@@ -1,0 +1,23 @@
+services:
+  backend:
+    build: ./backend
+    ports: ["5000:5000"]
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
+  
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "tail -f /dev/null"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: always
