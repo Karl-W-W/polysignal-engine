@@ -12,6 +12,7 @@ import requests
 import sqlite3
 import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
@@ -29,7 +30,7 @@ class Signal(BaseModel):
     timestamp: str
     source: str = "polymarket"
 
-DB_PATH = "/data/polysignal.db"
+DB_PATH = os.getenv("DB_PATH", "/data/polysignal.db")
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
