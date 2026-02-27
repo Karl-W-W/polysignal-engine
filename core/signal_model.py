@@ -1,7 +1,11 @@
 """
-core/signal.py
-==============
+core/signal_model.py
+====================
 THE CANONICAL SIGNAL SCHEMA — PolySignal-OS Vault.
+
+Renamed from: core/signal.py → core/signal_model.py (2026-02-27)
+Reason: signal.py shadowed Python's stdlib `signal` module, causing import
+failures unless `-m` invocation was used. ARCHITECTURE.md §5 flagged this.
 
 Promoted from: lab/signal_schema.py (2026-02-23)
 Promotion criteria all met:
@@ -126,7 +130,7 @@ if __name__ == "__main__":
         ),
         reasoning="Price moved +8pp against a baseline of +1.5pp avg. Volume confirms accumulation.",
     )
-    print("✅ core/signal.py validation passed")
+    print("✅ core/signal_model.py validation passed")
     print(sig.model_dump_json(indent=2))
     print("\n--- TELEGRAM PREVIEW ---")
     print(sig.to_telegram_message())

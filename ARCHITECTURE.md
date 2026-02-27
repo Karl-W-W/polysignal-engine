@@ -30,12 +30,12 @@ The following files are **officially in the Vault** and must not be rewritten wi
 - `core/supervisor.py` — NVIDIA Supervisor (HMAC audit + security, NIM endpoint `integrate.api.nvidia.com/v1`).
 - `core/bridge.py` — OpenClaw LangChain tool wrapper. ✅ Fixed `StructuredTool` import (2026-02-24).
 - `core/api.py` — Flask API server. ✅ Fixed orchestrator import → `workflows.masterloop` (2026-02-24).
-- `core/signal.py` — ⚠️ Shadows stdlib `signal` module. Safe with `-m` invocation. Rename to `signal_model.py` recommended before `lab/signal.py` promotion.
+- `core/signal_model.py` — Canonical Pydantic Signal schema. ✅ Renamed from `signal.py` to fix stdlib shadow (2026-02-27).
 - `core/notifications.py` — Telegram alert dispatcher.
 - `core/openclaw_api.py` — OpenClaw API client.
 
 **Agents (NOT the Vault, but tracked):**
-- `agents/streaming.py` — ⚠️ `AgentExecutor` removed in LangChain 1.x. Crashes every 30s (bounded). Migration to `langgraph.prebuilt.create_react_agent` pending.
+- `agents/streaming.py` — ✅ Migrated from `AgentExecutor` to `langgraph.prebuilt.create_react_agent` (2026-02-27).
 
 **Workflows (NOT the Vault, but stable):**
 - `workflows/masterloop.py` — MasterLoop LangGraph engine. **5/5 clean proof on DGX 2026-02-24** (OpenClaw audit logs confirm full chain).
@@ -45,7 +45,7 @@ The following files are **officially in the Vault** and must not be rewritten wi
 - `requirements.txt` — ✅ Pinned to LangChain 1.x era matching bare-metal 5/5 proof (2026-02-24).
 
 **Lab (Under Development — NOT production):**
-- `lab/signal.py` — Rich Pydantic Signal schema. Awaiting `core/signal.py` rename before promotion.
+- `lab/signal.py` — Rich Pydantic Signal schema. ✅ `core/signal.py` renamed to `core/signal_model.py` (2026-02-27). Ready for promotion review.
 - `lab/langsmith_eval.py` — LangSmith ecosystem verifier. ✅ Tested 2026-02-24.
 - `lab/start_sh_fix.md` — ✅ APPLIED (Options A+B merged into start.sh).
 
