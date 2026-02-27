@@ -1,0 +1,30 @@
+# === Core Framework ===
+flask==3.0.3
+flask-cors==5.0.0
+requests==2.32.3
+python-dotenv==1.0.1
+fastapi==0.115.0
+uvicorn==0.30.6
+slowapi==0.1.9
+httpx==0.27.2
+
+# === LangChain Ecosystem (Pinned: 0.3.x compatible set) ===
+langchain-core==0.3.17
+langchain==0.3.7
+langchain-community==0.3.7
+langchain-openai==0.2.9
+langchain-google-genai==2.0.4
+# langchain-google-vertexai removed (unused, causes httpx conflicts)
+openai==2.23.0
+
+# === LangGraph (Pinned: 0.2.x for langchain-core 0.3.x compat) ===
+langgraph==0.2.53
+langgraph-checkpoint==2.0.6
+langgraph-checkpoint-sqlite==2.0.1
+langsmith>=0.1.147          # LangSmith tracing SDK (activated by LANGCHAIN_TRACING_V2=true)
+
+# === Google AI ===
+google-generativeai==0.8.3
+
+# === Telegram ===
+python-telegram-bot==21.5
