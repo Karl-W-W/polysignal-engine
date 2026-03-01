@@ -63,6 +63,23 @@ except ImportError:
         print(f"CRITICAL: Core vault imports failed: {e}")
         def send_telegram_alert(msg): print(f"MOCK ALERT: {msg}")
 
+# ── Lab Integration (risk gate — built by Loop, wired Session 7) ─────────────
+try:
+    from lab.risk_integration import risk_gate_node, route_after_risk_gate
+except ImportError:
+    # Fallback: no risk gate — pass through (degrades gracefully)
+    def risk_gate_node(state):
+        print("[RISK_GATE] Module not found — passthrough (no risk checks)")
+        return state
+    def route_after_risk_gate(state):
+        if state.get("execution_status") == "RISK_BLOCKED":
+            return "END"
+        if state.get("human_approval_needed"):
+            return "wait_approval"
+        if state.get("signature"):
+            return "commit"
+        return "END"
+
 # ── Environment ───────────────────────────────────────────────────────────────
 from dotenv import load_dotenv
 load_dotenv(os.getenv("ENV_PATH", "/opt/loop/.env"))
@@ -467,6 +484,7 @@ def build_masterloop() -> StateGraph:
     wf.add_node("prediction",    prediction_node)
     wf.add_node("draft",         draft_node)
     wf.add_node("review",        review_node)
+    wf.add_node("risk_gate",     risk_gate_node)
     wf.add_node("wait_approval", wait_approval_node)
     wf.add_node("commit",        commit_node)
 
@@ -474,9 +492,16 @@ def build_masterloop() -> StateGraph:
     wf.add_edge("perception",    "prediction")
     wf.add_edge("prediction",    "draft")
     wf.add_edge("draft",         "review")
+    # Review routes to risk_gate (if approved/needs-human) or END (if rejected)
     wf.add_conditional_edges(
         "review",
         route_after_review,
+        {"wait_approval": "risk_gate", "commit": "risk_gate", END: END}
+    )
+    # Risk gate routes to wait_approval, commit, or END (if blocked)
+    wf.add_conditional_edges(
+        "risk_gate",
+        route_after_risk_gate,
         {"wait_approval": "wait_approval", "commit": "commit", END: END}
     )
     wf.add_edge("wait_approval", "commit")
