@@ -167,3 +167,103 @@ class TestTelegramFormatting:
         msg = v.to_telegram_message()
         assert good_trade.title in msg
         assert "APPROVED" in msg
+
+
+# ============================================================================
+# EDGE CASE TESTS (Loop's autonomous contribution — Session 7)
+# ============================================================================
+
+
+class TestExactPositionSizeBoundary:
+    """Edge case: proposed_size == MAX_POSITION_USDC exactly ($10.00)."""
+
+    def test_exact_max_approved_unclamped(self, tracker):
+        risk_module.TRADING_ENABLED = True
+        trade = TradeProposal(
+            market_id="0xedge1", title="Edge", outcome="Yes", side="BUY",
+            confidence=0.85, proposed_size_usdc=10.0, current_price=0.6,
+            signal_id="edge-1",
+        )
+        v = check_risk(trade, tracker)
+        assert v.approved
+        assert v.approved_size_usdc == 10.0
+        assert not any("clamped" in c for c in v.checks_passed)
+
+    def test_one_cent_over_is_clamped(self, tracker):
+        risk_module.TRADING_ENABLED = True
+        trade = TradeProposal(
+            market_id="0xedge1b", title="Edge", outcome="Yes", side="BUY",
+            confidence=0.85, proposed_size_usdc=10.01, current_price=0.6,
+            signal_id="edge-1b",
+        )
+        v = check_risk(trade, tracker)
+        assert v.approved
+        assert v.approved_size_usdc == MAX_POSITION_USDC
+
+
+class TestExactConfidenceBoundary:
+    """Edge case: confidence == MIN_CONFIDENCE exactly (0.75)."""
+
+    def test_exact_threshold_approved(self, tracker):
+        risk_module.TRADING_ENABLED = True
+        trade = TradeProposal(
+            market_id="0xedge2", title="Edge", outcome="Yes", side="BUY",
+            confidence=0.75, proposed_size_usdc=5.0, current_price=0.5,
+            signal_id="edge-2",
+        )
+        v = check_risk(trade, tracker)
+        assert v.approved
+
+    def test_one_tick_below_rejected(self, tracker):
+        risk_module.TRADING_ENABLED = True
+        trade = TradeProposal(
+            market_id="0xedge2b", title="Edge", outcome="Yes", side="BUY",
+            confidence=0.7499999, proposed_size_usdc=5.0, current_price=0.5,
+            signal_id="edge-2b",
+        )
+        v = check_risk(trade, tracker)
+        assert not v.approved
+        assert "confidence" in v.rejection_reason.lower()
+
+
+class TestDailyLossCapBoundary:
+    """Edge case: daily loss at $49.99, new $1.01 trade."""
+
+    def test_just_under_cap_approved(self, tracker):
+        risk_module.TRADING_ENABLED = True
+        tracker._state["daily_loss_usdc"] = 49.99
+        trade = TradeProposal(
+            market_id="0xedge3", title="Edge", outcome="Yes", side="BUY",
+            confidence=0.85, proposed_size_usdc=1.01, current_price=0.6,
+            signal_id="edge-3",
+        )
+        v = check_risk(trade, tracker)
+        assert v.approved
+        assert v.approved_size_usdc == 1.01
+
+    def test_exact_cap_blocked(self, tracker):
+        risk_module.TRADING_ENABLED = True
+        tracker._state["daily_loss_usdc"] = 50.0
+        trade = TradeProposal(
+            market_id="0xedge3b", title="Edge", outcome="Yes", side="BUY",
+            confidence=0.85, proposed_size_usdc=1.0, current_price=0.6,
+            signal_id="edge-3b",
+        )
+        v = check_risk(trade, tracker)
+        assert not v.approved
+
+    def test_loss_crossing_cap_blocks_next(self, tracker):
+        risk_module.TRADING_ENABLED = True
+        tracker._state["daily_loss_usdc"] = 49.99
+        trade = TradeProposal(
+            market_id="0xedge3c", title="Edge", outcome="Yes", side="BUY",
+            confidence=0.85, proposed_size_usdc=1.01, current_price=0.6,
+            signal_id="edge-3c",
+        )
+        v = check_risk(trade, tracker)
+        assert v.approved
+        tracker.record_loss(1.01)
+        assert tracker.is_daily_cap_hit()
+        v2 = check_risk(trade, tracker)
+        assert not v2.approved
+
