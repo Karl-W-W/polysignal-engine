@@ -1,7 +1,9 @@
 # PolySignal-OS — Agent Instructions
 
 ## What This Is
-PolySignal-OS is an AI-native prediction market intelligence system. It scans Polymarket, detects signals through a 5-stage MasterLoop (LangGraph), and surfaces ~5 high-confidence signals/week. Hardware: NVIDIA DGX Spark (Munich). Frontend: Vercel.
+PolySignal-OS is an AI-native prediction market intelligence system. It scans Polymarket, detects signals through a 7-node MasterLoop (LangGraph), and surfaces ~5 high-confidence signals/week. Hardware: NVIDIA DGX Spark (Munich). Frontend: Vercel.
+
+Pipeline: `perception → prediction → draft → review → risk_gate → wait_approval → commit`
 
 ## Boot-Up Checklist
 1. Read `ARCHITECTURE.md` — folder constraints, Vault rules, RenTec empiricism
@@ -30,7 +32,7 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 64/64 pass. `test_api` excluded (needs Flask in venv).
+Expected: 86/86 pass. `test_api` excluded (needs Flask in venv).
 
 ## Working with Loop
 - Assign tasks via `/opt/loop/TASKS.md` — Loop reads on heartbeat (every 30m, 07:00–01:00 CET)
