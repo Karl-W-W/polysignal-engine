@@ -4,7 +4,7 @@ Tests for lab/polymarket/risk.py — Risk management gate.
 
 import pytest
 from datetime import datetime, timezone
-from lab.polymarket.risk import (
+from core.risk import (
     TradeProposal,
     RiskVerdict,
     DailyPnLTracker,
@@ -14,7 +14,7 @@ from lab.polymarket.risk import (
     DAILY_LOSS_CAP_USDC,
     HUMAN_APPROVAL_FIRST_N,
 )
-import lab.polymarket.risk as risk_module
+import core.risk as risk_module
 
 
 class MockTracker(DailyPnLTracker):

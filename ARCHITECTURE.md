@@ -31,6 +31,7 @@ The following files are **officially in the Vault** and must not be rewritten wi
 - `core/bridge.py` — OpenClaw LangChain tool wrapper. ✅ Fixed `StructuredTool` import (2026-02-24).
 - `core/api.py` — Flask API server. ✅ Fixed orchestrator import → `workflows.masterloop` (2026-02-24).
 - `core/signal_model.py` — Canonical Pydantic Signal schema. ✅ Renamed from `signal.py` to fix stdlib shadow (2026-02-27).
+- `core/risk.py` — Risk management gate (kill switch, position caps, loss caps, HITL). ✅ Promoted from lab Session 7 (2026-03-01).
 - `core/notifications.py` — Telegram alert dispatcher.
 - `core/openclaw_api.py` — OpenClaw API client.
 
@@ -45,6 +46,7 @@ The following files are **officially in the Vault** and must not be rewritten wi
 - `requirements.txt` — ✅ Pinned to LangChain 1.x era matching bare-metal 5/5 proof (2026-02-24).
 
 **Lab (Under Development — NOT production):**
+- `lab/polymarket/risk.py` — ✅ PROMOTED to `core/risk.py` (Session 7, 2026-03-01). 7/7 self-tests + 11/11 pytest.
 - `lab/signal.py` — Rich Pydantic Signal schema. ✅ `core/signal.py` renamed to `core/signal_model.py` (2026-02-27). Ready for promotion review.
 - `lab/langsmith_eval.py` — LangSmith ecosystem verifier. ✅ Tested 2026-02-24.
 - `lab/start_sh_fix.md` — ✅ APPLIED (Options A+B merged into start.sh).
