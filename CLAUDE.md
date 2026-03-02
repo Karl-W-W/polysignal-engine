@@ -44,7 +44,7 @@ Expected: 86/86 pass. `test_api` excluded (needs Flask in venv).
 ## Critical Rules
 - Docker config changes need container **destruction** (`docker rm -f`), not restart
 - Never re-add `"api": "anthropic-messages"` to `openclaw.json`
-- Never restart `loop-telegram` — OpenClaw owns Telegram
+- `loop-telegram` service removed (Session 9) — OpenClaw owns Telegram now
 - No credentials in markdown files
 - `docker compose up -d --force-recreate` for env/code changes in containers
 

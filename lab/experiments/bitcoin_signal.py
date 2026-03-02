@@ -24,6 +24,7 @@ import sqlite3
 import json
 import os
 from datetime import datetime
+from lab.time_horizon import derive_time_horizon
 
 # ── Config ────────────────────────────────────────────────────────────────────
 DB_PATH           = os.getenv("DB_PATH", "/data/polysignal.db")
@@ -143,6 +144,11 @@ def detect_signals(markets: list) -> list:
 
             if abs(delta) >= SIGNAL_THRESHOLD:
                 direction = "📈 Bullish" if delta > 0 else "📉 Bearish"
+                time_horizon = derive_time_horizon(
+                    volume_24h=m["volume"],
+                    abs_price_delta=abs(delta),
+                    num_recent_signals=len(signals),
+                )
                 signals.append({
                     "market_id":     market_id,
                     "title":         m["title"],
@@ -154,8 +160,9 @@ def detect_signals(markets: list) -> list:
                     "url":           m["url"],
                     "direction":     direction,
                     "last_seen":     last_ts,
+                    "time_horizon":  time_horizon,
                 })
-                print(f"  🔔 SIGNAL: {m['title'][:50]} {delta:+.3f}")
+                print(f"  🔔 SIGNAL: {m['title'][:50]} {delta:+.3f} [{time_horizon}]")
 
     conn.commit()
     conn.close()

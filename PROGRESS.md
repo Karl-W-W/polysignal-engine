@@ -124,6 +124,6 @@ TASKS.md has: TradeProposal.from_signal() bridge, cycle_number fix, MasterLoop e
 - `workflows/` is editable with justification (not Vault)
 - Docker config changes need container **destruction**, not restart
 - Never re-add `"api": "anthropic-messages"` to `openclaw.json`
-- Never restart `loop-telegram` — OpenClaw owns Telegram
+- `loop-telegram` service removed (Session 9) — OpenClaw owns Telegram now
 - No `TRADING_ENABLED=true` until Polymarket wallet exists
 - No credentials in markdown files or chat history

@@ -187,15 +187,16 @@ def _market_to_observation(m: dict) -> dict:
 def _signal_to_observation(sig: dict) -> dict:
     """Convert detected signal dict to LoopState observation format."""
     return {
-        "market_id":  sig["market_id"],
-        "title":      f"{sig['title']} — {sig['outcome']}",
-        "price":      sig["current_price"],
-        "volume":     sig["volume"],
-        "change_24h": sig["delta"],
-        "timestamp":  datetime.now(timezone.utc).isoformat(),
-        "source":     "polymarket",
-        "direction":  sig["direction"],
-        "url":        sig["url"],
+        "market_id":    sig["market_id"],
+        "title":        f"{sig['title']} — {sig['outcome']}",
+        "price":        sig["current_price"],
+        "volume":       sig["volume"],
+        "change_24h":   sig["delta"],
+        "timestamp":    datetime.now(timezone.utc).isoformat(),
+        "source":       "polymarket",
+        "direction":    sig["direction"],
+        "url":          sig["url"],
+        "time_horizon": sig.get("time_horizon", "24h"),
     }
 
 

@@ -1,5 +1,5 @@
 # Loop Task Queue
-# Updated: 2026-03-02 19:00 CET (Session 9 — Antigravity)
+# Updated: 2026-03-02 21:00 CET (Session 9 — Claude Code)
 # Loop reads this on every heartbeat. Pick the first unchecked [ ] item.
 
 ---
@@ -8,7 +8,7 @@
 
 - [ ] **Promote risk_integration.py from lab/ to core/**
 
-  **Goal:** The risk gate bridge has been tested e2e (90/90 pass). It should move out of `lab/` and into the production path. The `from langgraph.graph import END` fix is already applied.
+  **Goal:** The risk gate bridge has been tested e2e (107/107 pass). It should move out of `lab/` and into the production path. The `from langgraph.graph import END` fix is already applied.
 
   **Where to write:** `core/risk_integration.py` (new file, copy from lab/)
 
@@ -20,37 +20,40 @@
   5. Report on Telegram when done
   6. **DO NOT delete the lab/ copy yet** — architect will verify and clean up
 
-- [ ] **Add TradeProposal.from_signal() classmethod**
+- [ ] **Write pytest suite for trade_proposal_bridge.py**
 
-  **Goal:** Clean bridge from typed `Signal` objects directly to `TradeProposal`.
+  **Goal:** Your `lab/trade_proposal_bridge.py` works (8 self-tests). But those are inline `_run_tests()` not pytest. Port to `tests/test_trade_proposal_bridge.py` so CI catches regressions.
 
-  **Context:** `observation_to_trade_proposal()` in risk_integration.py works on raw dicts. We also need a typed path from `Signal` (Pydantic) to `TradeProposal` (dataclass) for when the pipeline moves to fully-typed signals.
-
-  **Where to write:** `lab/trade_proposal_bridge.py` (new file)
+  **Where to write:** `tests/test_trade_proposal_bridge.py` (new file)
 
   **What to do:**
-  1. Read `core/signal_model.py` — understand Signal class fields
-  2. Read `core/risk.py` — understand TradeProposal fields
-  3. Write `from_signal(signal: Signal) -> TradeProposal` that:
-     - Maps `hypothesis` → `side` (Bullish→BUY, Bearish→SELL, Neutral→skip)
-     - Uses `confidence` directly
-     - Uses `outcome` directly
-     - Defaults `proposed_size_usdc` to $5
-     - Uses `signal_id` directly
-  4. Write 5+ tests (with real Signal objects, not dicts)
-  5. Report on Telegram when done
+  1. Read `lab/trade_proposal_bridge.py` — understand the 8 existing self-tests
+  2. Convert each to a pytest test using proper fixtures and assertions
+  3. Use real `Signal` objects (from core/signal_model.py) not dicts for the typed path tests
+  4. Report on Telegram when done
 
-- [ ] **Audit and document dead fields: time_horizon**
+- [ ] **Write pytest suite for time_horizon.py**
 
-  **Goal:** `time_horizon` defaults to "24h" in Signal and nothing sets it. Document whether to remove it or wire it.
+  **Goal:** Same as above — `lab/time_horizon.py` has 12 inline tests. Port to `tests/test_time_horizon.py` for CI.
 
-  **Where to write:** `lab/reviews/dead_fields_audit.md`
+  **Where to write:** `tests/test_time_horizon.py` (new file)
 
   **What to do:**
-  1. Search all files for `time_horizon` usage
-  2. Determine: is it ever set to anything other than default?
-  3. Recommend: keep (with wiring plan) or remove
-  4. Report on Telegram
+  1. Read `lab/time_horizon.py` — understand the 12 existing self-tests
+  2. Convert each to a pytest test
+  3. Include boundary tests (exact thresholds, zero values)
+  4. Report on Telegram when done
+
+- [ ] **MoltBook publisher dry-run test on DGX**
+
+  **Goal:** Verify `lab/moltbook_publisher.py` runs correctly on DGX (just built by Claude Code, 17 tests passing). Do NOT call live API.
+
+  **Where to write:** Nothing new — just run the tests
+
+  **What to do:**
+  1. Run `python3 -m pytest tests/test_moltbook_publisher.py -v` on DGX
+  2. If any failures, report the error on Telegram with traceback
+  3. If all pass, report "MoltBook publisher verified on DGX"
 
 ## Completed Tasks
 
@@ -60,6 +63,12 @@
 - [x] health_check.py — thermal, disk, DB freshness (Session 7)
 - [x] test_risk_edge_cases.py — boundary tests for risk.py (Session 7)
 - [x] schema_review.md — field usage audit (Session 7)
-- [x] cycle_number fix — wired from LoopState into observations (Session 9 — Antigravity)
-- [x] MasterLoop e2e smoke test — 4 tests, 90/90 pass (Session 9 — Antigravity)
-- [x] route_after_risk_gate END bug — returned "END" string instead of langgraph END sentinel (Session 9 — Antigravity)
+- [x] trade_proposal_bridge.py — typed Signal→TradeProposal bridge (Session 9 — Loop)
+- [x] time_horizon.py — derives time_horizon from volatility (Session 9 — Loop)
+- [x] time_horizon_audit.md — dead field audit (Session 9 — Loop)
+- [x] cycle_number fix — wired from LoopState into observations (Session 9 — Claude Code)
+- [x] MasterLoop e2e smoke test — 4 tests (Session 9 — Claude Code)
+- [x] route_after_risk_gate END bug fix (Session 9 — Claude Code + Loop independently)
+- [x] telegram service removed from docker-compose.yml (Session 9 — Claude Code)
+- [x] time_horizon wired into perception pipeline (Session 9 — Claude Code)
+- [x] MoltBook publisher built with 17 tests (Session 9 — Claude Code)
