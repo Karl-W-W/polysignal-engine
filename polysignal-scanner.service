@@ -1,0 +1,21 @@
+[Unit]
+Description=PolySignal Continuous Market Scanner
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/loop
+ExecStart=/opt/loop/.venv/bin/python3 -m workflows.scanner
+Restart=on-failure
+RestartSec=30
+Environment=SCAN_INTERVAL_SECONDS=300
+Environment=ENV_PATH=/opt/loop/.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=polysignal-scanner
+
+[Install]
+WantedBy=multi-user.target
