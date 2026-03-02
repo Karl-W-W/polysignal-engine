@@ -2,6 +2,9 @@
 data/
 node_modules/
 __pycache__/
+*.pyc
 .DS_Store
 core/secrets/
 *.json.bak*
+frontend/.next/
+.venv/
