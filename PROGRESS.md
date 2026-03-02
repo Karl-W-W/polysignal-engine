@@ -35,7 +35,8 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX auto-syncs via cron |
 | Tests | 190/190 PASS | Mac (1.5s) |
-| Scanner | DEPLOYED | `polysignal-scanner.service` on DGX, 5min interval |
+| Scanner | DEPLOYED | `polysignal-scanner.service` on DGX — increase to 10min if temps >80°C |
+| DGX Thermal | ⚠️ 67-77°C | Scanner + Ollama sustained load. Throttle at 90°C. Monitor. |
 | Outcome Tracker | WIRED | Records predictions, evaluates after time horizon |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
 | MoltBook Publisher | WIRED | Non-blocking in commit_node (dry-run until JWT) |
@@ -79,7 +80,8 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 | **Risk Gate** | $10 max, 75% confidence, $50 daily cap | Same | OK |
 | **Wait Approval** | `human_approved = True` (hardcoded) | Telegram YES/NO buttons | **Stub** |
 | **Commit** | Execute via OpenClaw sandbox | Same | OK |
-| **Publish** | MoltBook dry-run (no JWT yet) | Live posts | Human blocker (JWT) |
+| **Publish** | MoltBook dry-run (no JWT yet) | Live posts (write-only) | Human blocker (JWT) |
+| **MoltBook Read** | NOT BUILT | Double-layer isolation required | **BLOCKED — see threat model** |
 | **Learn** | write_memory() + outcome_tracker → labeled data | Feedback loop with accuracy tracking | OK |
 | **Scheduler** | `polysignal-scanner.service` (5min, active hours) | Same | OK |
 
@@ -157,3 +159,21 @@ Replace auto-approve placeholder with actual Telegram approval.
 - `loop-telegram` service removed (Session 9) — OpenClaw owns Telegram now
 - No `TRADING_ENABLED=true` until Polymarket wallet exists
 - No credentials in markdown files or chat history
+
+## MoltBook Threat Model (Session 10)
+
+**MoltBook is a hostile network.** 1.5M agents, ~17K operators running bulk loops. Exposed credentials (Wiz report Jan 2026). Semantic worms propagate prompt injection across agents. Treat as untrusted external API.
+
+**Write path (publisher):** LOW RISK. We format our own data. JWT is the exposure.
+**Read path (subscriber):** EXTREMELY HIGH RISK. DO NOT BUILD YET.
+
+**Rules:**
+- MoltBook is **write-only** until double-layer read isolation is built
+- No MoltBook read pipeline without: (1) separate LLM context from execution engine, (2) egress-filtered container, (3) no exec permissions for MoltBook-sourced content
+- Never fetch remote instructions (no `curl moltbook.com/*.md` in heartbeat/cron)
+- sanitize.py is the last line of defense — regex can't catch semantic injection
+- When read pipeline is built: MoltBook content → sanitizer → isolated read-only LLM → structured output only
+
+**DGX Caging Gaps (not urgent for write-only):**
+- ⚠️ Network egress: Docker has full access — needs egress filtering before read pipeline
+- ⚠️ Exec isolation: Publisher uses `requests.post()` (fine) — read pipeline would need strict exec=false

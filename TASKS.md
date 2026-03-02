@@ -17,6 +17,15 @@
   4. Verify outcome tracker writes to `/opt/loop/data/prediction_outcomes.json`
   5. Report results on Telegram
 
+- [ ] **Monitor DGX thermals — increase scan interval if >80°C**
+
+  **Goal:** Scanner + Ollama pushing DGX to 67-77°C. Throttle at 90°C.
+
+  **What to do:**
+  1. `ssh spark "cat /sys/class/thermal/thermal_zone*/temp"`
+  2. If sustained >80°C: set `SCAN_INTERVAL_SECONDS=600` in systemd unit
+  3. `systemctl --user daemon-reload && systemctl --user restart polysignal-scanner`
+
 - [ ] **Let scanner accumulate data (48-72h)**
 
   **Goal:** Scanner running as systemd service. Let it accumulate observations before Phase 2 ML.
@@ -40,6 +49,9 @@
 - Git auto-sync cron installed
 
 **Phase 4: Real HITL** — Telegram YES/NO buttons instead of auto-approve.
+
+**⛔ MoltBook Read Pipeline** — DO NOT BUILD. Write-only until double-layer isolation exists.
+See PROGRESS.md "MoltBook Threat Model" for details.
 
 ## Completed Tasks
 
