@@ -236,7 +236,7 @@ class TestMasterLoopE2ETradingEnabled:
     def test_full_pipeline_trading_enabled(self):
         risk_module.TRADING_ENABLED = True
 
-        import lab.risk_integration as ri
+        import core.risk_integration as ri
         from core.risk import DailyPnLTracker
 
         class MockTracker(DailyPnLTracker):

@@ -63,9 +63,9 @@ except ImportError:
         print(f"CRITICAL: Core vault imports failed: {e}")
         def send_telegram_alert(msg): print(f"MOCK ALERT: {msg}")
 
-# ── Lab Integration (risk gate — built by Loop, wired Session 7) ─────────────
+# ── Risk Gate (promoted from lab/ to core/ — Session 9) ──────────────────────
 try:
-    from lab.risk_integration import risk_gate_node, route_after_risk_gate
+    from core.risk_integration import risk_gate_node, route_after_risk_gate
 except ImportError:
     # Fallback: no risk gate — pass through (degrades gracefully)
     def risk_gate_node(state):

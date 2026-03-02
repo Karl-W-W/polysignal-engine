@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-01 18:30 CET | Session 8 closed
+# Last updated: 2026-03-02 23:30 CET | Session 9 in progress
 # Session history: See HISTORY.md
 
 ---
@@ -32,12 +32,12 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
-| GitHub | SYNCED | `7427f6c`, Mac + DGX both current |
-| Tests | 86/86 PASS | Mac (0.34s) + DGX (0.33s) |
-| Risk Gate | WIRED | review → risk_gate → commit (kill switch OFF) |
-| Loop Autonomy | BLOCKED | TASKS.md mounted, heartbeat firing, but Anthropic credits depleted |
+| GitHub | SYNCED | `5a77d91`, Mac + DGX both current |
+| Tests | 140/140 PASS | Mac (1.6s) + DGX (1.6s) |
+| Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit (kill switch OFF) |
+| Loop Autonomy | ACTIVE | TASKS.md mounted, heartbeat firing, credits restored |
 
-## Vault Inventory (`/opt/loop/core/` — 9 files)
+## Vault Inventory (`/opt/loop/core/` — 10 files)
 
 | File | Purpose |
 |------|---------|
@@ -50,6 +50,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | `openclaw_api.py` | Firejail sandbox executor |
 | `signal_model.py` | Canonical Signal schema (Pydantic V2) |
 | `risk.py` | Risk gate ($10 max, 75% confidence, $50 daily cap, kill switch) |
+| `risk_integration.py` | Risk gate node for MasterLoop (promoted from lab/ Session 9) |
 
 ## MasterLoop Graph (7 nodes)
 
@@ -113,7 +114,7 @@ The signal broadcaster is the product. Register, get JWT, add to OpenClaw sandbo
 After MoltBook is active. Read-only CLOB client already works (14 markets probed in Session 2).
 
 ### P4: Loop Tasks (AUTONOMOUS)
-TASKS.md has: TradeProposal.from_signal() bridge, cycle_number fix, MasterLoop e2e test.
+TASKS.md has: Wire MoltBook publisher into commit_node, clean up lab/ stale copies.
 
 ---
 

@@ -1,11 +1,11 @@
 """
-Tests for lab/risk_integration.py — Risk gate node for MasterLoop.
+Tests for core/risk_integration.py — Risk gate node for MasterLoop.
 """
 
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import patch
-from lab.risk_integration import (
+from core.risk_integration import (
     risk_gate_node,
     route_after_risk_gate,
     observation_to_trade_proposal,
@@ -51,7 +51,7 @@ def _make_state(direction="Bullish", confidence=0.85, has_signature=True, observ
 def reset_risk_state():
     """Reset kill switch and tracker after each test."""
     original = risk_module.TRADING_ENABLED
-    import lab.risk_integration as ri
+    import core.risk_integration as ri
     ri._tracker = None
     yield
     risk_module.TRADING_ENABLED = original
@@ -120,7 +120,7 @@ class TestRiskGateNode:
 
     def test_good_trade_approved(self):
         risk_module.TRADING_ENABLED = True
-        import lab.risk_integration as ri
+        import core.risk_integration as ri
         from core.risk import DailyPnLTracker
 
         class MockTracker(DailyPnLTracker):

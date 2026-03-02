@@ -1,59 +1,36 @@
 # Loop Task Queue
-# Updated: 2026-03-02 21:00 CET (Session 9 — Claude Code)
+# Updated: 2026-03-02 23:30 CET (Session 9 — Claude Code)
 # Loop reads this on every heartbeat. Pick the first unchecked [ ] item.
 
 ---
 
 ## Active Tasks
 
-- [ ] **Promote risk_integration.py from lab/ to core/**
+- [ ] **Wire MoltBook publisher into masterloop commit_node**
 
-  **Goal:** The risk gate bridge has been tested e2e (107/107 pass). It should move out of `lab/` and into the production path. The `from langgraph.graph import END` fix is already applied.
+  **Goal:** The MoltBook publisher (`lab/moltbook_publisher.py`) is built and tested (17 tests) but never called from the pipeline. Wire it as a non-blocking post-commit step so signals get published to MoltBook after successful execution.
 
-  **Where to write:** `core/risk_integration.py` (new file, copy from lab/)
-
-  **What to do:**
-  1. Read `lab/risk_integration.py` — this is the file to promote
-  2. Copy it to `core/risk_integration.py`
-  3. Update the import in `workflows/masterloop.py` from `from lab.risk_integration import ...` to `from core.risk_integration import ...`
-  4. Update `tests/test_risk_integration.py` to import from `core.risk_integration`
-  5. Report on Telegram when done
-  6. **DO NOT delete the lab/ copy yet** — architect will verify and clean up
-
-- [ ] **Write pytest suite for trade_proposal_bridge.py**
-
-  **Goal:** Your `lab/trade_proposal_bridge.py` works (8 self-tests). But those are inline `_run_tests()` not pytest. Port to `tests/test_trade_proposal_bridge.py` so CI catches regressions.
-
-  **Where to write:** `tests/test_trade_proposal_bridge.py` (new file)
+  **Where to write:** `workflows/masterloop.py` (edit commit_node function)
 
   **What to do:**
-  1. Read `lab/trade_proposal_bridge.py` — understand the 8 existing self-tests
-  2. Convert each to a pytest test using proper fixtures and assertions
-  3. Use real `Signal` objects (from core/signal_model.py) not dicts for the typed path tests
+  1. Read `lab/moltbook_publisher.py` — understand `publish_signal()` and `MoltBookConfig`
+  2. In commit_node (after successful execution), call `publish_signal()` in dry-run mode
+  3. Add result to state (e.g. `state["moltbook_result"]`)
+  4. Wrap in try/except so publish failure never blocks the trade pipeline
+  5. Run `python3 -m pytest tests/ --tb=short -k 'not test_api'` — all must pass
+  6. Report on Telegram when done
+
+- [ ] **Clean up lab/ copies of promoted modules**
+
+  **Goal:** `risk_integration.py` is now live in `core/`. The `lab/` copy is stale. Remove it to prevent import confusion.
+
+  **Where to write:** Delete `lab/risk_integration.py`
+
+  **What to do:**
+  1. Verify `core/risk_integration.py` exists and imports work: `python3 -c "from core.risk_integration import risk_gate_node; print('OK')"`
+  2. Delete `lab/risk_integration.py`
+  3. Run full test suite to confirm nothing imports from lab path
   4. Report on Telegram when done
-
-- [ ] **Write pytest suite for time_horizon.py**
-
-  **Goal:** Same as above — `lab/time_horizon.py` has 12 inline tests. Port to `tests/test_time_horizon.py` for CI.
-
-  **Where to write:** `tests/test_time_horizon.py` (new file)
-
-  **What to do:**
-  1. Read `lab/time_horizon.py` — understand the 12 existing self-tests
-  2. Convert each to a pytest test
-  3. Include boundary tests (exact thresholds, zero values)
-  4. Report on Telegram when done
-
-- [ ] **MoltBook publisher dry-run test on DGX**
-
-  **Goal:** Verify `lab/moltbook_publisher.py` runs correctly on DGX (just built by Claude Code, 17 tests passing). Do NOT call live API.
-
-  **Where to write:** Nothing new — just run the tests
-
-  **What to do:**
-  1. Run `python3 -m pytest tests/test_moltbook_publisher.py -v` on DGX
-  2. If any failures, report the error on Telegram with traceback
-  3. If all pass, report "MoltBook publisher verified on DGX"
 
 ## Completed Tasks
 
@@ -72,3 +49,7 @@
 - [x] telegram service removed from docker-compose.yml (Session 9 — Claude Code)
 - [x] time_horizon wired into perception pipeline (Session 9 — Claude Code)
 - [x] MoltBook publisher built with 17 tests (Session 9 — Claude Code)
+- [x] risk_integration.py promoted from lab/ to core/ — 140/140 tests (Session 9 — Claude Code)
+- [x] test_trade_proposal_bridge.py — 14 pytest tests ported (Session 9 — Loop)
+- [x] test_time_horizon.py — 16 pytest tests ported (Session 9 — Loop)
+- [x] MoltBook publisher verified on DGX (Session 9 — Loop)
