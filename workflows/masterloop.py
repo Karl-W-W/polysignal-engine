@@ -73,12 +73,12 @@ except ImportError:
         return state
     def route_after_risk_gate(state):
         if state.get("execution_status") == "RISK_BLOCKED":
-            return "END"
+            return END
         if state.get("human_approval_needed"):
             return "wait_approval"
         if state.get("signature"):
             return "commit"
-        return "END"
+        return END
 
 # ── Environment ───────────────────────────────────────────────────────────────
 from dotenv import load_dotenv
@@ -216,11 +216,15 @@ def perception_node(state: LoopState) -> LoopState:
 
             if signals:
                 state["observations"] = [_signal_to_observation(s) for s in signals]
+                for obs in state["observations"]:
+                    obs["cycle_number"] = state["cycle_number"]
                 print(f"  🔔 {len(signals)} signal(s) detected:")
                 for s in signals:
                     print(f"     {s['direction']}  {s['title'][:50]}  {s['delta']:+.3f}")
             else:
                 state["observations"] = [_market_to_observation(m) for m in markets]
+                for obs in state["observations"]:
+                    obs["cycle_number"] = state["cycle_number"]
                 print(f"  ✓ {len(markets)} markets observed, 0 signals (quiet market)")
 
     except Exception as e:

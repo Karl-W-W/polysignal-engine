@@ -171,8 +171,9 @@ class TestRiskGateNode:
 
 class TestRouteAfterRiskGate:
     def test_blocked_returns_end(self):
+        from langgraph.graph import END
         state = {"execution_status": "RISK_BLOCKED", "human_approval_needed": False, "signature": None}
-        assert route_after_risk_gate(state) == "END"
+        assert route_after_risk_gate(state) == END
 
     def test_human_approval_routes_to_wait(self):
         state = {"execution_status": None, "human_approval_needed": True, "signature": "sig"}
@@ -183,5 +184,6 @@ class TestRouteAfterRiskGate:
         assert route_after_risk_gate(state) == "commit"
 
     def test_no_signature_returns_end(self):
+        from langgraph.graph import END
         state = {"execution_status": None, "human_approval_needed": False, "signature": None}
-        assert route_after_risk_gate(state) == "END"
+        assert route_after_risk_gate(state) == END

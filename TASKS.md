@@ -1,49 +1,56 @@
 # Loop Task Queue
-# Updated: 2026-03-01 18:00 CET
+# Updated: 2026-03-02 19:00 CET (Session 9 — Antigravity)
 # Loop reads this on every heartbeat. Pick the first unchecked [ ] item.
 
 ---
 
 ## Active Tasks
 
-- [ ] **Add TradeProposal.from_signal() classmethod to core/risk.py**
+- [ ] **Promote risk_integration.py from lab/ to core/**
 
-  **Goal:** Eliminate the manual Signal→TradeProposal conversion scattered across files.
+  **Goal:** The risk gate bridge has been tested e2e (90/90 pass). It should move out of `lab/` and into the production path. The `from langgraph.graph import END` fix is already applied.
+
+  **Where to write:** `core/risk_integration.py` (new file, copy from lab/)
+
+  **What to do:**
+  1. Read `lab/risk_integration.py` — this is the file to promote
+  2. Copy it to `core/risk_integration.py`
+  3. Update the import in `workflows/masterloop.py` from `from lab.risk_integration import ...` to `from core.risk_integration import ...`
+  4. Update `tests/test_risk_integration.py` to import from `core.risk_integration`
+  5. Report on Telegram when done
+  6. **DO NOT delete the lab/ copy yet** — architect will verify and clean up
+
+- [ ] **Add TradeProposal.from_signal() classmethod**
+
+  **Goal:** Clean bridge from typed `Signal` objects directly to `TradeProposal`.
+
+  **Context:** `observation_to_trade_proposal()` in risk_integration.py works on raw dicts. We also need a typed path from `Signal` (Pydantic) to `TradeProposal` (dataclass) for when the pipeline moves to fully-typed signals.
 
   **Where to write:** `lab/trade_proposal_bridge.py` (new file)
 
   **What to do:**
-  1. Read `core/signal_model.py` — understand the Signal class fields
+  1. Read `core/signal_model.py` — understand Signal class fields
   2. Read `core/risk.py` — understand TradeProposal fields
-  3. Write a `from_signal(signal_dict: dict) -> TradeProposal` function that:
-     - Maps Signal fields to TradeProposal fields cleanly
-     - Derives `side` from `hypothesis` (Bullish→BUY, Bearish→SELL)
-     - Uses Signal's `confidence` directly
-     - Defaults `proposed_size_usdc` to $5 (conservative)
-  4. Write 5+ tests in the same file
+  3. Write `from_signal(signal: Signal) -> TradeProposal` that:
+     - Maps `hypothesis` → `side` (Bullish→BUY, Bearish→SELL, Neutral→skip)
+     - Uses `confidence` directly
+     - Uses `outcome` directly
+     - Defaults `proposed_size_usdc` to $5
+     - Uses `signal_id` directly
+  4. Write 5+ tests (with real Signal objects, not dicts)
   5. Report on Telegram when done
 
-- [ ] **Fix cycle_number (dead field)**
+- [ ] **Audit and document dead fields: time_horizon**
 
-  **Goal:** `cycle_number` is always 0 in signals. Wire it from LoopState.
+  **Goal:** `time_horizon` defaults to "24h" in Signal and nothing sets it. Document whether to remove it or wire it.
 
-  **Where to write:** `workflows/masterloop.py` — in `perception_node()`
-
-  **What to do:**
-  1. In perception_node, after creating observations, set each observation's `cycle_number` from `state["cycle_number"]`
-  2. This is a one-line fix. Report on Telegram.
-
-- [ ] **Write MasterLoop end-to-end smoke test**
-
-  **Goal:** A single test that runs the full graph with mocked external calls.
-
-  **Where to write:** `lab/tests/test_masterloop_e2e.py`
+  **Where to write:** `lab/reviews/dead_fields_audit.md`
 
   **What to do:**
-  1. Mock: Polymarket API (return fake market), Ollama (return fake LLM response), OpenClaw (return "SUCCESS")
-  2. Build initial LoopState, invoke `build_masterloop().compile()` with it
-  3. Assert: pipeline completes, all 7 nodes execute, stage_timings populated
-  4. This proves the graph wiring is correct end-to-end
+  1. Search all files for `time_horizon` usage
+  2. Determine: is it ever set to anything other than default?
+  3. Recommend: keep (with wiring plan) or remove
+  4. Report on Telegram
 
 ## Completed Tasks
 
@@ -53,3 +60,6 @@
 - [x] health_check.py — thermal, disk, DB freshness (Session 7)
 - [x] test_risk_edge_cases.py — boundary tests for risk.py (Session 7)
 - [x] schema_review.md — field usage audit (Session 7)
+- [x] cycle_number fix — wired from LoopState into observations (Session 9 — Antigravity)
+- [x] MasterLoop e2e smoke test — 4 tests, 90/90 pass (Session 9 — Antigravity)
+- [x] route_after_risk_gate END bug — returned "END" string instead of langgraph END sentinel (Session 9 — Antigravity)

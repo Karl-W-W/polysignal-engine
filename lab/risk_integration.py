@@ -261,15 +261,16 @@ def risk_gate_node(state: LoopState) -> LoopState:
 def route_after_risk_gate(state: LoopState) -> str:
     """
     Router for after the risk gate node.
-    Returns the next node name or END.
+    Returns the next node name or END sentinel.
     """
+    from langgraph.graph import END
     if state.get("execution_status") == "RISK_BLOCKED":
-        return "END"  # Skip commit entirely
+        return END
     if state.get("human_approval_needed"):
         return "wait_approval"
     if state.get("signature"):
         return "commit"
-    return "END"
+    return END
 
 
 # ============================================================================
