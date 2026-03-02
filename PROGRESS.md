@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-03 00:30 CET | Session 9 closing
+# Last updated: 2026-03-03 02:00 CET | Session 10
 # Session history: See HISTORY.md
 
 ---
@@ -33,8 +33,10 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
-| GitHub | SYNCED | Mac current, DGX needs `git pull` |
-| Tests | 140/140 PASS | Mac (1.5s) |
+| GitHub | SYNCED | Mac current, DGX auto-syncs via cron |
+| Tests | 190/190 PASS | Mac (1.5s) |
+| Scanner | DEPLOYED | `polysignal-scanner.service` on DGX, 5min interval |
+| Outcome Tracker | WIRED | Records predictions, evaluates after time horizon |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
 | MoltBook Publisher | WIRED | Non-blocking in commit_node (dry-run until JWT) |
 | Learning Loop | WIRED | write_memory() in commit_node → memory.md → draft_node |
@@ -78,8 +80,8 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 | **Wait Approval** | `human_approved = True` (hardcoded) | Telegram YES/NO buttons | **Stub** |
 | **Commit** | Execute via OpenClaw sandbox | Same | OK |
 | **Publish** | MoltBook dry-run (no JWT yet) | Live posts | Human blocker (JWT) |
-| **Learn** | write_memory() → memory.md → draft_node | Feedback loop with accuracy tracking | **MVP** |
-| **Scheduler** | Manual invocation only | 5-minute scan cycle | **Missing** |
+| **Learn** | write_memory() + outcome_tracker → labeled data | Feedback loop with accuracy tracking | OK |
+| **Scheduler** | `polysignal-scanner.service` (5min, active hours) | Same | OK |
 
 ---
 
@@ -93,7 +95,14 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 - [x] risk_integration.py promoted to core/
 - [x] 140/140 tests
 
-### Phase 2: REAL PREDICTION (next)
+### Phase 1.5: DATA PIPELINE (Session 10) — COMPLETE
+- [x] Continuous scanner deployed (Antigravity — systemd service, 5min interval)
+- [x] Outcome tracker built (Claude Code — record, evaluate, accuracy summary)
+- [x] Outcome tracking wired into MasterLoop (perception evaluates, prediction records, memory includes accuracy)
+- [x] Sanitize tests ported (23 tests for MoltBook post sanitizer)
+- [x] 190/190 tests
+
+### Phase 2: REAL PREDICTION (next — waiting on 48-72h scanner data)
 Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [ ] Feature engineering from observations table (price, volume, delta, time_horizon)
 - [ ] XGBoost baseline model (interpretable, fast to train)
@@ -101,11 +110,11 @@ Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [ ] A/B: rule-based vs XGBoost confidence scores
 - [ ] Promote if XGBoost beats baseline by >10% accuracy
 
-### Phase 3: CONTINUOUS SCANNING
-Kill the manual invocation. The DGX should watch markets autonomously.
-- [ ] Add scheduler (APScheduler or systemd timer) for 5-minute scan cycles
-- [ ] Cycle number auto-increment from DB
-- [ ] Telegram notification on new signals (not just execution)
+### Phase 3: CONTINUOUS SCANNING — COMPLETE (Antigravity, Session 10)
+- [x] `polysignal-scanner.service` deployed on DGX (systemd)
+- [x] 5-minute interval, active hours 07:00-01:00 CET
+- [x] Graceful SIGTERM, crash isolation per cycle
+- [x] Git auto-sync cron installed on DGX
 
 ### Phase 4: REAL HUMAN-IN-THE-LOOP
 Replace auto-approve placeholder with actual Telegram approval.

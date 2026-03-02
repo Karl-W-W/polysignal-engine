@@ -206,6 +206,17 @@ def perception_node(state: LoopState) -> LoopState:
     print("\n[PERCEPTION] Scanning crypto markets...")
     start = datetime.now(timezone.utc)
 
+    # ── Evaluate past predictions against fresh prices (non-blocking) ─────────
+    try:
+        from lab.outcome_tracker import evaluate_outcomes, get_accuracy_summary
+        eval_result = evaluate_outcomes(state.get("observations", []))
+        if eval_result["evaluated"] > 0:
+            print(f"  📊 Outcomes: {eval_result['correct']} correct, "
+                  f"{eval_result['incorrect']} wrong, {eval_result['neutral']} neutral")
+            print(f"     {get_accuracy_summary()}")
+    except Exception:
+        pass  # First cycle or no prior predictions — expected
+
     try:
         markets = fetch_crypto_markets()
 
@@ -256,6 +267,18 @@ def prediction_node(state: LoopState) -> LoopState:
         preds = predict_market_moves(observations)
         state["predictions"] = [p.to_dict() for p in preds]
         print(f"  ✓ {len(preds)} hypotheses generated")
+
+        # ── Record predictions for future outcome evaluation (non-blocking) ──
+        try:
+            from lab.outcome_tracker import record_predictions
+            recorded = record_predictions(
+                state["predictions"], observations,
+                cycle_number=state.get("cycle_number", 0),
+            )
+            if recorded:
+                print(f"  📝 {recorded} predictions recorded for outcome tracking")
+        except Exception:
+            pass
 
     except Exception as e:
         print(f"  ⚠ Prediction failed: {e}")
@@ -500,6 +523,11 @@ def commit_node(state: LoopState) -> LoopState:
         )
         if state.get("draft_reasoning"):
             entry += f" | Reasoning: {state['draft_reasoning'][:100]}"
+        try:
+            from lab.outcome_tracker import get_accuracy_summary
+            entry += f" | {get_accuracy_summary()}"
+        except Exception:
+            pass
         write_memory(entry)
         print(f"  ✓ Memory updated")
     except Exception as e:
@@ -590,6 +618,7 @@ def run_cycle(user_request: str, thread_id: str = "default", on_event=None) -> L
         "human_approved":        None,
         "execution_result":      None,
         "execution_status":      None,
+        "moltbook_result":       None,
         "errors":                [],
         "stage_timings":         {},
     }
