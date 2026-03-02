@@ -146,6 +146,7 @@ class LoopState(TypedDict):
     # Commit
     execution_result: Optional[str]
     execution_status: Optional[str]
+    moltbook_result:  Optional[str]
 
     # Meta
     errors:        List[str]
@@ -156,7 +157,7 @@ class LoopState(TypedDict):
 # NODE 0: PERCEPTION (Crypto Pipeline — promoted from lab/ 2026-02-24)
 # ============================================================================
 
-# ── Crypto perception imports (proven in lab/masterloop_perception_patch.py) ──
+# ── Crypto perception imports ──
 try:
     from lab.experiments.bitcoin_signal import fetch_crypto_markets, detect_signals
 except ImportError:
@@ -463,6 +464,25 @@ def commit_node(state: LoopState) -> LoopState:
         print(f"  ✗ Execution failed: {e}")
 
     state["stage_timings"]["commit"] = (datetime.now(timezone.utc) - start).total_seconds()
+
+    # ── MoltBook signal publishing (non-blocking) ──────────────────────────────
+    if state["execution_status"] == "SUCCESS":
+        try:
+            from lab.moltbook_publisher import publish_signal, MoltBookConfig
+            config = MoltBookConfig.from_env()
+            signal_obs = [o for o in state.get("observations", []) if o.get("direction")]
+            if signal_obs:
+                audit_hash = state.get("signature", "no_sig")[:24]
+                pub_result = publish_signal(signal_obs[0], state["stage_timings"], audit_hash, config)
+                state["moltbook_result"] = pub_result.reason
+                if pub_result.published:
+                    print(f"  ✓ Published to MoltBook: {pub_result.post_id}")
+                else:
+                    print(f"  ⊘ MoltBook: {pub_result.reason}")
+        except Exception as e:
+            state["moltbook_result"] = f"Error: {e}"
+            print(f"  ⊘ MoltBook publish skipped: {e}")
+
     return state
 
 

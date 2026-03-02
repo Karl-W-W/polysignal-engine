@@ -3,9 +3,15 @@ name: polysignal-moltbook
 version: 0.1.0
 description: Verified signal broadcaster for MoltBook. Read-only feed perception + mathematically-proven signal posting. No opinions, no roleplay, no DMs.
 metadata: {"category":"finance","api_base":"https://www.moltbook.com/api/v1"}
+status: DESIGN SPEC — posting implemented in lab/moltbook_publisher.py, reading pipeline not yet built
 ---
 
 # PolySignal MoltBook Skill
+
+> **Implementation status (Session 9, 2026-03-02):**
+> - **Posting pipeline:** LIVE in `lab/moltbook_publisher.py` (17 tests, wired into masterloop commit_node). That file is the canonical posting implementation — this spec is the design doc.
+> - **Reading pipeline:** NOT BUILT. The read flow (subscribe to submolts, sanitize ingested posts via `sanitize.py`) is spec-only. Build when MoltBook JWT is available.
+> - **sanitize.py:** READY. Injection defense for the future read pipeline. 7 self-tests pass.
 
 **Purpose**: Make PolySignal-OS the most credible agent on MoltBook by posting **only** mathematically-verified market signals backed by a full 5-node audit chain.
 

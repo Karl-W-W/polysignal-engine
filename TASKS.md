@@ -1,36 +1,33 @@
 # Loop Task Queue
-# Updated: 2026-03-02 23:30 CET (Session 9 — Claude Code)
+# Updated: 2026-03-03 00:15 CET (Session 9 — Claude Code)
 # Loop reads this on every heartbeat. Pick the first unchecked [ ] item.
 
 ---
 
 ## Active Tasks
 
-- [ ] **Wire MoltBook publisher into masterloop commit_node**
+- [ ] **Port sanitize.py self-tests to pytest**
 
-  **Goal:** The MoltBook publisher (`lab/moltbook_publisher.py`) is built and tested (17 tests) but never called from the pipeline. Wire it as a non-blocking post-commit step so signals get published to MoltBook after successful execution.
+  **Goal:** `lab/openclaw/moltbook_polysignal_skill/sanitize.py` has 7 inline self-tests (run via `__main__`). Port them to `tests/test_sanitize.py` for CI coverage.
 
-  **Where to write:** `workflows/masterloop.py` (edit commit_node function)
-
-  **What to do:**
-  1. Read `lab/moltbook_publisher.py` — understand `publish_signal()` and `MoltBookConfig`
-  2. In commit_node (after successful execution), call `publish_signal()` in dry-run mode
-  3. Add result to state (e.g. `state["moltbook_result"]`)
-  4. Wrap in try/except so publish failure never blocks the trade pipeline
-  5. Run `python3 -m pytest tests/ --tb=short -k 'not test_api'` — all must pass
-  6. Report on Telegram when done
-
-- [ ] **Clean up lab/ copies of promoted modules**
-
-  **Goal:** `risk_integration.py` is now live in `core/`. The `lab/` copy is stale. Remove it to prevent import confusion.
-
-  **Where to write:** Delete `lab/risk_integration.py`
+  **Where to write:** `tests/test_sanitize.py` (new file)
 
   **What to do:**
-  1. Verify `core/risk_integration.py` exists and imports work: `python3 -c "from core.risk_integration import risk_gate_node; print('OK')"`
-  2. Delete `lab/risk_integration.py`
-  3. Run full test suite to confirm nothing imports from lab path
-  4. Report on Telegram when done
+  1. Read `lab/openclaw/moltbook_polysignal_skill/sanitize.py` — understand the 7 self-tests
+  2. Convert each to a pytest test with proper assertions
+  3. Include edge cases: empty post, missing fields, very long content
+  4. Run `python3 -m pytest tests/test_sanitize.py -v` — all must pass
+  5. Report on Telegram when done
+
+- [ ] **Verify MoltBook publisher dry-run end-to-end on DGX**
+
+  **Goal:** The publisher is now wired into masterloop commit_node. Verify the full pipeline fires on DGX with `MOLTBOOK_DRY_RUN=true`.
+
+  **What to do:**
+  1. Pull latest: `cd /opt/loop && git pull origin main`
+  2. Run tests: `python3 -m pytest tests/ --tb=short -k 'not test_api'` — expect 140/140
+  3. Run dry-run smoke test from lab/reviews/moltbook_verification.md §4
+  4. Report results on Telegram
 
 ## Completed Tasks
 
@@ -53,3 +50,7 @@
 - [x] test_trade_proposal_bridge.py — 14 pytest tests ported (Session 9 — Loop)
 - [x] test_time_horizon.py — 16 pytest tests ported (Session 9 — Loop)
 - [x] MoltBook publisher verified on DGX (Session 9 — Loop)
+- [x] MoltBook publisher wired into commit_node (Session 9 — Claude Code)
+- [x] Dead files deleted: lab/signal.py, lab/polymarket/risk.py, lab/masterloop_perception_patch.py, lab/risk_integration.py (Session 9 — Claude Code)
+- [x] MoltBook implementations reconciled: publisher=canonical posting, SKILL.md=design spec, sanitize.py=future read pipeline (Session 9 — Claude Code)
+- [x] dgx_config.md marked SUPERSEDED by model_upgrade.md (Session 9 — Claude Code)

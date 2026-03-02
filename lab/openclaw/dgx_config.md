@@ -1,7 +1,7 @@
 # OpenClaw DGX Spark Configuration Spec (v2)
 
 **Author:** Antigravity, Shift 3 | **Date:** 2026-02-24  
-**Status:** DRAFT — Phase 2 complete, awaiting Phase 3 authorization
+**Status:** SUPERSEDED by `model_upgrade.md` (2026-02-25). Model is now Claude Opus 4.6 via Anthropic API, not local Ollama. Heartbeat and security sections remain valid reference material.
 
 ---
 

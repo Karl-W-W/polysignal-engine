@@ -138,6 +138,7 @@ def _build_initial_state(thread_id, cycle_number=1, user_request="test"):
         "human_approved": None,
         "execution_result": None,
         "execution_status": None,
+        "moltbook_result": None,
         "errors": [],
         "stage_timings": {},
     }
