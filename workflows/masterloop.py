@@ -483,6 +483,28 @@ def commit_node(state: LoopState) -> LoopState:
             state["moltbook_result"] = f"Error: {e}"
             print(f"  ⊘ MoltBook publish skipped: {e}")
 
+    # ── Learning: write cycle summary to memory (non-blocking) ────────────────
+    try:
+        obs_count = len(state.get("observations", []))
+        pred_count = len(state.get("predictions", []))
+        signals = [o for o in state.get("observations", []) if o.get("direction")]
+        signal_summary = ", ".join(
+            f"{s.get('title', '?')[:40]} ({s.get('direction', '?')})"
+            for s in signals[:3]
+        ) or "none"
+        entry = (
+            f"Cycle #{state.get('cycle_number', '?')} | "
+            f"Obs: {obs_count} | Signals: {len(signals)} | Preds: {pred_count} | "
+            f"Status: {state.get('execution_status', 'UNKNOWN')} | "
+            f"Signals: {signal_summary}"
+        )
+        if state.get("draft_reasoning"):
+            entry += f" | Reasoning: {state['draft_reasoning'][:100]}"
+        write_memory(entry)
+        print(f"  ✓ Memory updated")
+    except Exception as e:
+        print(f"  ⊘ Memory write skipped: {e}")
+
     return state
 
 

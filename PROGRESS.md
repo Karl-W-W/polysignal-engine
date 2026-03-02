@@ -1,22 +1,23 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-02 23:30 CET | Session 9 in progress
+# Last updated: 2026-03-03 00:30 CET | Session 9 closing
 # Session history: See HISTORY.md
 
 ---
 
 ## System Overview
 
-PolySignal-OS is an AI-native prediction market intelligence system. It scans Polymarket via the Gamma API, detects signals through a 6-stage MasterLoop (LangGraph), and surfaces ~5 high-confidence signals/week. Deployed on NVIDIA DGX Spark (Munich), frontend on Vercel.
+PolySignal-OS is an AI-native prediction market intelligence system. It scans Polymarket via the Gamma API, detects signals through a 7-node MasterLoop (LangGraph), publishes to MoltBook, and writes cycle learnings to memory. Deployed on NVIDIA DGX Spark (Munich), frontend on Vercel.
 
-**Pipeline (complete, risk-gated):**
+**Pipeline (complete, risk-gated, publishing, learning):**
 ```
-Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → COMMIT → Telegram
+Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → COMMIT → MoltBook → Memory
 ```
 
 **Three-agent workflow:**
-- **Antigravity** (Claude Code / DGX access) — architect, infrastructure, test runner
-- **Loop** (OpenClaw sandbox / Telegram) — autonomous developer, reads/writes code
-- **Karl** — router, Vault authorizer, human-only tasks
+- **Claude Code** — architect, strategy, complex implementations, testing
+- **Loop** (OpenClaw sandbox / Telegram) — autonomous developer, code reviews, DGX-local tasks
+- **Antigravity** (IDE agent) — DGX ops, Docker rebuilds, file syncing (cheaper per prompt)
+- **KWW** — Vault authorizer, human-only tasks, strategic decisions
 
 ---
 
@@ -24,7 +25,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| DGX Spark | UP | Munich, `llama3.3:70b` on Ollama |
+| DGX Spark | UP | Munich, Blackwell GPU, `llama3.3:70b` on Ollama |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
 | OpenClaw Sandbox | UP | Firejail :9001, 10 bind mounts |
 | OpenClaw Gateway | UP | systemd, Claude Opus 4.6, heartbeat 30m |
@@ -32,17 +33,19 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
-| GitHub | SYNCED | `5a77d91`, Mac + DGX both current |
-| Tests | 140/140 PASS | Mac (1.6s) + DGX (1.6s) |
-| Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit (kill switch OFF) |
-| Loop Autonomy | ACTIVE | TASKS.md mounted, heartbeat firing, credits restored |
+| GitHub | SYNCED | Mac current, DGX needs `git pull` |
+| Tests | 140/140 PASS | Mac (1.5s) |
+| Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
+| MoltBook Publisher | WIRED | Non-blocking in commit_node (dry-run until JWT) |
+| Learning Loop | WIRED | write_memory() in commit_node → memory.md → draft_node |
+| Loop Autonomy | ACTIVE | TASKS.md mounted, heartbeat firing |
 
 ## Vault Inventory (`/opt/loop/core/` — 10 files)
 
 | File | Purpose |
 |------|---------|
 | `perceive.py` | Polymarket Gamma API scanner |
-| `predict.py` | Pattern matching, momentum detection |
+| `predict.py` | Rule-based momentum detection (MVP — see roadmap) |
 | `supervisor.py` | NVIDIA NIM + HMAC audit (fast/slow path) |
 | `bridge.py` | OpenClaw LangChain tool wrapper |
 | `api.py` | Flask REST API (status, stats, narrative, SSE) |
@@ -52,13 +55,63 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | `risk.py` | Risk gate ($10 max, 75% confidence, $50 daily cap, kill switch) |
 | `risk_integration.py` | Risk gate node for MasterLoop (promoted from lab/ Session 9) |
 
-## MasterLoop Graph (7 nodes)
+## MasterLoop Graph (7 nodes + inline publish + learn)
 
 ```
 perception → prediction → draft → review → risk_gate → [approved] → wait_approval → commit → END
-                                              ↓
-                                        [RISK_BLOCKED] → END
+                                              ↓                            │
+                                        [RISK_BLOCKED] → END              ├── MoltBook publish (inline)
+                                                                          └── write_memory() (inline)
 ```
+
+---
+
+## Honest Architecture Assessment
+
+| Component | What It Does | What It Should Do | Gap |
+|-----------|-------------|-------------------|-----|
+| **Perception** | Scans Polymarket Gamma API, detects 5pp moves | Same + multi-source | Minimal |
+| **Prediction** | `if avg_move > 0.01 → bullish` | ML model (XGBoost → transformer) | **Critical** |
+| **Draft** | Ollama LLM generates shell command from signal | Same | OK |
+| **Review** | HMAC audit + supervisor approval | Same | OK |
+| **Risk Gate** | $10 max, 75% confidence, $50 daily cap | Same | OK |
+| **Wait Approval** | `human_approved = True` (hardcoded) | Telegram YES/NO buttons | **Stub** |
+| **Commit** | Execute via OpenClaw sandbox | Same | OK |
+| **Publish** | MoltBook dry-run (no JWT yet) | Live posts | Human blocker (JWT) |
+| **Learn** | write_memory() → memory.md → draft_node | Feedback loop with accuracy tracking | **MVP** |
+| **Scheduler** | Manual invocation only | 5-minute scan cycle | **Missing** |
+
+---
+
+## Roadmap
+
+### Phase 1: CLOSE THE LOOP (Session 9) — COMPLETE
+- [x] MoltBook publisher wired into commit_node
+- [x] write_memory() wired into commit_node (learning loop)
+- [x] Dead files deleted (-1,230 lines)
+- [x] MoltBook implementations reconciled
+- [x] risk_integration.py promoted to core/
+- [x] 140/140 tests
+
+### Phase 2: REAL PREDICTION (next)
+Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
+- [ ] Feature engineering from observations table (price, volume, delta, time_horizon)
+- [ ] XGBoost baseline model (interpretable, fast to train)
+- [ ] Backtest against historical observations
+- [ ] A/B: rule-based vs XGBoost confidence scores
+- [ ] Promote if XGBoost beats baseline by >10% accuracy
+
+### Phase 3: CONTINUOUS SCANNING
+Kill the manual invocation. The DGX should watch markets autonomously.
+- [ ] Add scheduler (APScheduler or systemd timer) for 5-minute scan cycles
+- [ ] Cycle number auto-increment from DB
+- [ ] Telegram notification on new signals (not just execution)
+
+### Phase 4: REAL HUMAN-IN-THE-LOOP
+Replace auto-approve placeholder with actual Telegram approval.
+- [ ] Telegram inline keyboard (YES / NO / SKIP) in wait_approval_node
+- [ ] Timeout: auto-reject after 30 minutes
+- [ ] Approval audit trail in DB
 
 ---
 
@@ -72,49 +125,16 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 | HMAC audit | LIVE | — |
 | Sandboxed execution | LIVE | — |
 | Telegram alerts | LIVE | — |
-| MoltBook broadcast | BLOCKED | Human: Twitter verification |
-| Polymarket wallet | NOT STARTED | Needs `risk.py` + wallet setup |
+| MoltBook broadcast | WIRED (dry-run) | Human: Twitter verification → JWT |
+| Learning loop | WIRED | memory.md grows per cycle |
+| Polymarket wallet | NOT STARTED | Needs wallet + CLOB auth |
 | Custom domain | BLOCKED | Human: DNS CNAME + Vercel |
-| Anthropic credits (Loop) | CHECK | Top up at console.anthropic.com |
 
 **To go live (human-only steps):**
-1. Top up Anthropic API credits (Loop is dead without them)
-2. MoltBook registration: `moltbook.com/api/v1/register` → Twitter verify → JWT → `openclaw.json`
-3. DNS: CNAME `polysignal.app` → `cname.vercel-dns.com` + Vercel dashboard
-4. Polymarket wallet setup (after MoltBook is active)
-5. `TRADING_ENABLED=true` (only after wallet exists)
-
----
-
-## Open Issues
-
-| Issue | Severity | Notes |
-|-------|----------|-------|
-| Anthropic credits for Loop | HIGH | Loop can't work without API credits |
-| MoltBook skill INACTIVE | MEDIUM | Built + sanitized. Needs Twitter verification (human-only). |
-| No Polymarket wallet | MEDIUM | Can't execute trades. Needs wallet + CLOB auth. |
-| `polysignal.app` DNS | LOW | CNAME → `cname.vercel-dns.com` + Vercel dashboard. |
-| No Python in sandbox | LOW | Loop can write code but not test. Antigravity runs tests. |
-| `group:memory` plugin warning | COSMETIC | OpenClaw v2026.2.12 built-in. Can't fix without upgrade. |
-
----
-
-## Priorities
-
-### P0: Anthropic Credits (HUMAN)
-Top up at console.anthropic.com. Without credits, Loop is dead — heartbeat fires but API rejects.
-
-### P1: MoltBook Registration (HUMAN)
-The signal broadcaster is the product. Register, get JWT, add to OpenClaw sandbox env.
-
-### P2: DNS (HUMAN)
-`polysignal.app` → Vercel. Makes the product real.
-
-### P3: Polymarket Wallet Setup
-After MoltBook is active. Read-only CLOB client already works (14 markets probed in Session 2).
-
-### P4: Loop Tasks (AUTONOMOUS)
-TASKS.md has: Wire MoltBook publisher into commit_node, clean up lab/ stale copies.
+1. MoltBook registration: Twitter verify → JWT → env var `MOLTBOOK_JWT`
+2. DNS: CNAME `polysignal.app` → `cname.vercel-dns.com` + Vercel dashboard
+3. Polymarket wallet setup (after MoltBook is active)
+4. `TRADING_ENABLED=true` (only after wallet exists)
 
 ---
 
