@@ -1,5 +1,5 @@
 # Loop Task Queue
-# Updated: 2026-03-04 00:30 CET (Session 13 — Claude Code)
+# Updated: 2026-03-04 01:45 CET (Session 13 closing — Claude Code)
 # Loop reads this on every heartbeat. Pick the first unchecked [ ] item.
 # IMPORTANT: You are a CODE AGENT. Write code in lab/ and workflows/. Do NOT run scanner commands.
 # The scanner is already running as a systemd service — you don't need to scan markets yourself.
@@ -148,3 +148,11 @@ See PROGRESS.md "MoltBook Threat Model" for details.
 - [x] Loop pytest verified — 217/217 passing from sandbox (Session 12 — Loop)
 - [x] Session 12 signal detection reviewed — approved with 3 minor findings (Session 12 — Loop)
 - [x] feature_engineering.py self-review — 27/27 passing, no bugs (Session 12 — Loop)
+- [x] XGBoost baseline built — `lab/xgboost_baseline.py`, 24 tests (Session 13 — Claude Code)
+- [x] XGBoost baseline reviewed — positive review, 2 minor findings (Session 13 — Loop)
+- [x] Loop verified 241/241 tests from sandbox incl. XGBoost tests (Session 13 — Loop)
+- [x] Overnight audit — 6 findings, cycle_number bug was actionable (Session 13 — Loop)
+- [x] Telegram notification dedup — 1hr cooldown, `core/notifications.py` (Session 13 — Claude Code, Vault auth)
+- [x] cycle_number wired from scanner into masterloop (Session 13 — Claude Code, bug found by Loop)
+- [x] ML deps (xgboost, scikit-learn) installed on DGX (Session 13 — Claude Code)
+- [x] 241/241 tests passing on Mac + DGX (Session 13 — Claude Code)

@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-03 18:00 CET | Session 12 active
+# Last updated: 2026-03-04 01:30 CET | Session 13 closing
 # Session history: See HISTORY.md
 
 ---
@@ -27,22 +27,24 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 |-----------|--------|---------|
 | DGX Spark | UP | Munich, Blackwell GPU, `llama3.3:70b` on Ollama |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
-| OpenClaw Sandbox | UP | Firejail :9001, 10 bind mounts |
+| OpenClaw Sandbox | UP | Firejail :9001, 12 bind mounts, Python 3.12.3 (Session 12) |
 | OpenClaw Gateway | UP | systemd, Claude Opus 4.6, heartbeat 30m |
 | Telegram Bot | UP | `@OpenClawOnDGX_bot`, allowlist: [1822532651] |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | 217/217 PASS | Mac (1.5s) — +27 feature engineering tests (Loop) |
-| Scanner | DEPLOYED | `polysignal-scanner.service` — signal-enhanced predictions (Session 11) |
-| DGX Thermal | OK 51-52°C | Cooled from 67-77°C (Session 10). Monitor. |
+| Tests | 241/241 PASS | Mac (6.5s), DGX (19s) — +24 XGBoost tests (Session 13) |
+| Scanner | DEPLOYED | `polysignal-scanner.service` — 54 predictions accumulated (Session 13) |
+| DGX Thermal | OK 73.7°C | Elevated but stable. Monitor. |
 | Outcome Tracker | WIRED | Signal-enhanced predictions now recording (was broken — Session 11 fix) |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
 | MoltBook Publisher | WIRED | Non-blocking in commit_node (dry-run until JWT) |
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (Session 11 fix) |
-| Loop Autonomy | ACTIVE | TASKS.md rewritten (Session 11), supervisor JSON fix deployed |
+| Loop Autonomy | ACTIVE | Can run pytest (Session 12), reviewed xgboost_baseline (Session 13) |
 | Feature Eng. | LAB | `lab/feature_engineering.py` — 18 features, labeled dataset builder (Loop) |
+| XGBoost Baseline | LAB | `lab/xgboost_baseline.py` — training + inference, 24 tests (Session 13) |
+| Telegram Dedup | VAULT | `core/notifications.py` — 1hr cooldown on identical alerts (Session 13) |
 
 ## Vault Inventory (`/opt/loop/core/` — 10 files)
 
@@ -75,7 +77,7 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 | Component | What It Does | What It Should Do | Gap |
 |-----------|-------------|-------------------|-----|
 | **Perception** | Scans Polymarket Gamma API, detects 5pp moves | Same + multi-source | Minimal |
-| **Prediction** | Rule-based + signal enhancement (Session 11) | ML model (XGBoost → transformer) | **Critical** — feature eng ready, waiting on labeled data |
+| **Prediction** | Rule-based + signal enhancement (Session 11) | ML model (XGBoost → transformer) | **In progress** — XGBoost baseline built (Session 13), waiting on 50+ labeled data |
 | **Draft** | Ollama LLM generates shell command from signal | Same | OK |
 | **Review** | HMAC audit + supervisor approval | Same | OK |
 | **Risk Gate** | $10 max, 75% confidence, $50 daily cap | Same | OK |
@@ -121,14 +123,26 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 - [x] First real prediction recorded: Bearish conf=0.60 for market 556108 at 16:59 CET
 - [x] Risk gate correctly blocking (TRADING_ENABLED=false) — pipeline working end-to-end
 
-### Phase 2: REAL PREDICTION (in progress — data now flowing)
+### Phase 1.9: LOOP EMPOWERMENT + ML PIPELINE (Session 12-13) — COMPLETE
+- [x] Sandbox image rebuilt with Python 3.12.3 from source — Loop can run pytest (Session 12)
+- [x] data/ and brain/ bind mounts added to openclaw.json (Session 12)
+- [x] Loop verified 241/241 tests from sandbox (Session 12-13)
+- [x] Loop completed 3 code reviews: signal detection, feature engineering, xgboost baseline
+- [x] XGBoost training pipeline — `lab/xgboost_baseline.py`, 24 tests (Claude Code, Session 13)
+- [x] Telegram notification dedup — 1hr cooldown on identical alerts (Vault fix, Session 13)
+- [x] cycle_number wired from scanner into masterloop (bug found by Loop audit, Session 13)
+- [x] ML deps (xgboost, scikit-learn) added to requirements.txt + installed on DGX
+- [x] 241/241 tests passing on both Mac and DGX
+
+### Phase 2: REAL PREDICTION (in progress — data nearly ready)
 Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [x] Feature engineering from observations table — `lab/feature_engineering.py` (Loop, Session 11)
-- [ ] Accumulate 50+ labeled predictions (signal enhancement now recording — ~24-48h)
-- [ ] XGBoost baseline model (interpretable, fast to train)
+- [x] XGBoost baseline built — `lab/xgboost_baseline.py` with train/predict/batch (Claude Code, Session 13)
+- [ ] Accumulate 50+ labeled predictions (54 total, 46 real — first evals ~17:00 UTC Mar 4)
+- [ ] Train XGBoost when data_readiness.py reports ready
 - [ ] Backtest against historical observations
 - [ ] A/B: rule-based vs XGBoost confidence scores
-- [ ] Promote if XGBoost beats baseline by >10% accuracy
+- [ ] Wire predict_batch() into masterloop prediction_node if accuracy > 55%
 
 ### Phase 3: CONTINUOUS SCANNING — COMPLETE (Antigravity, Session 10)
 - [x] `polysignal-scanner.service` deployed on DGX (systemd)
@@ -156,7 +170,8 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Telegram alerts | LIVE | — |
 | MoltBook broadcast | WIRED (dry-run) | Human: Twitter verification → JWT |
 | Learning loop | WIRED | memory.md now persistent (gitignored, Session 11) |
-| Feature engineering | READY | 18 features, awaiting 50+ labeled predictions |
+| Feature engineering | READY | 18 features, 54 predictions accumulating |
+| XGBoost baseline | READY | `lab/xgboost_baseline.py` — train when 50+ labeled |
 | Polymarket wallet | NOT STARTED | Needs wallet + CLOB auth |
 | Custom domain | BLOCKED | Human: DNS CNAME + Vercel |
 
@@ -199,20 +214,25 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ---
 
-## 🎯 NEXT STEPS (Session 12)
+## 🎯 NEXT STEPS (Session 14)
 
-**First real signal-enhanced prediction recorded. Data pipeline is LIVE. Phase 2 ML next.**
+**XGBoost baseline built. 54 predictions accumulating. First evaluations expected ~17:00 UTC Mar 4.**
 
-1. ~~**Verify:** Confirm outcome_tracker recording non-Neutral predictions~~ **DONE** — Bearish conf=0.60 for market 556108 recorded at 16:59 CET
-2. **Accumulate (24-48h):** 50+ labeled predictions needed for XGBoost baseline
-3. **Phase 2 (when data ready):** Train XGBoost on feature vectors from `lab/feature_engineering.py`
-4. **MoltBook JWT (human):** Twitter verification → env var `MOLTBOOK_JWT` → live publishing (defer until ML ready)
-5. **Phase 4 (after Phase 2):** Real HITL — Telegram YES/NO buttons
-6. **Known bug (needs Vault auth):** `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()`
+1. **Wait for evaluations:** outcome_tracker evaluates predictions after 24h horizon. First batch ~17:00 UTC Mar 4.
+2. **Check data_readiness.py:** Loop is building this — reports when 50+ labeled samples are available.
+3. **Train XGBoost:** Run `train_model()` on DGX when data ready. If accuracy > 55%, proceed to wire-in.
+4. **Wire predict_batch() into masterloop:** Replace rule-based `predict_market_moves()` in prediction_node.
+5. **Loop overnight findings to address:**
+   - Only 2/14 markets signaling — consider lowering SIGNAL_THRESHOLD to 1.5pp for broader coverage
+   - Observation count 13→2 per cycle is by design (signal markets only when signals present)
+   - polysignal.db WAL lock — Loop can't read from sandbox (low priority)
+6. **MoltBook JWT (human):** Twitter verification → env var `MOLTBOOK_JWT` (defer until ML predictions live)
+7. **Phase 4 (after Phase 2):** Real HITL — Telegram YES/NO buttons
+8. **Known bug (needs Vault auth):** `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()`
 
 ### Revenue Critical Path
 ```
+Labeled data (hours away) → Train XGBoost → Wire into masterloop → Validate
+    ↓
 MoltBook JWT (human) → Live publishing → Reputation → Polymarket wallet → Trading
-         ↓                                    ↓
-   Write signals              MoltBook read pipeline (Phase 5 — needs isolation)
 ```
