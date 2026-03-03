@@ -1,5 +1,6 @@
 .env
 data/
+brain/memory.md
 node_modules/
 __pycache__/
 *.pyc

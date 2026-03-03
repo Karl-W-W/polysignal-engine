@@ -265,8 +265,32 @@ def prediction_node(state: LoopState) -> LoopState:
 
     try:
         preds = predict_market_moves(observations)
-        state["predictions"] = [p.to_dict() for p in preds]
-        print(f"  ✓ {len(preds)} hypotheses generated")
+        predictions = [p.to_dict() for p in preds]
+
+        # Enhance Neutral predictions with perception signal data.
+        # Rule-based predictor returns Neutral when DB history is missing;
+        # perception signals already carry direction + delta from bitcoin_signal.py.
+        obs_signals = {}
+        for obs in observations:
+            mid = obs.get("market_id")
+            direction = obs.get("direction", "")
+            if mid and direction:
+                obs_signals[mid] = obs
+
+        enhanced = 0
+        for pred in predictions:
+            if pred["hypothesis"] == "Neutral" and pred["market_id"] in obs_signals:
+                sig = obs_signals[pred["market_id"]]
+                direction = sig["direction"].lower()
+                pred["hypothesis"] = "Bullish" if "bull" in direction or "📈" in sig.get("direction", "") else "Bearish"
+                delta = abs(sig.get("change_24h", 0.0))
+                pred["confidence"] = round(min(0.55 + delta * 2, 0.85), 2)
+                pred["reasoning"] = f"Signal-enhanced: {sig['direction']} (delta: {sig.get('change_24h', 0):.3f})"
+                pred["time_horizon"] = sig.get("time_horizon", "24h")
+                enhanced += 1
+
+        state["predictions"] = predictions
+        print(f"  ✓ {len(preds)} hypotheses ({enhanced} signal-enhanced)")
 
         # ── Record predictions for future outcome evaluation (non-blocking) ──
         try:
@@ -477,8 +501,15 @@ def commit_node(state: LoopState) -> LoopState:
     try:
         result = openclaw_tool._run(command=draft["command"])
         state["execution_result"] = result
-        state["execution_status"] = "SUCCESS"
-        print(f"  ✓ Done: {result[:150]}")
+
+        # Bridge returns errors as strings (not exceptions) — detect them
+        if isinstance(result, str) and result.startswith("❌"):
+            state["execution_status"] = "FAILED"
+            state["errors"].append(f"Commit: {result[:200]}")
+            print(f"  ✗ {result[:150]}")
+        else:
+            state["execution_status"] = "SUCCESS"
+            print(f"  ✓ Done: {str(result)[:150]}")
 
     except Exception as e:
         state["execution_status"] = "FAILED"

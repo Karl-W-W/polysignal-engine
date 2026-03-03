@@ -1,39 +1,51 @@
 # Loop Task Queue
-# Updated: 2026-03-03 02:00 CET (Session 10 — Claude Code)
+# Updated: 2026-03-03 15:00 CET (Session 11 — Claude Code)
 # Loop reads this on every heartbeat. Pick the first unchecked [ ] item.
+# IMPORTANT: You are a CODE AGENT. Write code in lab/ and workflows/. Do NOT run scanner commands.
+# The scanner is already running as a systemd service — you don't need to scan markets yourself.
 
 ---
 
 ## Active Tasks
 
-- [ ] **Verify full pipeline on DGX (git pull + tests + dry-run)**
+- [ ] **Review and test the signal-enhanced prediction fix in masterloop.py**
 
-  **Goal:** DGX auto-syncs via cron. Verify 190/190 tests pass after sync.
-
-  **What to do:**
-  1. `cd /opt/loop && git pull origin main`
-  2. `python3 -m pytest tests/ --tb=short -k 'not test_api'` — expect 190/190
-  3. Verify `write_memory()` works: check if `/opt/loop/brain/memory.md` gets entries
-  4. Verify outcome tracker writes to `/opt/loop/data/prediction_outcomes.json`
-  5. Report results on Telegram
-
-- [ ] **Monitor DGX thermals — increase scan interval if >80°C**
-
-  **Goal:** Scanner + Ollama pushing DGX to 67-77°C. Throttle at 90°C.
+  **Goal:** Session 11 fixed a critical bug: `predict_market_moves()` was returning Neutral for ALL markets because it couldn't find the DB. We added signal-enhancement in `prediction_node` so it uses perception signal direction when the rule-based predictor returns Neutral. Review the fix for correctness.
 
   **What to do:**
-  1. `ssh spark "cat /sys/class/thermal/thermal_zone*/temp"`
-  2. If sustained >80°C: set `SCAN_INTERVAL_SECONDS=600` in systemd unit
-  3. `systemctl --user daemon-reload && systemctl --user restart polysignal-scanner`
+  1. Read `workflows/masterloop.py` — find the `prediction_node` function (around line 256)
+  2. Review the new signal-enhancement block that maps perception direction → prediction hypothesis
+  3. Check edge cases: what if `direction` contains unexpected values?
+  4. Write your review in `/mnt/polysignal/lab/reviews/prediction_enhancement_review.md`
+  5. Report findings on Telegram
 
-- [ ] **Let scanner accumulate data (48-72h)**
+  **Context:**
+  - The perception node detects signals via `bitcoin_signal.py` with direction like `"📈 Bullish"` or `"📉 Bearish"`
+  - The rule-based predictor (`core/predict.py`) needs DB history but the DB path was wrong → always Neutral
+  - The enhancement in masterloop.py now uses the signal direction to override Neutral predictions
+  - This lets the outcome tracker record real predictions for Phase 2 ML training data
 
-  **Goal:** Scanner running as systemd service. Let it accumulate observations before Phase 2 ML.
+- [ ] **Write lab/feature_engineering.py — Phase 2 ML data prep**
+
+  **Goal:** Start building the feature engineering pipeline for Phase 2. The outcome tracker (`lab/outcome_tracker.py`) records predictions. The scanner DB (`/opt/loop/data/test.db`, table `observations`) has 1293+ rows. We need a module that reads both and produces feature vectors for XGBoost.
 
   **What to do:**
-  1. Monitor `/opt/loop/data/prediction_outcomes.json` grows
-  2. Check accuracy summary via `get_accuracy_summary()`
-  3. After 48h, evaluate if enough labeled data for XGBoost baseline
+  1. Read `lab/outcome_tracker.py` to understand the prediction schema
+  2. Read `lab/experiments/bitcoin_signal.py` → `detect_signals()` to understand the observation schema
+  3. Create `lab/feature_engineering.py` with:
+     - `load_observations(db_path)` → reads from SQLite observations table
+     - `load_outcomes(json_path)` → reads from prediction_outcomes.json
+     - `build_features(observations, outcomes)` → returns feature matrix + labels
+     - Features: price, volume, delta, time_of_day, day_of_week, momentum_3, momentum_5
+     - Labels: "CORRECT" / "INCORRECT" from outcome tracker
+  4. Include a `if __name__ == "__main__"` block that prints feature stats
+  5. Write the file to `/mnt/polysignal/lab/feature_engineering.py`
+  6. Report on Telegram when done
+
+  **Constraints:**
+  - Use only stdlib + sqlite3 + json (no sklearn/pandas — keep it simple for now)
+  - Must handle empty data gracefully (scanner just started accumulating)
+  - Include type hints and docstrings
 
 ## Roadmap (Phase 2+, for planning — not active tasks yet)
 
@@ -41,12 +53,7 @@
 - Feature engineering from outcome_tracker labeled data
 - XGBoost baseline → backtest → A/B vs rule-based
 - GPU utilization on DGX Blackwell
-- Requires: 48-72h of scanner data from outcome tracker
-
-**Phase 3: Continuous Scanning** — COMPLETE (Antigravity, Session 10)
-- Scanner deployed as `polysignal-scanner.service` on DGX
-- 5-minute interval, active hours 07:00-01:00 CET
-- Git auto-sync cron installed
+- Requires: enough labeled predictions from outcome tracker
 
 **Phase 4: Real HITL** — Telegram YES/NO buttons instead of auto-approve.
 
@@ -86,3 +93,5 @@ See PROGRESS.md "MoltBook Threat Model" for details.
 - [x] Outcome tracking wired into MasterLoop — perception evaluates, prediction records, memory includes accuracy (Session 10 — Claude Code)
 - [x] Sanitize tests ported — tests/test_sanitize.py, 23 tests (Session 10 — Claude Code)
 - [x] 190/190 tests passing (Session 10 — Claude Code)
+- [x] Verify full pipeline on DGX — REASSIGNED to Antigravity (Session 11)
+- [x] Monitor DGX thermals — REASSIGNED to Antigravity (Session 11)

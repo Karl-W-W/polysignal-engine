@@ -157,7 +157,9 @@ Return ONLY valid JSON, no additional text.
         elif "```" in response_text:
             response_text = response_text.split("```")[1].split("```")[0]
         
-        verdict = json.loads(response_text.strip())
+        # strict=False tolerates control characters (newlines/tabs) inside JSON
+        # string values, which Ollama's llama3.3:70b sometimes produces
+        verdict = json.loads(response_text.strip(), strict=False)
         
         # Generate HMAC signature if approved
         if verdict.get("verdict") == "APPROVE":
