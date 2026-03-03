@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-03 15:10 CET | Session 11 active
+# Last updated: 2026-03-03 18:00 CET | Session 12 active
 # Session history: See HISTORY.md
 
 ---
@@ -115,6 +115,12 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 - [x] Feature engineering pipeline: 18 features, labeled dataset builder (Loop)
 - [x] 217/217 tests
 
+### Phase 1.8: FIX SIGNAL DETECTION (Session 12) — COMPLETE
+- [x] Fix signal detection: rolling time windows (15m/1h/4h) instead of consecutive-scan comparison
+- [x] Root cause: prediction markets barely move between 5-min scans (0pp delta), but move 2-7pp over hours
+- [x] First real prediction recorded: Bearish conf=0.60 for market 556108 at 16:59 CET
+- [x] Risk gate correctly blocking (TRADING_ENABLED=false) — pipeline working end-to-end
+
 ### Phase 2: REAL PREDICTION (in progress — data now flowing)
 Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [x] Feature engineering from observations table — `lab/feature_engineering.py` (Loop, Session 11)
@@ -193,14 +199,14 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ---
 
-## 🎯 NEXT STEPS (Session 11)
+## 🎯 NEXT STEPS (Session 12)
 
-**Data pipeline fixed. Signal-enhanced predictions now recording. Phase 2 ML is next.**
+**First real signal-enhanced prediction recorded. Data pipeline is LIVE. Phase 2 ML next.**
 
-1. **Verify (now):** Confirm outcome_tracker recording non-Neutral predictions after scanner restart
+1. ~~**Verify:** Confirm outcome_tracker recording non-Neutral predictions~~ **DONE** — Bearish conf=0.60 for market 556108 recorded at 16:59 CET
 2. **Accumulate (24-48h):** 50+ labeled predictions needed for XGBoost baseline
 3. **Phase 2 (when data ready):** Train XGBoost on feature vectors from `lab/feature_engineering.py`
-4. **MoltBook JWT (human):** Twitter verification → env var `MOLTBOOK_JWT` → live publishing
+4. **MoltBook JWT (human):** Twitter verification → env var `MOLTBOOK_JWT` → live publishing (defer until ML ready)
 5. **Phase 4 (after Phase 2):** Real HITL — Telegram YES/NO buttons
 6. **Known bug (needs Vault auth):** `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()`
 

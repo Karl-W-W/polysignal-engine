@@ -1,59 +1,93 @@
 # Loop Task Queue
-# Updated: 2026-03-03 15:00 CET (Session 11 — Claude Code)
+# Updated: 2026-03-03 18:30 CET (Session 12 — Claude Code)
 # Loop reads this on every heartbeat. Pick the first unchecked [ ] item.
 # IMPORTANT: You are a CODE AGENT. Write code in lab/ and workflows/. Do NOT run scanner commands.
 # The scanner is already running as a systemd service — you don't need to scan markets yourself.
 
 ---
 
+## YOUR ENVIRONMENT — READ THIS FIRST
+
+You have more capability than you think. Here's what's actually mounted in your sandbox:
+
+```
+/mnt/polysignal/lab/           → /opt/loop/lab/           (read/write)
+/mnt/polysignal/workflows/     → /opt/loop/workflows/     (read/write)
+/mnt/polysignal/tests/         → /opt/loop/tests/         (read/write)
+/mnt/polysignal/core/          → /opt/loop/core/          (READ-ONLY)
+/mnt/polysignal/agents/        → /opt/loop/agents/        (read/write)
+/mnt/polysignal/.venv/         → /opt/loop/.venv/         (READ-ONLY)
+/mnt/polysignal/TASKS.md       → /opt/loop/TASKS.md       (read/write)
+/mnt/polysignal/PROGRESS.md    → /opt/loop/PROGRESS.md    (read/write)
+/mnt/polysignal/ARCHITECTURE.md → /opt/loop/ARCHITECTURE.md (read-only)
+/mnt/polysignal/polysignal.db  → /opt/loop/polysignal.db  (read-only)
+```
+
+**You CAN run pytest.** The `.venv` is mounted. Use this exact command:
+
+```bash
+cd /mnt/polysignal && /mnt/polysignal/.venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
+```
+
+If this works, you can validate your own code. If it fails, report the exact error on Telegram.
+
+---
+
 ## Active Tasks
 
-- [ ] **Review and test the signal-enhanced prediction fix in masterloop.py**
+- [ ] **TEST: Verify you can run pytest from sandbox**
 
-  **Goal:** Session 11 fixed a critical bug: `predict_market_moves()` was returning Neutral for ALL markets because it couldn't find the DB. We added signal-enhancement in `prediction_node` so it uses perception signal direction when the rule-based predictor returns Neutral. Review the fix for correctness.
+  **Goal:** Confirm pytest access. This is your most important capability unlock.
 
   **What to do:**
-  1. Read `workflows/masterloop.py` — find the `prediction_node` function (around line 256)
-  2. Review the new signal-enhancement block that maps perception direction → prediction hypothesis
-  3. Check edge cases: what if `direction` contains unexpected values?
-  4. Write your review in `/mnt/polysignal/lab/reviews/prediction_enhancement_review.md`
-  5. Report findings on Telegram
+  1. Run: `cd /mnt/polysignal && /mnt/polysignal/.venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'`
+  2. If it works: report "217/217 passing" (or whatever the count is) on Telegram
+  3. If it fails: report the EXACT error message on Telegram
+  4. Either way, write a brief note in `/mnt/polysignal/lab/reviews/pytest_access_test.md`
+
+- [ ] **Review Session 12 signal detection fix in bitcoin_signal.py**
+
+  **Goal:** Session 12 fixed a critical bug: `detect_signals()` was comparing to the previous 5-minute scan (always 0pp delta for prediction markets). Now uses rolling time windows (15m/1h/4h). Review for correctness and edge cases.
+
+  **What to do:**
+  1. Read `lab/experiments/bitcoin_signal.py` — find `detect_signals()` (around line 116)
+  2. Review the WINDOWS config and the rolling window query logic
+  3. Check edge cases:
+     - What if no observations exist in any window? (new market, first hour)
+     - What if multiple windows return the same delta? (monotonic trend)
+     - Is `datetime('now')` correct for UTC comparison?
+  4. Read `workflows/masterloop.py` lines 48-85 — we moved `load_dotenv()` BEFORE core imports (Session 12 fix). Verify this ordering is correct.
+  5. Write your review in `/mnt/polysignal/lab/reviews/session12_signal_detection_review.md`
+  6. Report findings on Telegram
 
   **Context:**
-  - The perception node detects signals via `bitcoin_signal.py` with direction like `"📈 Bullish"` or `"📉 Bearish"`
-  - The rule-based predictor (`core/predict.py`) needs DB history but the DB path was wrong → always Neutral
-  - The enhancement in masterloop.py now uses the signal direction to override Neutral predictions
-  - This lets the outcome tracker record real predictions for Phase 2 ML training data
+  - Production DB has 1,700+ observations across 14 markets
+  - First real predictions: Bearish conf=0.60 and Bullish conf=0.60 for market 556108
+  - The scanner is now producing real directional predictions via rolling windows
+  - Previous bug: `load_dotenv()` ran AFTER core imports, so `predict.py` got wrong DB_PATH
 
-- [ ] **Write lab/feature_engineering.py — Phase 2 ML data prep**
+- [ ] **Code review: feature_engineering.py quality check**
 
-  **Goal:** Start building the feature engineering pipeline for Phase 2. The outcome tracker (`lab/outcome_tracker.py`) records predictions. The scanner DB (`/opt/loop/data/test.db`, table `observations`) has 1293+ rows. We need a module that reads both and produces feature vectors for XGBoost.
+  **Goal:** You wrote `lab/feature_engineering.py` in Session 11 (481 lines, 18 features). It has 27 tests passing. Do a self-review now that you can potentially run tests yourself.
 
   **What to do:**
-  1. Read `lab/outcome_tracker.py` to understand the prediction schema
-  2. Read `lab/experiments/bitcoin_signal.py` → `detect_signals()` to understand the observation schema
-  3. Create `lab/feature_engineering.py` with:
-     - `load_observations(db_path)` → reads from SQLite observations table
-     - `load_outcomes(json_path)` → reads from prediction_outcomes.json
-     - `build_features(observations, outcomes)` → returns feature matrix + labels
-     - Features: price, volume, delta, time_of_day, day_of_week, momentum_3, momentum_5
-     - Labels: "CORRECT" / "INCORRECT" from outcome tracker
-  4. Include a `if __name__ == "__main__"` block that prints feature stats
-  5. Write the file to `/mnt/polysignal/lab/feature_engineering.py`
-  6. Report on Telegram when done
+  1. Re-read your own `lab/feature_engineering.py`
+  2. If pytest works: run `cd /mnt/polysignal && /mnt/polysignal/.venv/bin/python3 -m pytest tests/test_feature_engineering.py -v`
+  3. Look for:
+     - Edge cases in `_safe_std()` and `_prices_in_window()`
+     - Are the 18 features actually useful for XGBoost? Any redundant?
+     - Is `build_labeled_dataset()` correctly joining features to outcomes?
+  4. Write review + any suggested improvements in `/mnt/polysignal/lab/reviews/feature_eng_self_review.md`
 
-  **Constraints:**
-  - Use only stdlib + sqlite3 + json (no sklearn/pandas — keep it simple for now)
-  - Must handle empty data gracefully (scanner just started accumulating)
-  - Include type hints and docstrings
+---
 
-## Roadmap (Phase 2+, for planning — not active tasks yet)
+## Roadmap (for awareness — not active tasks)
 
 **Phase 2: Real Prediction** — Replace rule-based `predict_market_moves()` with ML.
-- Feature engineering from outcome_tracker labeled data
-- XGBoost baseline → backtest → A/B vs rule-based
-- GPU utilization on DGX Blackwell
-- Requires: enough labeled predictions from outcome tracker
+- Scanner is now producing real labeled predictions (Bullish/Bearish, not Neutral)
+- Need 50+ labeled predictions for XGBoost baseline (~24-48h of scanner data)
+- Feature engineering pipeline ready (`lab/feature_engineering.py`)
+- GPU available (Blackwell on DGX)
 
 **Phase 4: Real HITL** — Telegram YES/NO buttons instead of auto-approve.
 
@@ -90,8 +124,14 @@ See PROGRESS.md "MoltBook Threat Model" for details.
 - [x] 10 scanner tests added (Session 10 — Antigravity)
 - [x] Git auto-sync cron on DGX (Session 10 — Antigravity)
 - [x] Outcome tracker built — lab/outcome_tracker.py, 17 tests (Session 10 — Claude Code)
-- [x] Outcome tracking wired into MasterLoop — perception evaluates, prediction records, memory includes accuracy (Session 10 — Claude Code)
-- [x] Sanitize tests ported — tests/test_sanitize.py, 23 tests (Session 10 — Claude Code)
+- [x] Outcome tracking wired into MasterLoop (Session 10 — Claude Code)
+- [x] Sanitize tests ported — 23 tests (Session 10 — Claude Code)
 - [x] 190/190 tests passing (Session 10 — Claude Code)
 - [x] Verify full pipeline on DGX — REASSIGNED to Antigravity (Session 11)
 - [x] Monitor DGX thermals — REASSIGNED to Antigravity (Session 11)
+- [x] Feature engineering pipeline — 18 features, 27 tests (Session 11 — Loop)
+- [x] Signal-enhanced predictions — override Neutral with perception direction (Session 11 — Claude Code)
+- [x] Supervisor JSON fix — strict=False for Ollama (Session 11 — Claude Code, Vault auth)
+- [x] Rolling window signal detection — 15m/1h/4h windows (Session 12 — Claude Code)
+- [x] load_dotenv() import order fix — before core imports (Session 12 — Claude Code)
+- [x] 217/217 tests passing (Session 12 — Claude Code)
