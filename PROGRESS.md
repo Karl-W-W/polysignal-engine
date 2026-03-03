@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-03 02:00 CET | Session 10
+# Last updated: 2026-03-03 03:00 CET | Session 10 closing
 # Session history: See HISTORY.md
 
 ---
@@ -177,3 +177,15 @@ Replace auto-approve placeholder with actual Telegram approval.
 **DGX Caging Gaps (not urgent for write-only):**
 - ⚠️ Network egress: Docker has full access — needs egress filtering before read pipeline
 - ⚠️ Exec isolation: Publisher uses `requests.post()` (fine) — read pipeline would need strict exec=false
+
+---
+
+## 🎯 NEXT STEP
+
+**Monitor scanner data accumulation (48-72h), then start Phase 2: ML prediction.**
+
+1. **Immediate (Loop/Antigravity):** Monitor DGX thermals — increase `SCAN_INTERVAL_SECONDS=600` if sustained >80°C
+2. **Immediate (Loop):** Verify 190/190 tests on DGX after auto-sync, check outcome tracker writes to `/opt/loop/data/prediction_outcomes.json`
+3. **48h gate:** After scanner has accumulated data, evaluate if enough labeled predictions for XGBoost baseline
+4. **Phase 2 start:** Feature engineering from outcome_tracker data → XGBoost baseline → backtest → A/B vs rule-based
+5. **Known bug (needs Vault auth):** `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` — KWW must authorize fix

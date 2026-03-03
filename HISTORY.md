@@ -1,5 +1,5 @@
 # PolySignal-OS — Session History Archive
-# Archived: 2026-03-01 | Sessions 1–8
+# Archived: 2026-03-03 | Sessions 1–10
 
 This file contains the detailed session logs. For current system state and next steps, see **PROGRESS.md**.
 
@@ -73,3 +73,26 @@ This file contains the detailed session logs. For current system state and next 
 - `loop-telegram` service removed from docker-compose.yml (dead since Session 3)
 - `group:memory` plugin: enabling crashed gateway (doesn't exist in v2026.2.12). Reverted. Cosmetic only.
 - Loop did NOT complete new tasks — **Anthropic credits likely depleted** (confirmed as P0 blocker)
+
+## SESSION 9 (2026-03-02 ~22:00–01:00 CET)
+- **Agents:** Claude Code (architect) + Loop (code review) + Antigravity (not active)
+- Loop gave sharp feedback: "Build less. Wire more." — identified orphaned publisher, dead files, stale docs
+- Deleted 4 dead files (-1,230 lines): lab/signal.py, lab/polymarket/risk.py, lab/masterloop_perception_patch.py, lab/risk_integration.py
+- Wired MoltBook publisher into commit_node (non-blocking try/except)
+- Reconciled MoltBook implementations (SKILL.md vs moltbook_publisher.py)
+- Marked dgx_config.md as SUPERSEDED
+- Wired write_memory() into commit_node — closes the learning loop (memory.md → draft_node)
+- Rewrote PROGRESS.md with honest architecture assessment (stubs exposed)
+- **140/140 tests**, commits `36ea637` + `44eb590`
+
+## SESSION 10 (2026-03-03 ~00:30–03:00 CET)
+- **Agents:** Claude Code (architect) + Loop (threat analysis) + Antigravity (DGX ops)
+- **Antigravity deployed Phase 3:** `polysignal-scanner.service` on DGX (systemd, 5min interval, active hours 07:00–01:00 CET), git auto-sync cron, 10 scanner tests. Commit `7fcf48f`.
+- Built `lab/outcome_tracker.py`: records predictions, evaluates outcomes against future prices after time horizon elapses, produces labeled training data for Phase 2 ML. 17 tests.
+- Wired outcome tracking into MasterLoop: perception evaluates past predictions, prediction records new ones, commit includes accuracy summary in memory.
+- Ported sanitize.py inline self-tests to `tests/test_sanitize.py` — 23 tests (injection, exec, URL filtering, extraction, tags).
+- **Loop's MoltBook threat assessment:** 1.5M agents, 17K operators, exposed credentials (Wiz Jan 2026), semantic worms. MoltBook is a hostile network — write-only until double-layer read isolation built. Codified as hard rule in PROGRESS.md.
+- **Thermal alert:** DGX 67-77°C from scanner + Ollama. Documented escalation path (increase to 10min if >80°C).
+- Fixed missing `moltbook_result` field in `run_cycle()` initial state.
+- Known bug: `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` — needs Vault authorization.
+- **190/190 tests**, commits `acb65ce` + `296b5a5`
