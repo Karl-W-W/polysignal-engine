@@ -1,5 +1,5 @@
 # Loop Task Queue
-# Updated: 2026-03-03 18:30 CET (Session 12 — Claude Code)
+# Updated: 2026-03-04 00:30 CET (Session 13 — Claude Code)
 # Loop reads this on every heartbeat. Pick the first unchecked [ ] item.
 # IMPORTANT: You are a CODE AGENT. Write code in lab/ and workflows/. Do NOT run scanner commands.
 # The scanner is already running as a systemd service — you don't need to scan markets yourself.
@@ -23,11 +23,15 @@ You have more capability than you think. Here's what's actually mounted in your 
 /mnt/polysignal/polysignal.db  → /opt/loop/polysignal.db  (read-only)
 ```
 
-**You CAN run pytest.** The `.venv` is mounted. Use this exact command:
+**You CAN run pytest.** Python 3.12 is installed in your sandbox image. Use this exact command:
 
 ```bash
-cd /mnt/polysignal && /mnt/polysignal/.venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
+cd /mnt/polysignal && PYTHONPATH=/mnt/polysignal:/mnt/polysignal/.venv/lib/python3.12/site-packages /usr/local/bin/python3 -m pytest tests/ --tb=short -k 'not test_api' -q
 ```
+
+**Why this command?** The `.venv/bin/python3` symlink points to `/usr/bin/python3` which doesn't exist
+in your sandbox. Python 3.12 was compiled from source into `/usr/local/bin/python3` in your sandbox
+image. The `PYTHONPATH` tells it where to find all installed packages (pydantic, pytest, etc.).
 
 If this works, you can validate your own code. If it fails, report the exact error on Telegram.
 
@@ -35,49 +39,52 @@ If this works, you can validate your own code. If it fails, report the exact err
 
 ## Active Tasks
 
-- [ ] **TEST: Verify you can run pytest from sandbox**
+- [ ] **Build `lab/data_readiness.py` — Phase 2 data monitor**
 
-  **Goal:** Confirm pytest access. This is your most important capability unlock.
-
-  **What to do:**
-  1. Run: `cd /mnt/polysignal && /mnt/polysignal/.venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'`
-  2. If it works: report "217/217 passing" (or whatever the count is) on Telegram
-  3. If it fails: report the EXACT error message on Telegram
-  4. Either way, write a brief note in `/mnt/polysignal/lab/reviews/pytest_access_test.md`
-
-- [ ] **Review Session 12 signal detection fix in bitcoin_signal.py**
-
-  **Goal:** Session 12 fixed a critical bug: `detect_signals()` was comparing to the previous 5-minute scan (always 0pp delta for prediction markets). Now uses rolling time windows (15m/1h/4h). Review for correctness and edge cases.
+  **Goal:** We need to know when we have enough labeled predictions to train XGBoost.
+  The scanner is accumulating data. Build a script that checks readiness.
 
   **What to do:**
-  1. Read `lab/experiments/bitcoin_signal.py` — find `detect_signals()` (around line 116)
-  2. Review the WINDOWS config and the rolling window query logic
-  3. Check edge cases:
-     - What if no observations exist in any window? (new market, first hour)
-     - What if multiple windows return the same delta? (monotonic trend)
-     - Is `datetime('now')` correct for UTC comparison?
-  4. Read `workflows/masterloop.py` lines 48-85 — we moved `load_dotenv()` BEFORE core imports (Session 12 fix). Verify this ordering is correct.
-  5. Write your review in `/mnt/polysignal/lab/reviews/session12_signal_detection_review.md`
-  6. Report findings on Telegram
+  1. Create `lab/data_readiness.py` with a `check_readiness()` function
+  2. It should read `prediction_outcomes.json` (at `/mnt/polysignal/data/prediction_outcomes.json`)
+  3. Report: total predictions, evaluated predictions, correct/incorrect/neutral counts, accuracy
+  4. Report: estimated time to 50 labeled samples based on current accumulation rate
+  5. Return a dict with all stats + `ready: bool` (True when >=50 evaluated predictions)
+  6. Add a CLI `__main__` block that prints a formatted report
+  7. Write tests in `tests/test_data_readiness.py` — at least 8 tests
+  8. Run pytest to verify: `cd /mnt/polysignal && PYTHONPATH=/mnt/polysignal:/mnt/polysignal/.venv/lib/python3.12/site-packages /usr/local/bin/python3 -m pytest tests/test_data_readiness.py -v`
 
   **Context:**
-  - Production DB has 1,700+ observations across 14 markets
-  - First real predictions: Bearish conf=0.60 and Bullish conf=0.60 for market 556108
-  - The scanner is now producing real directional predictions via rolling windows
-  - Previous bug: `load_dotenv()` ran AFTER core imports, so `predict.py` got wrong DB_PATH
+  - `lab/outcome_tracker.py` already has the PredictionRecord format — read it for the JSON schema
+  - `lab/feature_engineering.py` has `dataset_summary()` which does similar reporting — reuse patterns
+  - The prediction_outcomes.json lives in `/opt/loop/data/` (mounted at `/mnt/polysignal/data/`)
+  - Claude Code is building `lab/xgboost_baseline.py` in parallel — your data_readiness.py will tell us when to trigger training
 
-- [ ] **Code review: feature_engineering.py quality check**
+- [ ] **Apply your Session 12 review findings to bitcoin_signal.py**
 
-  **Goal:** You wrote `lab/feature_engineering.py` in Session 11 (481 lines, 18 features). It has 27 tests passing. Do a self-review now that you can potentially run tests yourself.
+  **Goal:** You found 3 minor issues in your review. Apply the fixes.
 
   **What to do:**
-  1. Re-read your own `lab/feature_engineering.py`
-  2. If pytest works: run `cd /mnt/polysignal && /mnt/polysignal/.venv/bin/python3 -m pytest tests/test_feature_engineering.py -v`
-  3. Look for:
-     - Edge cases in `_safe_std()` and `_prices_in_window()`
-     - Are the 18 features actually useful for XGBoost? Any redundant?
-     - Is `build_labeled_dataset()` correctly joining features to outcomes?
-  4. Write review + any suggested improvements in `/mnt/polysignal/lab/reviews/feature_eng_self_review.md`
+  1. Add a UTC comment to the `datetime('now')` usage in `detect_signals()` (line ~156-159)
+     — Clarify that SQLite `datetime('now')` returns UTC, which matches our UTC-stored timestamps
+  2. Do NOT change any logic — the review confirmed correctness
+  3. Run pytest after: `cd /mnt/polysignal && PYTHONPATH=/mnt/polysignal:/mnt/polysignal/.venv/lib/python3.12/site-packages /usr/local/bin/python3 -m pytest tests/ --tb=short -k 'not test_api' -q`
+
+- [ ] **Build a `polysignal-pytest` custom skill**
+
+  **Goal:** Make pytest a first-class skill so you don't have to remember the long command.
+
+  **What to do:**
+  1. Create `/workspace/skills/polysignal-pytest/SKILL.md` (or wherever your skills live)
+  2. The skill should wrap: `PYTHONPATH=/mnt/polysignal:/mnt/polysignal/.venv/lib/python3.12/site-packages /usr/local/bin/python3 -m pytest`
+  3. Support optional arguments: specific test file, verbose flag, keyword filter
+  4. Include instructions on how to interpret results
+
+  **⚠️ IMPORTANT REMINDERS:**
+  - Do NOT run scanner commands. Do NOT run any `.sh` scripts. The scanner is a systemd service.
+  - Do NOT try to access the network. You have no network in your sandbox.
+  - If a command doesn't exist in the codebase, don't run it.
+  - Your job: write Python code, write tests, run pytest. Stay in your lane.
 
 ---
 
@@ -87,6 +94,7 @@ If this works, you can validate your own code. If it fails, report the exact err
 - Scanner is now producing real labeled predictions (Bullish/Bearish, not Neutral)
 - Need 50+ labeled predictions for XGBoost baseline (~24-48h of scanner data)
 - Feature engineering pipeline ready (`lab/feature_engineering.py`)
+- XGBoost training pipeline being built by Claude Code (`lab/xgboost_baseline.py`)
 - GPU available (Blackwell on DGX)
 
 **Phase 4: Real HITL** — Telegram YES/NO buttons instead of auto-approve.
@@ -135,3 +143,8 @@ See PROGRESS.md "MoltBook Threat Model" for details.
 - [x] Rolling window signal detection — 15m/1h/4h windows (Session 12 — Claude Code)
 - [x] load_dotenv() import order fix — before core imports (Session 12 — Claude Code)
 - [x] 217/217 tests passing (Session 12 — Claude Code)
+- [x] Sandbox image rebuilt with Python 3.12.3 — Loop can run pytest (Session 12 — Claude Code)
+- [x] data/ and brain/ bind mounts added to openclaw.json (Session 12 — Claude Code)
+- [x] Loop pytest verified — 217/217 passing from sandbox (Session 12 — Loop)
+- [x] Session 12 signal detection reviewed — approved with 3 minor findings (Session 12 — Loop)
+- [x] feature_engineering.py self-review — 27/27 passing, no bugs (Session 12 — Loop)
