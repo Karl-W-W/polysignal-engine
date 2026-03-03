@@ -114,55 +114,81 @@ def fetch_crypto_markets(limit: int = 50) -> list:
 # ── Signal Detection ──────────────────────────────────────────────────────────
 
 def detect_signals(markets: list) -> list:
-    """Compare current prices with DB history. Return signals > THRESHOLD."""
+    """Compare current prices with DB history using rolling time windows.
+
+    Instead of comparing only to the previous scan (5min ago, usually 0 delta),
+    checks 1h and 4h windows to catch meaningful price moves in prediction markets.
+    """
     conn = get_db()
     init_db(conn)
     c = conn.cursor()
 
     signals = []
 
+    # Rolling windows: (label, min_age_seconds, max_age_seconds)
+    # We look for the closest observation within each window.
+    WINDOWS = [
+        ("1h",  3600,  7200),   # 1–2h ago
+        ("4h",  10800, 18000),  # 3–5h ago
+    ]
+
     for m in markets:
         market_id     = m["id"]
         current_price = m["price"]
 
-        # Read PREVIOUS observation BEFORE inserting current one (fixes off-by-one)
-        row = c.execute(
-            "SELECT price, timestamp FROM observations WHERE market_id = ? ORDER BY timestamp DESC LIMIT 1",
-            (market_id,)
-        ).fetchone()
-
-        # NOW record current observation
+        # Record current observation first
         c.execute(
             "INSERT INTO observations (market_id, title, price, volume, raw_data) VALUES (?, ?, ?, ?, ?)",
             (market_id, f"{m['title']} — {m['outcome']}", current_price, m["volume"], json.dumps(m))
         )
 
-        if row:
-            last_price = row["price"]
-            last_ts    = row["timestamp"]
-            delta      = current_price - last_price
+        # Find the best (largest absolute) delta across all time windows
+        best_delta     = 0.0
+        best_ref_price = None
+        best_ref_ts    = None
+        best_window    = None
 
-            if abs(delta) >= SIGNAL_THRESHOLD:
-                direction = "📈 Bullish" if delta > 0 else "📉 Bearish"
-                time_horizon = derive_time_horizon(
-                    volume_24h=m["volume"],
-                    abs_price_delta=abs(delta),
-                    num_recent_signals=len(signals),
-                )
-                signals.append({
-                    "market_id":     market_id,
-                    "title":         m["title"],
-                    "outcome":       m["outcome"],
-                    "current_price": current_price,
-                    "last_price":    last_price,
-                    "delta":         delta,
-                    "volume":        m["volume"],
-                    "url":           m["url"],
-                    "direction":     direction,
-                    "last_seen":     last_ts,
-                    "time_horizon":  time_horizon,
-                })
-                print(f"  🔔 SIGNAL: {m['title'][:50]} {delta:+.3f} [{time_horizon}]")
+        for window_name, min_sec, max_sec in WINDOWS:
+            row = c.execute(
+                """SELECT price, timestamp FROM observations
+                   WHERE market_id = ?
+                     AND timestamp < datetime('now', ?)
+                     AND timestamp > datetime('now', ?)
+                   ORDER BY timestamp DESC LIMIT 1""",
+                (market_id, f"-{min_sec} seconds", f"-{max_sec} seconds")
+            ).fetchone()
+
+            if row:
+                ref_price = row["price"]
+                delta = current_price - ref_price
+                if abs(delta) > abs(best_delta):
+                    best_delta     = delta
+                    best_ref_price = ref_price
+                    best_ref_ts    = row["timestamp"]
+                    best_window    = window_name
+
+        if abs(best_delta) >= SIGNAL_THRESHOLD and best_ref_price is not None:
+            direction = "📈 Bullish" if best_delta > 0 else "📉 Bearish"
+            time_horizon = derive_time_horizon(
+                volume_24h=m["volume"],
+                abs_price_delta=abs(best_delta),
+                num_recent_signals=len(signals),
+            )
+            signals.append({
+                "market_id":     market_id,
+                "title":         m["title"],
+                "outcome":       m["outcome"],
+                "current_price": current_price,
+                "last_price":    best_ref_price,
+                "delta":         best_delta,
+                "volume":        m["volume"],
+                "url":           m["url"],
+                "direction":     direction,
+                "last_seen":     best_ref_ts,
+                "time_horizon":  time_horizon,
+                "window":        best_window,
+            })
+            print(f"  🔔 SIGNAL: {m['title'][:50]} {best_delta:+.3f} ({best_window}) [{time_horizon}]")
 
     conn.commit()
     conn.close()
