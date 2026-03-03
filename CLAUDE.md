@@ -32,13 +32,13 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 86/86 pass. `test_api` excluded (needs Flask in venv).
+Expected: 241/241 pass. `test_api` excluded (needs Flask in venv).
 
 ## Working with Loop
 - Assign tasks via `/opt/loop/TASKS.md` — Loop reads on heartbeat (every 30m, 07:00–01:00 CET)
 - Loop writes code to `lab/` and `workflows/` via sandbox mounts at `/mnt/polysignal/`
 - Loop reports via Telegram — check messages for overnight work
-- Loop cannot run pytest (no Python in sandbox) — you are the test runner
+- Loop CAN run pytest (Python 3.12.3 in sandbox since Session 12) — but you verify on Mac too
 - One task at a time. Wait for completion before assigning next.
 
 ## Critical Rules
@@ -51,12 +51,14 @@ Expected: 86/86 pass. `test_api` excluded (needs Flask in venv).
 ## Key Paths on DGX
 ```
 /opt/loop/                    — Project root
-/opt/loop/core/               — Vault (9 files)
-/opt/loop/workflows/          — MasterLoop
-/opt/loop/lab/                — Experiments
-/opt/loop/tests/              — Pytest suite
+/opt/loop/core/               — Vault (10 files)
+/opt/loop/workflows/          — MasterLoop + scanner
+/opt/loop/lab/                — Experiments (feature_engineering, xgboost_baseline)
+/opt/loop/tests/              — Pytest suite (241 tests)
+/opt/loop/data/               — polysignal.db, prediction_outcomes.json
+/opt/loop/brain/memory.md     — Compounding learnings (gitignored)
 /opt/loop/TASKS.md            — Loop's task queue
 /opt/loop/.venv/              — Python 3.13 virtualenv
 /home/cube/.openclaw/         — OpenClaw config + workspace
-/home/cube/.openclaw/openclaw.json — Gateway config (10 bind mounts)
+/home/cube/.openclaw/openclaw.json — Gateway config (12 bind mounts)
 ```
