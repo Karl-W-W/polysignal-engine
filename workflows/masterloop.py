@@ -620,7 +620,7 @@ def build_masterloop() -> StateGraph:
 # PUBLIC API
 # ============================================================================
 
-def run_cycle(user_request: str, thread_id: str = "default", on_event=None) -> LoopState:
+def run_cycle(user_request: str, thread_id: str = "default", on_event=None, cycle_number: int = 1) -> LoopState:
     """
     Execute one full MasterLoop cycle.
     on_event: optional callback(event_type: str, data: dict)
@@ -636,7 +636,7 @@ def run_cycle(user_request: str, thread_id: str = "default", on_event=None) -> L
 
     initial: LoopState = {
         "thread_id":             thread_id,
-        "cycle_number":          1,
+        "cycle_number":          cycle_number,
         "started_at":            datetime.now(timezone.utc).isoformat(),
         "user_request":          user_request,
         "observations":          [],   # ← was missing from original; caused KeyError
@@ -667,7 +667,7 @@ def run_cycle(user_request: str, thread_id: str = "default", on_event=None) -> L
         "metadata": {
             "request":      user_request,
             "thread_id":    thread_id,
-            "cycle_number": 1,
+            "cycle_number": cycle_number,
         },
         "configurable": {"thread_id": thread_id},
     }

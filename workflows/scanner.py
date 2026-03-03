@@ -117,6 +117,7 @@ def run_scanner():
             result = run_cycle(
                 user_request="Scan Polymarket for crypto signals",
                 thread_id=thread_id,
+                cycle_number=cycle_count,
             )
 
             elapsed = time.time() - start
