@@ -45,6 +45,10 @@ try:
 except Exception:
     _ls_client = None
 
+# ── Environment (MUST load before core imports — they read os.getenv at module level) ──
+from dotenv import load_dotenv
+load_dotenv(os.getenv("ENV_PATH", "/opt/loop/.env"))
+
 # ── Vault Imports (core/ is READ-ONLY; we import, never modify) ──────────────
 try:
     from core.supervisor import audit_action, verify_signature
@@ -79,10 +83,6 @@ except ImportError:
         if state.get("signature"):
             return "commit"
         return END
-
-# ── Environment ───────────────────────────────────────────────────────────────
-from dotenv import load_dotenv
-load_dotenv(os.getenv("ENV_PATH", "/opt/loop/.env"))
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 OLLAMA_HOST  = os.getenv("OLLAMA_HOST",  "http://172.17.0.1:11434")
