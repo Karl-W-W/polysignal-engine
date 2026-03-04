@@ -571,6 +571,15 @@ def commit_node(state: LoopState) -> LoopState:
 # ROUTING
 # ============================================================================
 
+def route_after_prediction(state: LoopState) -> str:
+    """Skip draft/review/risk_gate when trading disabled — saves 2 LLM calls/cycle."""
+    from core.risk import TRADING_ENABLED
+    if not TRADING_ENABLED:
+        print("\n[SHORT-CIRCUIT] TRADING_ENABLED=false — skipping draft/review/risk_gate")
+        return END
+    return "draft"
+
+
 def route_after_review(state: LoopState) -> str:
     if state.get("human_approval_needed"):
         return "wait_approval"
@@ -596,7 +605,11 @@ def build_masterloop() -> StateGraph:
 
     wf.set_entry_point("perception")
     wf.add_edge("perception",    "prediction")
-    wf.add_edge("prediction",    "draft")
+    wf.add_conditional_edges(
+        "prediction",
+        route_after_prediction,
+        {"draft": "draft", END: END},
+    )
     wf.add_edge("draft",         "review")
     # Review routes to risk_gate (if approved/needs-human) or END (if rejected)
     wf.add_conditional_edges(

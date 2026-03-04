@@ -166,17 +166,18 @@ def _run_graph(initial):
 # ============================================================================
 
 class TestMasterLoopE2EKillSwitchOn:
-    """Full pipeline with TRADING_ENABLED=False (default safe mode).
-    Risk gate should block the trade, pipeline should complete cleanly."""
+    """With TRADING_ENABLED=False (default), graph short-circuits after prediction.
+    No LLM calls (draft/review skipped), no Telegram spam, data still collected."""
 
-    def test_full_pipeline_kill_switch_blocks(self):
+    def test_short_circuit_skips_draft_review_risk(self):
+        """When trading disabled, only perception + prediction run."""
         with (
             patch.object(ml_module, "fetch_crypto_markets", side_effect=_fake_markets),
             patch.object(ml_module, "detect_signals", side_effect=_fake_signals),
             patch.object(ml_module, "predict_market_moves", side_effect=_fake_predictions),
             patch.object(ml_module, "audit_action", side_effect=_fake_audit),
             patch.object(ml_module, "verify_signature", side_effect=_fake_verify),
-            patch.object(ml_module, "send_telegram_alert"),
+            patch.object(ml_module, "send_telegram_alert") as mock_tg,
             patch.object(ml_module, "openclaw_tool") as mock_openclaw,
             patch.object(ml_module, "brain") as mock_brain,
         ):
@@ -187,12 +188,15 @@ class TestMasterLoopE2EKillSwitchOn:
                                             user_request="Check Bitcoin signals")
             final, nodes_executed = _run_graph(initial)
 
-            # All expected nodes executed
+            # Only perception + prediction executed (short-circuit)
             assert "perception" in nodes_executed
             assert "prediction" in nodes_executed
-            assert "draft" in nodes_executed
-            assert "review" in nodes_executed
-            assert "risk_gate" in nodes_executed
+            assert "draft" not in nodes_executed
+            assert "review" not in nodes_executed
+            assert "risk_gate" not in nodes_executed
+
+            # No LLM calls made (the whole point of the short-circuit)
+            mock_brain.invoke.assert_not_called()
 
             # Perception produced observations
             assert len(final["observations"]) > 0
@@ -204,27 +208,25 @@ class TestMasterLoopE2EKillSwitchOn:
             # Predictions were generated
             assert len(final["predictions"]) > 0
 
-            # Draft action was created
-            assert final["draft_action"] is not None
-            assert "command" in final["draft_action"]
-
-            # Supervisor approved
-            assert final["audit_verdict"]["verdict"] == "APPROVE"
-
-            # Risk gate blocked (TRADING_ENABLED=False by default)
-            assert final["execution_status"] == "RISK_BLOCKED"
-            assert final["signature"] is None
-
-            # Stage timings populated
+            # Stage timings for perception + prediction only
             assert "perception" in final["stage_timings"]
             assert "prediction" in final["stage_timings"]
-            assert "draft" in final["stage_timings"]
-            assert "review" in final["stage_timings"]
-            assert "risk_gate" in final["stage_timings"]
 
-            # No unhandled errors (risk block is intentional)
-            non_risk_errors = [e for e in final["errors"] if "Risk gate" not in e]
-            assert len(non_risk_errors) == 0
+    def test_short_circuit_no_telegram_spam(self):
+        """Short-circuit must not send any Telegram alerts."""
+        with (
+            patch.object(ml_module, "fetch_crypto_markets", side_effect=_fake_markets),
+            patch.object(ml_module, "detect_signals", side_effect=_fake_signals),
+            patch.object(ml_module, "predict_market_moves", side_effect=_fake_predictions),
+            patch.object(ml_module, "send_telegram_alert") as mock_tg,
+            patch.object(ml_module, "brain") as mock_brain,
+        ):
+            initial = _build_initial_state("e2e_test_001b",
+                                            user_request="Check signals")
+            final, nodes_executed = _run_graph(initial)
+
+            # Draft/review never ran, so no Telegram alerts from risk gate
+            mock_tg.assert_not_called()
 
 
 # ============================================================================
@@ -293,31 +295,24 @@ class TestMasterLoopE2ETradingEnabled:
 # ============================================================================
 
 class TestMasterLoopE2ENoSignals:
-    """Pipeline with no signals detected. Should complete gracefully."""
+    """Pipeline with no signals detected. Short-circuits after prediction (trading off)."""
 
     def test_quiet_market_completes(self):
         with (
             patch.object(ml_module, "fetch_crypto_markets", return_value=_fake_markets()),
             patch.object(ml_module, "detect_signals", return_value=[]),
             patch.object(ml_module, "predict_market_moves", side_effect=_fake_predictions),
-            patch.object(ml_module, "audit_action", side_effect=_fake_audit),
-            patch.object(ml_module, "verify_signature", side_effect=_fake_verify),
             patch.object(ml_module, "send_telegram_alert"),
-            patch.object(ml_module, "openclaw_tool") as mock_openclaw,
             patch.object(ml_module, "brain") as mock_brain,
         ):
-            mock_brain.invoke.side_effect = _fake_llm_response
-            mock_openclaw._run.return_value = "SUCCESS: test"
-
             initial = _build_initial_state("e2e_test_003", cycle_number=5,
                                             user_request="Scan markets")
             final, nodes_executed = _run_graph(initial)
 
-            # Core nodes still execute
+            # Short-circuit: only perception + prediction
             assert "perception" in nodes_executed
             assert "prediction" in nodes_executed
-            assert "draft" in nodes_executed
-            assert "review" in nodes_executed
+            assert "draft" not in nodes_executed
 
             # Observations should exist (quiet markets, no signals)
             assert len(final["observations"]) == 2
@@ -329,10 +324,6 @@ class TestMasterLoopE2ENoSignals:
             # cycle_number still propagated
             for obs in final["observations"]:
                 assert obs.get("cycle_number") == 5
-
-            # No unhandled errors
-            non_risk_errors = [e for e in final["errors"] if "Risk gate" not in e]
-            assert len(non_risk_errors) == 0
 
 
 # ============================================================================
@@ -347,15 +338,9 @@ class TestMasterLoopE2EAPIFailure:
             patch.object(ml_module, "fetch_crypto_markets", return_value=[]),
             patch.object(ml_module, "detect_signals", return_value=[]),
             patch.object(ml_module, "predict_market_moves", return_value=[]),
-            patch.object(ml_module, "audit_action", side_effect=_fake_audit),
-            patch.object(ml_module, "verify_signature", side_effect=_fake_verify),
             patch.object(ml_module, "send_telegram_alert"),
-            patch.object(ml_module, "openclaw_tool") as mock_openclaw,
             patch.object(ml_module, "brain") as mock_brain,
         ):
-            mock_brain.invoke.side_effect = _fake_llm_response
-            mock_openclaw._run.return_value = "SUCCESS: test"
-
             initial = _build_initial_state("e2e_test_004", user_request="Scan markets")
             final, _ = _run_graph(initial)
 
