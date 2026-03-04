@@ -70,17 +70,9 @@ cycle and eliminates all Telegram spam. Perception + prediction still run for da
   7. Run pytest: use polysignal-pytest skill, filter with `-k 'test_masterloop'`
   8. Report findings on Telegram
 
-- [ ] **Task 4: Dead code audit (lab/ and workflows/)**
-
-  **Goal:** Find unused imports, unreachable code, or files that should be deleted.
-
-  **What to do:**
-  1. Check each file in `lab/` — are there functions never called anywhere?
-  2. Check `workflows/scanner.py` — any dead code from before the short-circuit?
-  3. Check `workflows/masterloop.py` — any now-unreachable code paths?
-  4. Check for unused imports across all non-core files
-  5. Write findings in `lab/dead_code_audit.md`
-  6. Do NOT delete anything — just report
+- [x] **Task 4: Dead code audit (lab/ and workflows/)** — DONE by Claude Code (Session 14)
+  Result: **No dead code found.** Every import, function, and file is actively used.
+  Report: `lab/dead_code_audit.md`
 
 ---
 
@@ -95,7 +87,10 @@ cycle and eliminates all Telegram spam. Perception + prediction still run for da
 ---
 
 ## Completed Tasks (Session 14)
-(none yet — you're up!)
+- [x] Task 2: data_readiness.py built (Claude Code) — 14 tests
+- [x] Task 4: Dead code audit (Claude Code) — no dead code found
+- [x] Evaluation pipeline fix: moved evaluate_outcomes() after market fetch (Claude Code)
+- [x] MasterLoop short-circuit: TRADING_ENABLED=false skips draft/review/risk_gate (Claude Code)
 
 ## Completed Tasks (Session 13 and earlier)
 - [x] XGBoost baseline reviewed (Session 13 — Loop)
