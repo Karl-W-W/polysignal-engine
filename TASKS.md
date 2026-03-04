@@ -50,24 +50,11 @@ cycle and eliminates all Telegram spam. Perception + prediction still run for da
 
   **Commands**: See `polysignal-data/SKILL.md` for exact queries.
 
-- [ ] **Task 2: Build `lab/data_readiness.py` — Phase 2 data monitor**
-
-  **Goal:** We need to know when we have enough labeled predictions to train XGBoost.
-
-  **What to do:**
-  1. Create `lab/data_readiness.py` with a `check_readiness()` function
-  2. Read `prediction_outcomes.json` (at `/mnt/polysignal/data/prediction_outcomes.json`)
-  3. Report: total predictions, evaluated predictions, correct/incorrect/neutral counts, accuracy
-  4. Report: estimated time to 50 labeled samples based on current accumulation rate
-  5. Return a dict with all stats + `ready: bool` (True when >=50 evaluated predictions)
-  6. Add a CLI `__main__` block that prints a formatted report
-  7. Write tests in `tests/test_data_readiness.py` — at least 8 tests
-  8. Run pytest to verify (use polysignal-pytest skill)
-
-  **Context:**
-  - `lab/outcome_tracker.py` already has the PredictionRecord format — read it for the JSON schema
-  - `lab/feature_engineering.py` has `dataset_summary()` which does similar reporting
-  - The prediction_outcomes.json lives in `/mnt/polysignal/data/`
+- [x] **Task 2: Build `lab/data_readiness.py`** — DONE by Claude Code (Session 14)
+  `lab/data_readiness.py` + `tests/test_data_readiness.py` (14 tests). Use it:
+  ```bash
+  cd /mnt/polysignal && PYTHONPATH=/mnt/polysignal:/mnt/polysignal/.venv/lib/python3.12/site-packages /usr/local/bin/python3 -m lab.data_readiness
+  ```
 
 - [ ] **Task 3: Review masterloop short-circuit (code review)**
 

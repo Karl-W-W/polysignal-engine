@@ -34,10 +34,10 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | 242/242 PASS | Mac (5.9s) — +1 short-circuit test (Session 14) |
+| Tests | 256/256 PASS | Mac (6.0s) — +15 tests Session 14 (short-circuit + data_readiness) |
 | Scanner | DEPLOYED | `polysignal-scanner.service` — 125 predictions accumulated (Session 14) |
 | DGX Thermal | OK 73.7°C | Elevated but stable. Monitor. |
-| Outcome Tracker | WIRED | Signal-enhanced predictions now recording (was broken — Session 11 fix) |
+| Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
 | MoltBook Publisher | WIRED | Non-blocking in commit_node (dry-run until JWT) |
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (Session 11 fix) |
@@ -141,7 +141,9 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 - [x] OpenClaw gateway restarted with new config
 - [x] TASKS.md rewritten with achievable, skill-backed tasks
 - [x] Oracle research: existing Polymarket agents documented (polyclaw, py-clob-client)
-- [x] 242/242 tests passing
+- [x] CRITICAL BUG FIX: evaluate_outcomes() was called before market fetch (empty observations → 0 evaluations)
+- [x] data_readiness.py built with 14 tests (Loop failed overnight, Claude Code delivered)
+- [x] 256/256 tests passing
 
 ### Phase 2: REAL PREDICTION (in progress — data nearly ready)
 Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.

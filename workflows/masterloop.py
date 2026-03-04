@@ -206,17 +206,6 @@ def perception_node(state: LoopState) -> LoopState:
     print("\n[PERCEPTION] Scanning crypto markets...")
     start = datetime.now(timezone.utc)
 
-    # ── Evaluate past predictions against fresh prices (non-blocking) ─────────
-    try:
-        from lab.outcome_tracker import evaluate_outcomes, get_accuracy_summary
-        eval_result = evaluate_outcomes(state.get("observations", []))
-        if eval_result["evaluated"] > 0:
-            print(f"  📊 Outcomes: {eval_result['correct']} correct, "
-                  f"{eval_result['incorrect']} wrong, {eval_result['neutral']} neutral")
-            print(f"     {get_accuracy_summary()}")
-    except Exception:
-        pass  # First cycle or no prior predictions — expected
-
     try:
         markets = fetch_crypto_markets()
 
@@ -244,6 +233,19 @@ def perception_node(state: LoopState) -> LoopState:
         print(f"  ✗ Perception failed: {e}")
         state["observations"] = []
         state["errors"].append(f"Perception: {e}")
+
+    # ── Evaluate past predictions against fresh prices (non-blocking) ─────────
+    # NOTE: Must run AFTER market fetch so state["observations"] has current prices.
+    # Bug fix Session 14: was called before fetch → empty observations → 0 evaluations.
+    try:
+        from lab.outcome_tracker import evaluate_outcomes, get_accuracy_summary
+        eval_result = evaluate_outcomes(state.get("observations", []))
+        if eval_result["evaluated"] > 0:
+            print(f"  📊 Outcomes: {eval_result['correct']} correct, "
+                  f"{eval_result['incorrect']} wrong, {eval_result['neutral']} neutral")
+            print(f"     {get_accuracy_summary()}")
+    except Exception:
+        pass  # First cycle or no prior predictions — expected
 
     state["stage_timings"]["perception"] = (datetime.now(timezone.utc) - start).total_seconds()
     return state
