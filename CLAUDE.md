@@ -3,7 +3,7 @@
 ## What This Is
 PolySignal-OS is an AI-native prediction market intelligence system. It scans Polymarket, detects signals through a 7-node MasterLoop (LangGraph), and surfaces ~5 high-confidence signals/week. Hardware: NVIDIA DGX Spark (Munich). Frontend: Vercel.
 
-Pipeline: `perception → prediction → draft → review → risk_gate → wait_approval → commit`
+Pipeline: `perception → prediction → [short-circuit if !TRADING_ENABLED] → draft → review → risk_gate → wait_approval → commit`
 
 ## Boot-Up Checklist
 1. Read `ARCHITECTURE.md` — folder constraints, Vault rules, RenTec empiricism
@@ -32,13 +32,15 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 241/241 pass. `test_api` excluded (needs Flask in venv).
+Expected: 256/256 pass. `test_api` excluded (needs Flask in venv).
 
 ## Working with Loop
 - Assign tasks via `/opt/loop/TASKS.md` — Loop reads on heartbeat (every 30m, 07:00–01:00 CET)
 - Loop writes code to `lab/` and `workflows/` via sandbox mounts at `/mnt/polysignal/`
 - Loop reports via Telegram — check messages for overnight work
 - Loop CAN run pytest (Python 3.12.3 in sandbox since Session 12) — but you verify on Mac too
+- Loop has 3 skills: polysignal-pytest, polysignal-data, polysignal-git (Session 14)
+- Loop's HEARTBEAT.md upgraded to report prediction intelligence, data readiness, observation growth
 - One task at a time. Wait for completion before assigning next.
 
 ## Critical Rules
@@ -54,7 +56,7 @@ Expected: 241/241 pass. `test_api` excluded (needs Flask in venv).
 /opt/loop/core/               — Vault (10 files)
 /opt/loop/workflows/          — MasterLoop + scanner
 /opt/loop/lab/                — Experiments (feature_engineering, xgboost_baseline)
-/opt/loop/tests/              — Pytest suite (241 tests)
+/opt/loop/tests/              — Pytest suite (256 tests)
 /opt/loop/data/               — polysignal.db, prediction_outcomes.json
 /opt/loop/brain/memory.md     — Compounding learnings (gitignored)
 /opt/loop/TASKS.md            — Loop's task queue

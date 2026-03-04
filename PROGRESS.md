@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-04 19:15 CET | Session 14
+# Last updated: 2026-03-04 22:30 CET | Session 14 (closing)
 # Session history: See HISTORY.md
 
 ---
@@ -27,7 +27,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 |-----------|--------|---------|
 | DGX Spark | UP | Munich, Blackwell GPU, `llama3.3:70b` on Ollama |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
-| OpenClaw Sandbox | UP | Firejail :9001, 12 bind mounts, Python 3.12.3 (Session 12) |
+| OpenClaw Sandbox | UP | Docker :9001, 12 bind mounts, Python 3.12.3, 3 skills, 20 safeBins |
 | OpenClaw Gateway | UP | systemd, Claude Opus 4.6, heartbeat 30m |
 | Telegram Bot | UP | `@OpenClawOnDGX_bot`, allowlist: [1822532651] |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
@@ -35,15 +35,20 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
 | Tests | 256/256 PASS | Mac (6.0s) — +15 tests Session 14 (short-circuit + data_readiness) |
-| Scanner | DEPLOYED | `polysignal-scanner.service` — 125 predictions accumulated (Session 14) |
-| DGX Thermal | OK 73.7°C | Elevated but stable. Monitor. |
+| Scanner | DEPLOYED | `polysignal-scanner.service` — 173 predictions, 30 evaluated, 60% accuracy |
+| DGX Thermal | OK 42°C | Dramatically improved — short-circuit eliminated LLM heat spikes |
+| Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
 | MoltBook Publisher | WIRED | Non-blocking in commit_node (dry-run until JWT) |
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (Session 11 fix) |
 | Loop Autonomy | UPGRADED | 3 skills, +6 safeBins, Claude Opus 4.6, 30m heartbeat (Session 14) |
+| Data Readiness | LAB | `lab/data_readiness.py` — monitors progress to 50 labeled predictions, 14 tests |
 | Feature Eng. | LAB | `lab/feature_engineering.py` — 18 features, labeled dataset builder (Loop) |
 | XGBoost Baseline | LAB | `lab/xgboost_baseline.py` — training + inference, 24 tests (Session 13) |
+| Dead Code Audit | CLEAN | No dead code found — `lab/dead_code_audit.md` (Session 14) |
+| Oracle Research | DONE | `lab/oracle_research.md` — py-clob-client, Polymarket/agents documented |
+| README | DONE | `README.md` — project overview for GitHub landing page |
 | Telegram Dedup | VAULT | `core/notifications.py` — 1hr cooldown on identical alerts (Session 13) |
 
 ## Vault Inventory (`/opt/loop/core/` — 10 files)
@@ -149,7 +154,7 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [x] Feature engineering from observations table — `lab/feature_engineering.py` (Loop, Session 11)
 - [x] XGBoost baseline built — `lab/xgboost_baseline.py` with train/predict/batch (Claude Code, Session 13)
-- [ ] Accumulate 50+ labeled predictions (125 total, 117 real, 0 evaluated — horizons haven't elapsed yet)
+- [ ] Accumulate 50+ labeled predictions (173 total, 165 real, 30 evaluated — 60% accuracy, ETA overnight)
 - [ ] Train XGBoost when data_readiness.py reports ready
 - [ ] Backtest against historical observations
 - [ ] A/B: rule-based vs XGBoost confidence scores
@@ -181,8 +186,8 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Telegram alerts | LIVE | — |
 | MoltBook broadcast | WIRED (dry-run) | Human: Twitter verification → JWT |
 | Learning loop | WIRED | memory.md now persistent (gitignored, Session 11) |
-| Feature engineering | READY | 18 features, 125 predictions accumulating |
-| XGBoost baseline | READY | `lab/xgboost_baseline.py` — train when 50+ labeled |
+| Feature engineering | READY | 18 features, 173 predictions (30 evaluated, 60% accuracy) |
+| XGBoost baseline | READY | `lab/xgboost_baseline.py` — train when 50+ labeled (ETA overnight) |
 | Polymarket wallet | NOT STARTED | Needs wallet + CLOB auth |
 | Custom domain | BLOCKED | Human: DNS CNAME + Vercel |
 
@@ -227,21 +232,21 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ## 🎯 NEXT STEPS (Session 15)
 
-**MasterLoop short-circuited. Loop empowered. 125 predictions accumulating. Evaluations imminent.**
+**30/50 evaluated. 60% accuracy. Evaluations accumulating ~3/hour. XGBoost training imminent.**
 
-1. **Kill rogue `polysignal.service`** — crash-looped 461K times, needs `sudo` (Antigravity)
-2. **Wait for evaluations:** outcome_tracker evaluates on each scanner cycle once time horizons elapse
-3. **Loop tasks:** data_readiness.py, masterloop review, dead code audit (new TASKS.md deployed)
-4. **Train XGBoost:** When data_readiness.py reports ≥50 evaluated predictions
-5. **Loop network access (Session 15):** Set up Squid proxy with domain allowlist for research capability
-6. **Oracle integration:** Study polyclaw (py-clob-client) for order execution patterns before TRADING_ENABLED
+1. **Train XGBoost** — the moment `data_readiness.py` reports READY (50+ evaluated). Loop will alert on Telegram.
+2. **Wire XGBoost into pipeline** — if accuracy >55%, replace rule-based `predict_market_moves()` with `predict_batch()`
+3. **Set promotion threshold** — 60% baseline + 5pp = 65% target (was 55%, updated with real data)
+4. **py-clob-client prototype** — `lab/execution.py` wrapping the official SDK (dry-run, no live orders)
+5. **Loop network access:** Set up Squid proxy with domain allowlist for research capability
+6. **Loop remaining tasks:** Task 1 (data status report) and Task 3 (masterloop review) still open
 7. **MoltBook JWT (human):** Twitter verification → env var `MOLTBOOK_JWT`
 8. **Phase 4:** Real HITL — Telegram YES/NO buttons (after Phase 2 ML is live)
 9. **Known bug (needs Vault auth):** `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()`
 
 ### Revenue Critical Path
 ```
-Evaluations (imminent) → Train XGBoost → Wire into masterloop → Validate
+50 evaluated (overnight) → Train XGBoost → Wire into masterloop → Validate
     ↓
 MoltBook JWT (human) → Live publishing → Reputation → Polymarket wallet → Trading
 ```
