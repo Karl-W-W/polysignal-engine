@@ -296,7 +296,7 @@ def prediction_node(state: LoopState) -> LoopState:
         # Suppresses predictions where the model expects them to fail.
         suppressed = 0
         try:
-            from lab.xgboost_baseline import load_model as xgb_load, _select_features
+            from lab.xgboost_baseline import load_model as xgb_load, select_features
             from lab.feature_engineering import extract_features
             xgb_model, xgb_features = xgb_load()
             db_path = os.getenv("DB_PATH", "/opt/loop/data/test.db")
@@ -309,12 +309,12 @@ def prediction_node(state: LoopState) -> LoopState:
                     continue
                 try:
                     fv = extract_features(market_id, db_path=db_path)
-                    X = _select_features(fv, xgb_features)
+                    X = select_features(fv, xgb_features)
                     proba = xgb_model.predict_proba(X)[0]
                     p_correct = float(proba[1])
                     pred["xgb_p_correct"] = round(p_correct, 3)
 
-                    if p_correct < 0.3:
+                    if p_correct < 0.5:
                         suppressed += 1
                         continue
                     gated.append(pred)

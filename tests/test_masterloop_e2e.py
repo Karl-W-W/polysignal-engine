@@ -212,6 +212,85 @@ class TestMasterLoopE2EKillSwitchOn:
             assert "perception" in final["stage_timings"]
             assert "prediction" in final["stage_timings"]
 
+    def test_xgboost_gate_suppresses_low_confidence(self):
+        """XGBoost confidence gate suppresses predictions with P(correct) < 0.5."""
+        import numpy as np
+
+        # Create a fake XGBoost model that returns low P(correct)
+        mock_model = MagicMock()
+        mock_model.predict_proba.return_value = np.array([[0.8, 0.2]])  # P(correct)=0.2
+
+        with (
+            patch.object(ml_module, "fetch_crypto_markets", side_effect=_fake_markets),
+            patch.object(ml_module, "detect_signals", side_effect=_fake_signals),
+            patch.object(ml_module, "predict_market_moves", side_effect=_fake_predictions),
+            patch.object(ml_module, "send_telegram_alert"),
+            patch.object(ml_module, "brain") as mock_brain,
+            patch("workflows.masterloop.os.getenv", return_value=":memory:"),
+            patch("lab.xgboost_baseline.load_model", return_value=(mock_model, ["price", "trend_strength"])),
+            patch("lab.feature_engineering.extract_features") as mock_extract,
+        ):
+            # Make extract_features return a mock FeatureVector
+            mock_fv = MagicMock()
+            mock_fv.to_dict.return_value = {"price": 0.65, "trend_strength": 1.2}
+            mock_extract.return_value = mock_fv
+
+            initial = _build_initial_state("e2e_xgb_gate",
+                                            user_request="Check signals")
+            final, nodes_executed = _run_graph(initial)
+
+            # All predictions should be suppressed (P(correct)=0.2 < 0.5)
+            assert len(final["predictions"]) == 0
+
+    def test_xgboost_gate_passes_high_confidence(self):
+        """XGBoost confidence gate passes predictions with P(correct) >= 0.5."""
+        import numpy as np
+
+        mock_model = MagicMock()
+        mock_model.predict_proba.return_value = np.array([[0.3, 0.7]])  # P(correct)=0.7
+
+        with (
+            patch.object(ml_module, "fetch_crypto_markets", side_effect=_fake_markets),
+            patch.object(ml_module, "detect_signals", side_effect=_fake_signals),
+            patch.object(ml_module, "predict_market_moves", side_effect=_fake_predictions),
+            patch.object(ml_module, "send_telegram_alert"),
+            patch.object(ml_module, "brain") as mock_brain,
+            patch("workflows.masterloop.os.getenv", return_value=":memory:"),
+            patch("lab.xgboost_baseline.load_model", return_value=(mock_model, ["price", "trend_strength"])),
+            patch("lab.feature_engineering.extract_features") as mock_extract,
+        ):
+            mock_fv = MagicMock()
+            mock_fv.to_dict.return_value = {"price": 0.65, "trend_strength": 1.2}
+            mock_extract.return_value = mock_fv
+
+            initial = _build_initial_state("e2e_xgb_pass",
+                                            user_request="Check signals")
+            final, nodes_executed = _run_graph(initial)
+
+            # Predictions should pass through (P(correct)=0.7 >= 0.5)
+            assert len(final["predictions"]) > 0
+            # Each prediction should have xgb_p_correct attached
+            for pred in final["predictions"]:
+                assert "xgb_p_correct" in pred
+                assert pred["xgb_p_correct"] >= 0.5
+
+    def test_xgboost_gate_graceful_fallback(self):
+        """XGBoost gate falls through gracefully if model not found."""
+        with (
+            patch.object(ml_module, "fetch_crypto_markets", side_effect=_fake_markets),
+            patch.object(ml_module, "detect_signals", side_effect=_fake_signals),
+            patch.object(ml_module, "predict_market_moves", side_effect=_fake_predictions),
+            patch.object(ml_module, "send_telegram_alert"),
+            patch.object(ml_module, "brain") as mock_brain,
+            patch("lab.xgboost_baseline.load_model", side_effect=FileNotFoundError("No model")),
+        ):
+            initial = _build_initial_state("e2e_xgb_fallback",
+                                            user_request="Check signals")
+            final, nodes_executed = _run_graph(initial)
+
+            # All predictions should pass through (gate skipped)
+            assert len(final["predictions"]) > 0
+
     def test_short_circuit_no_telegram_spam(self):
         """Short-circuit must not send any Telegram alerts."""
         with (

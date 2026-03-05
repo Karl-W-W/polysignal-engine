@@ -127,10 +127,11 @@ def detect_signals(markets: list) -> list:
 
     # Rolling windows: (label, min_age_seconds, max_age_seconds)
     # We look for the closest observation within each window.
+    # Session 15: Removed 4h window — 0% accuracy (0W/17L across 134 evals).
+    # Prediction markets move too slowly for 4h windows to be useful.
     WINDOWS = [
         ("15m", 600,   1800),   # 10–30min ago (catches fast intra-hour moves)
         ("1h",  3600,  7200),   # 1–2h ago
-        ("4h",  10800, 18000),  # 3–5h ago
     ]
 
     for m in markets:

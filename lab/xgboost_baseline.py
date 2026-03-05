@@ -281,7 +281,7 @@ def load_model(
     return data["model"], data["feature_names"]
 
 
-def _select_features(fv: 'FeatureVector', feature_names: List[str]) -> np.ndarray:
+def select_features(fv: 'FeatureVector', feature_names: List[str]) -> np.ndarray:
     """Extract only the features the model was trained on (handles pruning)."""
     fv_dict = fv.to_dict()
     values = [float(fv_dict.get(name, 0.0) or 0.0) for name in feature_names]
@@ -318,7 +318,7 @@ def predict_single(
     fv = extract_features(market_id, **kwargs)
 
     # Predict (use only features the model was trained on)
-    X = _select_features(fv, feature_names)
+    X = select_features(fv, feature_names)
     proba = model.predict_proba(X)[0]
     # proba[1] = probability of CORRECT, proba[0] = probability of INCORRECT
     confidence = float(proba[1])
@@ -372,7 +372,7 @@ def predict_batch(
         if db_path:
             kwargs["db_path"] = db_path
         fv = extract_features(market_id, **kwargs)
-        X = _select_features(fv, feature_names)
+        X = select_features(fv, feature_names)
 
         proba = model.predict_proba(X)[0]
         confidence_correct = float(proba[1])
