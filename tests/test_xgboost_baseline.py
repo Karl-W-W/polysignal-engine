@@ -171,7 +171,16 @@ class TestPrepareTrainingData:
         assert y[25:].sum() == 0
 
     def test_feature_count_matches(self, labeled_dataset):
+        # With pruning (default): fewer features than FeatureVector defines
         X, y, names = prepare_training_data(labeled_dataset)
+        from lab.xgboost_baseline import DEAD_FEATURES
+        fv = labeled_dataset[0]
+        expected = len(fv.feature_names()) - len(DEAD_FEATURES)
+        assert len(names) == expected
+        assert X.shape[1] == expected
+
+    def test_feature_count_without_pruning(self, labeled_dataset):
+        X, y, names = prepare_training_data(labeled_dataset, prune_dead=False)
         fv = labeled_dataset[0]
         assert len(names) == len(fv.feature_names())
         assert X.shape[1] == len(fv.feature_names())

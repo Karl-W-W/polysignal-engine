@@ -291,8 +291,43 @@ def prediction_node(state: LoopState) -> LoopState:
                 pred["time_horizon"] = sig.get("time_horizon", "24h")
                 enhanced += 1
 
+        # ── XGBoost confidence gate (Session 15) ─────────────────────────────
+        # Meta-predictor: evaluates P(this prediction will be CORRECT).
+        # Suppresses predictions where the model expects them to fail.
+        suppressed = 0
+        try:
+            from lab.xgboost_baseline import load_model as xgb_load, _select_features
+            from lab.feature_engineering import extract_features
+            xgb_model, xgb_features = xgb_load()
+            db_path = os.getenv("DB_PATH", "/opt/loop/data/test.db")
+
+            gated = []
+            for pred in predictions:
+                market_id = pred.get("market_id")
+                if not market_id:
+                    gated.append(pred)
+                    continue
+                try:
+                    fv = extract_features(market_id, db_path=db_path)
+                    X = _select_features(fv, xgb_features)
+                    proba = xgb_model.predict_proba(X)[0]
+                    p_correct = float(proba[1])
+                    pred["xgb_p_correct"] = round(p_correct, 3)
+
+                    if p_correct < 0.3:
+                        suppressed += 1
+                        continue
+                    gated.append(pred)
+                except Exception:
+                    gated.append(pred)
+            predictions = gated
+        except Exception as e:
+            print(f"  ⊘ XGBoost gate skipped: {e}")
+
         state["predictions"] = predictions
-        print(f"  ✓ {len(preds)} hypotheses ({enhanced} signal-enhanced)")
+        if suppressed:
+            print(f"  🔍 XGBoost gate: {suppressed} low-confidence predictions suppressed")
+        print(f"  ✓ {len(predictions)} hypotheses ({enhanced} signal-enhanced)")
 
         # ── Record predictions for future outcome evaluation (non-blocking) ──
         try:

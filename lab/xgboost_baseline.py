@@ -48,6 +48,20 @@ MIN_SAMPLES = 30
 # Labels we train on (NEUTRAL is dropped — it means the market didn't move)
 TRAINABLE_LABELS = {"CORRECT", "INCORRECT"}
 
+# Features with zero importance from initial training (Session 15).
+# Pruning these reduces noise and improves robustness on small samples.
+DEAD_FEATURES = {
+    "price_delta_1h",
+    "volume_24h",
+    "volume_log",
+    "volume_delta_pct",
+    "price_distance_from_50",
+    "observation_count",
+    "signal_count_1h",
+    "signal_count_24h",
+    "max_signal_confidence",
+}
+
 
 # ── Data Types ───────────────────────────────────────────────────────────────
 
@@ -90,23 +104,34 @@ class ModelPrediction:
 
 def prepare_training_data(
     dataset: List[FeatureVector],
+    prune_dead: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
     """Convert labeled FeatureVectors into numpy arrays for training.
 
     Filters to CORRECT/INCORRECT only (drops NEUTRAL).
     Returns (X, y, feature_names) where y=1 for CORRECT, y=0 for INCORRECT.
+    When prune_dead=True, drops features with zero importance from prior training.
     """
     filtered = [fv for fv in dataset if fv.label in TRAINABLE_LABELS]
 
     if not filtered:
         return np.array([]), np.array([]), []
 
-    X = np.array([fv.feature_values() for fv in filtered], dtype=np.float32)
+    all_names = filtered[0].feature_names()
+    all_values = np.array([fv.feature_values() for fv in filtered], dtype=np.float32)
+
+    if prune_dead:
+        keep_idx = [i for i, name in enumerate(all_names) if name not in DEAD_FEATURES]
+        feature_names = [all_names[i] for i in keep_idx]
+        X = all_values[:, keep_idx]
+    else:
+        feature_names = all_names
+        X = all_values
+
     y = np.array(
         [1 if fv.label == "CORRECT" else 0 for fv in filtered],
         dtype=np.int32,
     )
-    feature_names = filtered[0].feature_names()
 
     return X, y, feature_names
 
@@ -202,7 +227,11 @@ def train_model(
     if save:
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
         with open(MODEL_PATH, "wb") as f:
-            pickle.dump({"model": model, "feature_names": feature_names}, f)
+            pickle.dump({
+                "model": model,
+                "feature_names": feature_names,
+                "pruned_features": list(DEAD_FEATURES),
+            }, f)
         model_path_str = str(MODEL_PATH)
 
     result = TrainingResult(
@@ -236,7 +265,7 @@ def load_model(
     """Load a trained model from disk.
 
     Returns:
-        (model, feature_names) tuple
+        (model, feature_names) tuple — feature_names reflects pruning
 
     Raises:
         FileNotFoundError: If model file doesn't exist
@@ -250,6 +279,13 @@ def load_model(
         data = pickle.load(f)
 
     return data["model"], data["feature_names"]
+
+
+def _select_features(fv: 'FeatureVector', feature_names: List[str]) -> np.ndarray:
+    """Extract only the features the model was trained on (handles pruning)."""
+    fv_dict = fv.to_dict()
+    values = [float(fv_dict.get(name, 0.0) or 0.0) for name in feature_names]
+    return np.array([values], dtype=np.float32)
 
 
 def predict_single(
@@ -281,8 +317,8 @@ def predict_single(
         kwargs["db_path"] = db_path
     fv = extract_features(market_id, **kwargs)
 
-    # Predict
-    X = np.array([fv.feature_values()], dtype=np.float32)
+    # Predict (use only features the model was trained on)
+    X = _select_features(fv, feature_names)
     proba = model.predict_proba(X)[0]
     # proba[1] = probability of CORRECT, proba[0] = probability of INCORRECT
     confidence = float(proba[1])
@@ -336,7 +372,7 @@ def predict_batch(
         if db_path:
             kwargs["db_path"] = db_path
         fv = extract_features(market_id, **kwargs)
-        X = np.array([fv.feature_values()], dtype=np.float32)
+        X = _select_features(fv, feature_names)
 
         proba = model.predict_proba(X)[0]
         confidence_correct = float(proba[1])
