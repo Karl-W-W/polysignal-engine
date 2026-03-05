@@ -3,14 +3,15 @@
 ## What This Is
 PolySignal-OS is an AI-native prediction market intelligence system. It scans Polymarket, detects signals through a 7-node MasterLoop (LangGraph), and surfaces ~5 high-confidence signals/week. Hardware: NVIDIA DGX Spark (Munich). Frontend: Vercel.
 
-Pipeline: `perception → prediction → [short-circuit if !TRADING_ENABLED] → draft → review → risk_gate → wait_approval → commit`
+Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRADING_ENABLED] → draft → review → risk_gate → wait_approval → commit`
 
 ## Boot-Up Checklist
 1. Read `ARCHITECTURE.md` — folder constraints, Vault rules, RenTec empiricism
 2. Read `PROGRESS.md` — current system state, open issues, priorities
-3. Check `TASKS.md` — see if Loop completed any tasks (check DGX: `cat /opt/loop/TASKS.md`)
-4. Run tests: `cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'`
-5. Report: what Loop accomplished, test results, next priority
+3. Check `lab/LOOP_TASKS.md` — Loop's task queue (NOT TASKS.md — Docker inode caching)
+4. Check `lab/reviews/` — Loop writes review files there
+5. Run tests: `cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'`
+6. Report: what Loop accomplished, test results, next priority
 
 ## Three-Agent System
 - **Antigravity** (you, Claude Code) — architect, infrastructure, test runner, DGX access
@@ -32,16 +33,16 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 256/256 pass. `test_api` excluded (needs Flask in venv).
+Expected: 260/260 pass. `test_api` excluded (needs Flask in venv).
 
 ## Working with Loop
-- Assign tasks via `/opt/loop/TASKS.md` — Loop reads on heartbeat (every 30m, 07:00–01:00 CET)
+- Assign tasks via `lab/LOOP_TASKS.md` — syncs through directory mount (NOT TASKS.md — Docker inode caching)
 - Loop writes code to `lab/` and `workflows/` via sandbox mounts at `/mnt/polysignal/`
+- Loop writes reviews to `lab/reviews/` — check there for overnight work
 - Loop reports via Telegram — check messages for overnight work
 - Loop CAN run pytest (Python 3.12.3 in sandbox since Session 12) — but you verify on Mac too
 - Loop has 3 skills: polysignal-pytest, polysignal-data, polysignal-git (Session 14)
-- Loop's HEARTBEAT.md upgraded to report prediction intelligence, data readiness, observation growth
-- One task at a time. Wait for completion before assigning next.
+- All 3 skills reference `lab/LOOP_TASKS.md` as the canonical task file
 
 ## Critical Rules
 - Docker config changes need container **destruction** (`docker rm -f`), not restart
@@ -56,10 +57,12 @@ Expected: 256/256 pass. `test_api` excluded (needs Flask in venv).
 /opt/loop/core/               — Vault (10 files)
 /opt/loop/workflows/          — MasterLoop + scanner
 /opt/loop/lab/                — Experiments (feature_engineering, xgboost_baseline)
-/opt/loop/tests/              — Pytest suite (256 tests)
-/opt/loop/data/               — polysignal.db, prediction_outcomes.json
+/opt/loop/lab/LOOP_TASKS.md   — Loop's task queue (canonical — syncs through directory mount)
+/opt/loop/lab/reviews/        — Loop's code review output files
+/opt/loop/tests/              — Pytest suite (260 tests)
+/opt/loop/data/               — polysignal.db, prediction_outcomes.json, models/
 /opt/loop/brain/memory.md     — Compounding learnings (gitignored)
-/opt/loop/TASKS.md            — Loop's task queue
+/opt/loop/TASKS.md            — STALE (Docker inode caching — do not use for Loop)
 /opt/loop/.venv/              — Python 3.13 virtualenv
 /home/cube/.openclaw/         — OpenClaw config + workspace
 /home/cube/.openclaw/openclaw.json — Gateway config (12 bind mounts)

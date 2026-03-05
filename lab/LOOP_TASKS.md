@@ -1,5 +1,5 @@
 # Loop Task Queue (lab/ mirror)
-# Updated: 2026-03-05 (Session 15 — Claude Code)
+# Updated: 2026-03-05 23:00 CET (Session 15 closing — Claude Code)
 #
 # WHY THIS FILE EXISTS:
 # TASKS.md and PROGRESS.md are mounted as individual file bind mounts in Docker.
@@ -61,56 +61,56 @@ due to Docker inode caching. Use THIS file for tasks.
 
 ## Active Tasks
 
-- [ ] **Task 1: Review XGBoost training results (15 min)**
+- [ ] **Task 5: Add `before` parameter to `get_market_history()` (20 min)**
 
-  The XGBoost model was trained on 112 samples (89 train, 23 test).
-  Training metrics are at `/mnt/polysignal/data/models/training_metrics.json`.
-
-  **Review checklist:**
-  1. Read the training metrics JSON and report accuracy, precision, recall, F1
-  2. Check feature importance — do the top features make intuitive sense?
-  3. Check: is `price_delta_24h` causing data leakage? (Should only use observations BEFORE prediction time)
-  4. Read `lab/feature_engineering.py` lines 340-380 (`build_labeled_dataset`) — verify temporal correctness
-  5. Run `tests/test_xgboost_baseline.py` to confirm tests pass
-  6. Report findings + recommendation (wire into masterloop or wait for more data?) on Telegram
-
-- [ ] **Task 2: Per-market accuracy analysis (20 min)**
-
-  Using the polysignal-data skill, analyze which markets are predictable.
-
-  **Analysis:**
-  1. Query prediction_outcomes.json for per-market win/loss rates
-  2. Market 824952 has 39% accuracy on 91 evals — investigate why. What is this market about?
-  3. Market 556108 has 89% accuracy — what makes it predictable?
-  4. The 4h time horizon was 0% accuracy (0W/17L). Verify these are now gone (collapsed to 24h).
-  5. Write findings to `lab/market_analysis.md`
-  6. Recommend: which markets should we keep tracking, which should we drop?
-
-- [ ] **Task 3: Review masterloop short-circuit + XGBoost gate (code review)**
-
-  **Goal:** Review the Session 14-15 changes to `workflows/masterloop.py`.
-
-  **What to review:**
-  1. Read the `route_after_prediction()` function (~line 574)
-  2. Read the XGBoost confidence gate in `prediction_node` (~line 295-330)
-  3. Verify: does the conditional edge correctly route to `draft` when `TRADING_ENABLED=true`?
-  4. Verify: gate threshold is 0.5 (not 0.3)
-  5. Verify: `select_features` is imported correctly (public, not private)
-  6. Run pytest: `-k 'test_masterloop'`
-  7. Report findings on Telegram
-
-- [ ] **Task 4: Evaluate PolyClaw skill for integration (research)**
-
-  PolyClaw (github.com/chainstacklabs/polyclaw) is an OpenClaw skill for Polymarket trading.
-  It has 166 GitHub stars, MIT license, last updated Jan 2026.
+  **Why:** You found in Task 1 that `get_market_history()` fetches 72h of observations regardless
+  of `ref_time`. All downstream code filters correctly TODAY, but one careless future feature
+  could silently cause data leakage. Add defense-in-depth.
 
   **What to do:**
-  1. Read `lab/ecosystem_research.md` for details
-  2. Assess: does PolyClaw's architecture fit our OpenClaw sandbox?
-  3. What dependencies does it need? (py-clob-client, web3.py, OpenRouter API)
-  4. Security: does it fetch remote instructions? Does it have exec permissions?
-  5. Write a risk assessment to `lab/polyclaw_assessment.md`
-  6. Recommend: install as skill, fork and strip, or skip?
+  1. Read `lab/feature_engineering.py` — find `get_market_history()` function
+  2. Add an optional `before: datetime = None` parameter
+  3. If `before` is set, filter the SQL query to `timestamp <= before`
+  4. Update `extract_features()` to pass `ref_time` as `before` when available
+  5. Add test(s) to `tests/test_feature_engineering.py` verifying temporal correctness
+  6. Run full test suite — must still be 260/260
+  7. Report on Telegram
+
+- [ ] **Task 6: Investigate XGBoost gate live impact (15 min)**
+
+  **Why:** The gate has been live since Session 15. We need to know if it's helping.
+
+  **What to do:**
+  1. Query `prediction_outcomes.json` for predictions made AFTER the gate was wired
+     (look for predictions with `xgb_p_correct` field — these passed through the gate)
+  2. Compare accuracy of gated predictions vs pre-gate predictions
+  3. Count: how many predictions were SUPPRESSED by the gate? (These won't appear in outcomes)
+  4. Check scanner logs for "XGBoost gate" output messages
+  5. Write findings to `lab/reviews/xgboost_gate_impact.md`
+  6. Report on Telegram
+
+- [ ] **Task 7: Market 824952 exclusion analysis (15 min)**
+
+  **Why:** You found this market has 38.4% accuracy — worse than random. Excluding it
+  would eliminate 53 of 55 losses. Before we exclude it, we need a clean analysis.
+
+  **What to do:**
+  1. Query the latest prediction_outcomes.json for market 824952 stats
+  2. Has the XGBoost gate already started suppressing 824952 predictions?
+  3. If yes, the gate may auto-fix the problem. If no, we need a manual exclusion.
+  4. Check: what is 824952's `xgb_p_correct` score? Does the model know it's bad?
+  5. Write recommendation to `lab/reviews/market_824952_decision.md`
+  6. Recommend: exclude, invert, or let the gate handle it?
+
+- [ ] **Task 8: Current prediction accuracy snapshot (10 min)**
+
+  **Why:** Regular accuracy monitoring catches regressions early.
+
+  **What to do:**
+  1. Run the polysignal-data status report query
+  2. Report total predictions, evaluated, accuracy, pending
+  3. Per-horizon breakdown (should be no more 4h predictions)
+  4. Report on Telegram
 
 ---
 
@@ -125,6 +125,10 @@ due to Docker inode caching. Use THIS file for tasks.
 ---
 
 ## Completed Tasks (Session 15)
+- [x] Task 1: XGBoost training review — NO DATA LEAKAGE confirmed (Loop)
+- [x] Task 2: Per-market accuracy analysis — 824952=38.4%, 556108=88.9% (Loop)
+- [x] Task 3: Masterloop review — gate, short-circuit, imports all correct (Loop)
+- [x] Task 4: PolyClaw assessment — verdict: SKIP (Loop)
 - [x] XGBoost trained: 91.3% accuracy, model saved (Claude Code)
 - [x] Accuracy forensics: per-market/horizon/hypothesis breakdown (Claude Code)
 - [x] Ecosystem research: py-clob-client, PolyClaw, arxiv, strategies (Claude Code)
@@ -133,6 +137,7 @@ due to Docker inode caching. Use THIS file for tasks.
 - [x] 4h horizon killed: time_horizon.py + bitcoin_signal.py WINDOWS (Claude Code)
 - [x] 3 integration tests for XGBoost gate (suppress/pass/fallback) (Claude Code)
 - [x] All Loop code review feedback addressed (Claude Code)
+- [x] Docker bind mount fix: lab/LOOP_TASKS.md created, skills updated (Claude Code)
 
 ## Completed Tasks (Session 14)
 - [x] Task 2: data_readiness.py built (Claude Code) — 14 tests

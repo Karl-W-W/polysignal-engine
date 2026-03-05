@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-05 19:30 CET | Session 15 (active)
+# Last updated: 2026-03-05 23:00 CET | Session 15 (closing)
 # Session history: See HISTORY.md
 
 ---
@@ -44,9 +44,12 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (Session 11 fix) |
 | Loop Autonomy | UPGRADED | 3 skills, +6 safeBins, Claude Opus 4.6, 30m heartbeat (Session 14) |
 | Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |
-| Feature Eng. | LAB | `lab/feature_engineering.py` — 19 features, labeled dataset builder (Loop) |
-| XGBoost Baseline | **TRAINED** | 91.3% test accuracy, 87.3% CV. Model at `/opt/loop/data/models/xgboost_baseline.pkl` |
+| Feature Eng. | READY | `lab/feature_engineering.py` — 19 features (10 after pruning), labeled dataset builder |
+| XGBoost Baseline | **WIRED** | 91.3% test, 85.5% CV ±10.6%. Confidence gate LIVE in prediction_node (threshold 0.5) |
+| Feature Pruning | DONE | 9 dead features removed, 10 active features in trained model |
 | Ecosystem Research | DONE | `lab/ecosystem_research.md` — py-clob-client, PolyClaw, arxiv, strategies |
+| Loop Task Sync | FIXED | `lab/LOOP_TASKS.md` — bypasses Docker inode caching on individual file bind mounts |
+| Loop Reviews | DONE | 4/4 tasks completed — XGBoost review, market analysis, masterloop review, PolyClaw assessment |
 | Dead Code Audit | CLEAN | No dead code found — `lab/dead_code_audit.md` (Session 14) |
 | Oracle Research | DONE | `lab/oracle_research.md` — py-clob-client, Polymarket/agents documented |
 | README | DONE | `README.md` — project overview for GitHub landing page |
@@ -83,7 +86,7 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 | Component | What It Does | What It Should Do | Gap |
 |-----------|-------------|-------------------|-----|
 | **Perception** | Scans Polymarket Gamma API, detects 5pp moves | Same + multi-source | Minimal |
-| **Prediction** | Rule-based + signal enhancement (Session 11) | ML model (XGBoost → transformer) | **In progress** — XGBoost baseline built (Session 13), waiting on 50+ labeled data |
+| **Prediction** | Rule-based + XGBoost confidence gate (Session 15) | ML direction predictor (XGBoost → transformer) | Gate LIVE — suppresses P(correct)<0.5. Rule-based still sets direction. |
 | **Draft** | Ollama LLM generates shell command from signal | Same | OK |
 | **Review** | HMAC audit + supervisor approval | Same | OK |
 | **Risk Gate** | $10 max, 75% confidence, $50 daily cap | Same | OK |
@@ -163,9 +166,15 @@ Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [x] Drop 4h horizon — removed from both time_horizon.py AND bitcoin_signal.py WINDOWS (Session 15)
 - [x] Feature pruning — 9 dead features removed, 10 active features (Session 15)
 - [x] Integration tests — 3 tests for XGBoost gate (suppress, pass, fallback) (Session 15)
-- [ ] Loop review of XGBoost training results (data leakage check)
+- [x] Loop review of XGBoost training results — NO DATA LEAKAGE confirmed (Loop, Session 15)
+- [x] Loop per-market analysis — market 824952 is 38.4%, 556108 is 88.9% (Loop, Session 15)
+- [x] Loop masterloop review — gate, short-circuit, imports all verified correct (Loop, Session 15)
+- [x] Loop PolyClaw assessment — verdict: SKIP, too many credential vectors (Loop, Session 15)
+- [x] Docker bind mount fix — lab/LOOP_TASKS.md, first task sync since Session 12 (Claude Code, Session 15)
+- [ ] Exclude/invert market 824952 — eliminates 53 of 55 losses deterministically
+- [ ] Add `before` parameter to `get_market_history()` — defense-in-depth against future leakage
 - [ ] Monitor XGBoost gate impact on live accuracy over 24h
-- [ ] Investigate market 824952 (39% accuracy — XGBoost gate may auto-suppress)
+- [ ] Retrain XGBoost at 200+ evaluated predictions
 
 ### Phase 3: CONTINUOUS SCANNING — COMPLETE (Antigravity, Session 10)
 - [x] `polysignal-scanner.service` deployed on DGX (systemd)
@@ -194,7 +203,7 @@ Replace auto-approve placeholder with actual Telegram approval.
 | MoltBook broadcast | WIRED (dry-run) | Human: Twitter verification → JWT |
 | Learning loop | WIRED | memory.md now persistent (gitignored, Session 11) |
 | Feature engineering | READY | 19 features, 254 predictions (134 evaluated, 50.9% rule-based accuracy) |
-| XGBoost baseline | **TRAINED** | 91.3% test, 87.3% CV. Pending masterloop wiring |
+| XGBoost baseline | **WIRED** | 91.3% test, 85.5% CV. Confidence gate LIVE in prediction_node (threshold 0.5) |
 | Polymarket wallet | NOT STARTED | Needs wallet + CLOB auth |
 | Custom domain | BLOCKED | Human: DNS CNAME + Vercel |
 
@@ -237,30 +246,38 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ---
 
-## NEXT STEPS (Session 15-16)
+## NEXT STEPS (Session 16)
 
-**XGBoost trained: 91.3% test accuracy. Rule-based baseline: 50.9%. Wiring imminent.**
+**XGBoost confidence gate LIVE. Loop verified: no data leakage, all code correct. Market 824952 is the #1 problem.**
 
-### Accuracy Forensics (Session 15)
-| Dimension | Finding | Action |
-|-----------|---------|--------|
-| Market 824952 | 39% accuracy (52L/33W on 91 evals) | Drop or inverse |
-| Market 556108 | 89% accuracy (24W/3L on 27 evals) | Lean in |
-| 4h horizon | 0% accuracy (0W/17L) | **KILLED** — removed from scanner + time_horizon |
-| Bearish vs Bullish | 67% vs 38% | Model captures this |
-| Temporal | 43% early → 59% late | Improving |
+### Session 15 Accomplishments
+| What | Impact |
+|------|--------|
+| XGBoost gate wired (threshold 0.5) | Suppresses predictions model thinks will be wrong |
+| 4h horizon killed | Eliminated 17 guaranteed-wrong predictions |
+| 9 dead features pruned | Reduced noise, improved CV stability (12% → 10.6% std) |
+| Docker bind mount fix | Loop can finally see tasks (first time since Session 12) |
+| Loop completed 4/4 tasks | XGBoost review, market analysis, masterloop review, PolyClaw assessment |
+| Accuracy forensics | Per-market/horizon/hypothesis breakdown of 134 predictions |
+| Ecosystem research | py-clob-client, PolyClaw, arxiv, trading strategies documented |
 
-### Immediate (Session 15)
-1. **Wire XGBoost into masterloop** — `predict_batch()` replaces rule-based (91.3% vs 50.9%)
-2. **Drop 4h horizon** — 0% accuracy across 17 predictions, actively wrong
-3. **Loop reviews** — XGBoost leakage check (Task 1), per-market analysis (Task 2), masterloop review (Task 3)
-4. **py-clob-client Level 0** — enhance perception_node with orderbook depth (no wallet needed)
+### Loop's Key Findings (Session 15)
+- **No data leakage** in XGBoost — `build_labeled_dataset()` correctly filters by ref_time. 91.3% is real.
+- **Market 824952 = 53 of 55 losses.** Excluding it raises rule-based accuracy from ~50% to ~75%.
+- **PolyClaw: SKIP.** Too many credential vectors, needs network access, fetches untrusted content.
+- **`get_market_history()` needs `before` parameter** for defense-in-depth against future leakage.
 
-### Near-term (Session 16-17)
-5. **High-probability bond detection** — free alpha (>95% markets near resolution, 5% per trade)
-6. **News retrieval pipeline** — single biggest accuracy multiplier (arxiv 2402.18563)
-7. **Loop network access** — Squid proxy with domain allowlist (human approval needed)
-8. **PolyClaw evaluation** — OpenClaw skill for Polymarket (after security audit)
+### Immediate (Session 16)
+1. **Exclude/invert market 824952** — single biggest accuracy win, eliminates 53/55 losses deterministically
+2. **Add `before` param to `get_market_history()`** — prevent future data leakage (Loop recommendation)
+3. **py-clob-client Level 0** — enhance perception_node with orderbook depth/spread (no wallet needed)
+4. **Monitor XGBoost gate impact** — need 24h of gated predictions before knowing if it helps live
+
+### Near-term (Session 17-18)
+5. **News retrieval pipeline** — single biggest accuracy multiplier (arxiv 2402.18563)
+6. **High-probability bond detection** — free alpha (>95% markets near resolution, 5% per trade)
+7. **Retrain XGBoost at 200+ evals** — model will stabilize with more data
+8. **Loop network access** — Squid proxy with domain allowlist (human approval needed)
 9. **Backtesting engine** — validate strategies before live trading
 
 ### Requires Human
@@ -274,9 +291,9 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ### Revenue Critical Path
 ```
-XGBoost wired (Session 15) → Validate 24h → Polymarket wallet (human)
-    ↓                                              ↓
-py-clob-client L0 perception → better features → retrain
+Exclude 824952 → Monitor gate 24h → Retrain at 200 evals → Polymarket wallet (human)
+    ↓                                                              ↓
+py-clob-client L0 → orderbook features → retrain with richer data
     ↓
 MoltBook JWT (human) → Live publishing → Reputation → First trades
 ```
