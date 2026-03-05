@@ -4,7 +4,7 @@ Autonomous prediction market intelligence system built on LangGraph.
 
 ## What it does
 
-PolySignal-OS continuously scans Polymarket crypto markets, detects price signals using rolling time-window analysis, generates directional predictions, and tracks their accuracy over time. The system is building toward ML-powered autonomous trading — currently in data collection mode, accumulating labeled predictions to train an XGBoost model that will replace the rule-based predictor.
+PolySignal-OS continuously scans Polymarket crypto markets, detects price signals using rolling time-window analysis, generates directional predictions with XGBoost confidence gating, and tracks their accuracy over time. The system runs a trained XGBoost meta-predictor that suppresses low-confidence predictions before they reach the trading pipeline.
 
 ## Architecture
 
@@ -12,18 +12,18 @@ PolySignal-OS continuously scans Polymarket crypto markets, detects price signal
 ┌─────────────┐    ┌──────────────┐    ┌───────────────────────────────────┐
 │  perception  │───▶│  prediction   │───▶│  TRADING_ENABLED?                 │
 │  (scan +     │    │  (detect +    │    │                                   │
-│   evaluate)  │    │   record)     │    │  false → END (short-circuit)      │
-└─────────────┘    └──────────────┘    │  true  → draft → review → risk   │
-                                        │          → approve → commit       │
-                                        └───────────────────────────────────┘
+│   evaluate)  │    │   XGBoost     │    │  false → END (short-circuit)      │
+└─────────────┘    │   gate +      │    │  true  → draft → review → risk   │
+                    │   record)     │    │          → approve → commit       │
+                    └──────────────┘    └───────────────────────────────────┘
 ```
 
 **7-node LangGraph StateGraph pipeline:**
-1. **perception** — Fetch markets from Polymarket Gamma API, evaluate past predictions
-2. **prediction** — Detect signals via rolling windows (15m/1h/4h), generate hypotheses, record for tracking
+1. **perception** — Fetch markets from Polymarket Gamma API, evaluate past predictions against outcomes
+2. **prediction** — Detect signals via rolling windows (15m/1h), generate hypotheses, XGBoost confidence gate suppresses P(correct)<0.5, record for tracking
 3. **draft** — LLM generates execution plan (skipped when trading disabled)
-4. **review** — LLM supervisor audit (skipped when trading disabled)
-5. **risk_gate** — Position limits, loss caps, kill switch enforcement
+4. **review** — LLM supervisor audit with HMAC signature (skipped when trading disabled)
+5. **risk_gate** — Position limits ($10 max), loss caps ($50/day), kill switch enforcement
 6. **wait_approval** — Human-in-the-loop gate
 7. **commit** — Execute trade, publish to MoltBook, write memory
 
@@ -41,18 +41,22 @@ core/           Vault — production code (read-only without authorization)
   ...
 
 lab/            Experiment scratchpad — new capabilities start here
-  outcome_tracker.py   Prediction recording + time-horizon evaluation
-  feature_engineering.py 18-feature extraction pipeline
-  xgboost_baseline.py   ML training + inference (Phase 2)
-  data_readiness.py     Monitors progress toward ML training threshold
-  moltbook_publisher.py Signal publishing (dry-run until JWT)
+  outcome_tracker.py     Prediction recording + time-horizon evaluation
+  feature_engineering.py 19-feature extraction pipeline (10 active after pruning)
+  xgboost_baseline.py   XGBoost training + inference — 91.3% test accuracy
+  time_horizon.py        Derives signal validity window from market observables
+  data_readiness.py      Monitors progress toward ML training threshold
+  moltbook_publisher.py  Signal publishing (dry-run until JWT)
+  ecosystem_research.md  py-clob-client, PolyClaw, arxiv, trading strategies
+  LOOP_TASKS.md          Loop's canonical task queue (syncs through directory mount)
+  reviews/               Loop's code review output files
   ...
 
 workflows/      LangGraph pipelines
-  masterloop.py   7-node MasterLoop (the core engine)
+  masterloop.py   7-node MasterLoop with XGBoost confidence gate
   scanner.py      Continuous scanning service (5-min intervals)
 
-tests/          256 tests (pytest)
+tests/          260 tests (pytest)
 agents/         Telegram bot
 brain/          Runtime memory (gitignored)
 ```
@@ -93,17 +97,21 @@ python -m workflows.scanner
 
 ## Current Status
 
-**Phase 1.95** — Data collection and prediction evaluation.
+**Phase 2** — XGBoost confidence gate LIVE, rule-based predictor + ML meta-predictor.
 
 | Metric | Value |
 |--------|-------|
-| Tests | 256 passing |
-| Predictions | 170+ accumulated |
-| Accuracy | ~67% (rule-based baseline) |
-| Markets tracked | 14 crypto markets |
-| Observations | 4,300+ |
+| Tests | 260 passing |
+| Predictions | 254+ accumulated, 134+ evaluated |
+| Rule-based accuracy | ~50.9% (coin flip — early 87% was survivorship bias) |
+| XGBoost accuracy | 91.3% test, 85.5% CV (meta-predictor: predicts whether prediction will be correct) |
+| Markets tracked | 14 crypto markets (2 actively signaling) |
+| Observations | 6,500+ |
+| Scanner | Running 24/7 on DGX, 5-min intervals |
 
-**Next milestone:** 50 evaluated predictions → train XGBoost → if accuracy >55% → wire into pipeline.
+**Key insight:** Market 824952 accounts for 53 of 55 total losses (38.4% accuracy). Excluding it raises accuracy to ~75%. The XGBoost gate may auto-suppress it.
+
+**Next:** Exclude market 824952, monitor gate impact, add orderbook depth features via py-clob-client.
 
 ## Multi-Agent System
 
@@ -113,7 +121,7 @@ Three agents collaborate on development:
 - **Loop** (OpenClaw on DGX) — Autonomous agent. Code reviews, data analysis, proactive monitoring. Runs 24/7 on heartbeat.
 - **Antigravity** — Infrastructure agent. DGX operations, Docker, deployments, systemd services.
 
-Agents coordinate through `TASKS.md` (Loop's task queue), `PROGRESS.md` (shared state), and Telegram.
+Agents coordinate through `lab/LOOP_TASKS.md` (Loop's task queue), `PROGRESS.md` (shared state), `lab/reviews/` (Loop's review output), and Telegram.
 
 ## Design Philosophy
 
