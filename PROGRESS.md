@@ -34,7 +34,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | 256/256 PASS | Mac (6.1s) — stable since Session 14 |
+| Tests | 260/260 PASS | Mac (6.1s) — +4 new Session 15 (XGBoost gate integration tests) |
 | Scanner | DEPLOYED | `polysignal-scanner.service` — 254 predictions, 134 evaluated, 50.9% rule-based accuracy |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
@@ -151,18 +151,21 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 - [x] data_readiness.py built with 14 tests (Loop failed overnight, Claude Code delivered)
 - [x] 256/256 tests passing
 
-### Phase 2: REAL PREDICTION (in progress — XGBoost trained, wiring next)
+### Phase 2: REAL PREDICTION (in progress — XGBoost wired as confidence gate)
 Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [x] Feature engineering from observations table — `lab/feature_engineering.py` (Loop, Session 11)
 - [x] XGBoost baseline built — `lab/xgboost_baseline.py` with train/predict/batch (Claude Code, Session 13)
 - [x] Accumulate 50+ labeled predictions — 254 total, 134 evaluated (Session 15)
-- [x] Train XGBoost — **91.3% test accuracy, 87.3% CV** (Claude Code, Session 15)
+- [x] Train XGBoost — **91.3% test, 85.5% CV** on pruned 10 features (Claude Code, Session 15)
 - [x] Accuracy forensics — per-market, per-horizon, per-hypothesis breakdown (Session 15)
 - [x] Ecosystem research — py-clob-client, PolyClaw, arxiv, trading strategies (Session 15)
+- [x] Wire XGBoost as confidence gate in prediction_node — suppresses P(correct)<0.5 (Session 15)
+- [x] Drop 4h horizon — removed from both time_horizon.py AND bitcoin_signal.py WINDOWS (Session 15)
+- [x] Feature pruning — 9 dead features removed, 10 active features (Session 15)
+- [x] Integration tests — 3 tests for XGBoost gate (suppress, pass, fallback) (Session 15)
 - [ ] Loop review of XGBoost training results (data leakage check)
-- [ ] Wire predict_batch() into masterloop prediction_node (needs XGBoost import path fix)
-- [ ] A/B: rule-based vs XGBoost confidence scores over 24h
-- [ ] Drop 4h horizon (0% accuracy) and investigate market 824952 (39% accuracy)
+- [ ] Monitor XGBoost gate impact on live accuracy over 24h
+- [ ] Investigate market 824952 (39% accuracy — XGBoost gate may auto-suppress)
 
 ### Phase 3: CONTINUOUS SCANNING — COMPLETE (Antigravity, Session 10)
 - [x] `polysignal-scanner.service` deployed on DGX (systemd)
@@ -243,7 +246,7 @@ Replace auto-approve placeholder with actual Telegram approval.
 |-----------|---------|--------|
 | Market 824952 | 39% accuracy (52L/33W on 91 evals) | Drop or inverse |
 | Market 556108 | 89% accuracy (24W/3L on 27 evals) | Lean in |
-| 4h horizon | 0% accuracy (0W/17L) | Kill this horizon |
+| 4h horizon | 0% accuracy (0W/17L) | **KILLED** — removed from scanner + time_horizon |
 | Bearish vs Bullish | 67% vs 38% | Model captures this |
 | Temporal | 43% early → 59% late | Improving |
 
