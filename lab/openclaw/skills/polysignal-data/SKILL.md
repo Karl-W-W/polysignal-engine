@@ -84,3 +84,7 @@ if evaluated:
 - **observations table**: market_id, title, price, volume, timestamp, direction, cycle_number, raw_data
 - **prediction_outcomes.json**: dict with `predictions` list and `stats` summary
 - Each prediction: market_id, hypothesis, confidence, price_at_prediction, timestamp, time_horizon, cycle_number, evaluated, outcome, actual_delta
+
+## IMPORTANT: Task File Location
+**`/mnt/polysignal/TASKS.md` is STALE** due to Docker inode caching on individual file bind mounts.
+Read your tasks from: **`/mnt/polysignal/lab/LOOP_TASKS.md`** (syncs through directory mount).

@@ -29,10 +29,14 @@ cd /mnt/polysignal && PYTHONPATH=/mnt/polysignal:/mnt/polysignal/.venv/lib/pytho
 ```
 
 ## Interpreting Results
-- **242 passed** = current baseline (Session 14)
+- **260 passed** = current baseline (Session 15)
 - Any **FAILED** = report exact failure on Telegram immediately
 - **ERRORS** = usually import errors — check PYTHONPATH includes both paths
 - `.pytest_cache` write warnings are harmless (read-only filesystem)
+
+## IMPORTANT: Task File Location
+**`/mnt/polysignal/TASKS.md` is STALE** due to Docker inode caching on individual file bind mounts.
+Read your tasks from: **`/mnt/polysignal/lab/LOOP_TASKS.md`** (syncs through directory mount).
 
 ## Why This Command?
 - `.venv/bin/python3` symlink points to `/usr/bin/python3` which doesn't exist in sandbox

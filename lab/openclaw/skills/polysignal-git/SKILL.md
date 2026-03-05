@@ -43,3 +43,7 @@ cd /mnt/polysignal && git log --oneline -10 -- workflows/masterloop.py
 - To contribute code: write files in `lab/` or `workflows/`, then report on Telegram.
 - Claude Code or Karl will commit your changes.
 - The DGX cron runs `git reset --hard origin/main` every 10 minutes — your uncommitted changes in git-tracked files will be wiped. Write to `lab/` (safe) or report immediately.
+
+## IMPORTANT: Task File Location
+**`/mnt/polysignal/TASKS.md` is STALE** due to Docker inode caching on individual file bind mounts.
+Read your tasks from: **`/mnt/polysignal/lab/LOOP_TASKS.md`** (syncs through directory mount).
