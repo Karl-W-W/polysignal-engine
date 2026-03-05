@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-04 22:30 CET | Session 14 (closing)
+# Last updated: 2026-03-05 19:30 CET | Session 15 (active)
 # Session history: See HISTORY.md
 
 ---
@@ -34,18 +34,19 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | 256/256 PASS | Mac (6.0s) — +15 tests Session 14 (short-circuit + data_readiness) |
-| Scanner | DEPLOYED | `polysignal-scanner.service` — 173 predictions, 30 evaluated, 60% accuracy |
-| DGX Thermal | OK 42°C | Dramatically improved — short-circuit eliminated LLM heat spikes |
+| Tests | 256/256 PASS | Mac (6.1s) — stable since Session 14 |
+| Scanner | DEPLOYED | `polysignal-scanner.service` — 254 predictions, 134 evaluated, 50.9% rule-based accuracy |
+| DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
 | MoltBook Publisher | WIRED | Non-blocking in commit_node (dry-run until JWT) |
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (Session 11 fix) |
 | Loop Autonomy | UPGRADED | 3 skills, +6 safeBins, Claude Opus 4.6, 30m heartbeat (Session 14) |
-| Data Readiness | LAB | `lab/data_readiness.py` — monitors progress to 50 labeled predictions, 14 tests |
-| Feature Eng. | LAB | `lab/feature_engineering.py` — 18 features, labeled dataset builder (Loop) |
-| XGBoost Baseline | LAB | `lab/xgboost_baseline.py` — training + inference, 24 tests (Session 13) |
+| Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |
+| Feature Eng. | LAB | `lab/feature_engineering.py` — 19 features, labeled dataset builder (Loop) |
+| XGBoost Baseline | **TRAINED** | 91.3% test accuracy, 87.3% CV. Model at `/opt/loop/data/models/xgboost_baseline.pkl` |
+| Ecosystem Research | DONE | `lab/ecosystem_research.md` — py-clob-client, PolyClaw, arxiv, strategies |
 | Dead Code Audit | CLEAN | No dead code found — `lab/dead_code_audit.md` (Session 14) |
 | Oracle Research | DONE | `lab/oracle_research.md` — py-clob-client, Polymarket/agents documented |
 | README | DONE | `README.md` — project overview for GitHub landing page |
@@ -150,15 +151,18 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 - [x] data_readiness.py built with 14 tests (Loop failed overnight, Claude Code delivered)
 - [x] 256/256 tests passing
 
-### Phase 2: REAL PREDICTION (in progress — data nearly ready)
+### Phase 2: REAL PREDICTION (in progress — XGBoost trained, wiring next)
 Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [x] Feature engineering from observations table — `lab/feature_engineering.py` (Loop, Session 11)
 - [x] XGBoost baseline built — `lab/xgboost_baseline.py` with train/predict/batch (Claude Code, Session 13)
-- [ ] Accumulate 50+ labeled predictions (173 total, 165 real, 30 evaluated — 60% accuracy, ETA overnight)
-- [ ] Train XGBoost when data_readiness.py reports ready
-- [ ] Backtest against historical observations
-- [ ] A/B: rule-based vs XGBoost confidence scores
-- [ ] Wire predict_batch() into masterloop prediction_node if accuracy > 55%
+- [x] Accumulate 50+ labeled predictions — 254 total, 134 evaluated (Session 15)
+- [x] Train XGBoost — **91.3% test accuracy, 87.3% CV** (Claude Code, Session 15)
+- [x] Accuracy forensics — per-market, per-horizon, per-hypothesis breakdown (Session 15)
+- [x] Ecosystem research — py-clob-client, PolyClaw, arxiv, trading strategies (Session 15)
+- [ ] Loop review of XGBoost training results (data leakage check)
+- [ ] Wire predict_batch() into masterloop prediction_node (needs XGBoost import path fix)
+- [ ] A/B: rule-based vs XGBoost confidence scores over 24h
+- [ ] Drop 4h horizon (0% accuracy) and investigate market 824952 (39% accuracy)
 
 ### Phase 3: CONTINUOUS SCANNING — COMPLETE (Antigravity, Session 10)
 - [x] `polysignal-scanner.service` deployed on DGX (systemd)
@@ -186,8 +190,8 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Telegram alerts | LIVE | — |
 | MoltBook broadcast | WIRED (dry-run) | Human: Twitter verification → JWT |
 | Learning loop | WIRED | memory.md now persistent (gitignored, Session 11) |
-| Feature engineering | READY | 18 features, 173 predictions (30 evaluated, 60% accuracy) |
-| XGBoost baseline | READY | `lab/xgboost_baseline.py` — train when 50+ labeled (ETA overnight) |
+| Feature engineering | READY | 19 features, 254 predictions (134 evaluated, 50.9% rule-based accuracy) |
+| XGBoost baseline | **TRAINED** | 91.3% test, 87.3% CV. Pending masterloop wiring |
 | Polymarket wallet | NOT STARTED | Needs wallet + CLOB auth |
 | Custom domain | BLOCKED | Human: DNS CNAME + Vercel |
 
@@ -230,23 +234,46 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ---
 
-## 🎯 NEXT STEPS (Session 15)
+## NEXT STEPS (Session 15-16)
 
-**30/50 evaluated. 60% accuracy. Evaluations accumulating ~3/hour. XGBoost training imminent.**
+**XGBoost trained: 91.3% test accuracy. Rule-based baseline: 50.9%. Wiring imminent.**
 
-1. **Train XGBoost** — the moment `data_readiness.py` reports READY (50+ evaluated). Loop will alert on Telegram.
-2. **Wire XGBoost into pipeline** — if accuracy >55%, replace rule-based `predict_market_moves()` with `predict_batch()`
-3. **Set promotion threshold** — 60% baseline + 5pp = 65% target (was 55%, updated with real data)
-4. **py-clob-client prototype** — `lab/execution.py` wrapping the official SDK (dry-run, no live orders)
-5. **Loop network access:** Set up Squid proxy with domain allowlist for research capability
-6. **Loop remaining tasks:** Task 1 (data status report) and Task 3 (masterloop review) still open
-7. **MoltBook JWT (human):** Twitter verification → env var `MOLTBOOK_JWT`
-8. **Phase 4:** Real HITL — Telegram YES/NO buttons (after Phase 2 ML is live)
-9. **Known bug (needs Vault auth):** `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()`
+### Accuracy Forensics (Session 15)
+| Dimension | Finding | Action |
+|-----------|---------|--------|
+| Market 824952 | 39% accuracy (52L/33W on 91 evals) | Drop or inverse |
+| Market 556108 | 89% accuracy (24W/3L on 27 evals) | Lean in |
+| 4h horizon | 0% accuracy (0W/17L) | Kill this horizon |
+| Bearish vs Bullish | 67% vs 38% | Model captures this |
+| Temporal | 43% early → 59% late | Improving |
+
+### Immediate (Session 15)
+1. **Wire XGBoost into masterloop** — `predict_batch()` replaces rule-based (91.3% vs 50.9%)
+2. **Drop 4h horizon** — 0% accuracy across 17 predictions, actively wrong
+3. **Loop reviews** — XGBoost leakage check (Task 1), per-market analysis (Task 2), masterloop review (Task 3)
+4. **py-clob-client Level 0** — enhance perception_node with orderbook depth (no wallet needed)
+
+### Near-term (Session 16-17)
+5. **High-probability bond detection** — free alpha (>95% markets near resolution, 5% per trade)
+6. **News retrieval pipeline** — single biggest accuracy multiplier (arxiv 2402.18563)
+7. **Loop network access** — Squid proxy with domain allowlist (human approval needed)
+8. **PolyClaw evaluation** — OpenClaw skill for Polymarket (after security audit)
+9. **Backtesting engine** — validate strategies before live trading
+
+### Requires Human
+10. **Polymarket wallet + CLOB auth** — gates all live trading
+11. **MoltBook JWT** — Twitter verification → env var
+12. **DNS CNAME** — polysignal.app → cname.vercel-dns.com
+13. **Squid proxy allowlist approval** — domains for Loop internet access
+
+### Known Bugs
+- `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)
 
 ### Revenue Critical Path
 ```
-50 evaluated (overnight) → Train XGBoost → Wire into masterloop → Validate
+XGBoost wired (Session 15) → Validate 24h → Polymarket wallet (human)
+    ↓                                              ↓
+py-clob-client L0 perception → better features → retrain
     ↓
-MoltBook JWT (human) → Live publishing → Reputation → Polymarket wallet → Trading
+MoltBook JWT (human) → Live publishing → Reputation → First trades
 ```

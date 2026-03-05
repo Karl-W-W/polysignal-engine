@@ -1,5 +1,5 @@
 # Loop Task Queue
-# Updated: 2026-03-04 (Session 14 — Claude Code)
+# Updated: 2026-03-05 (Session 15 — Claude Code)
 # Loop reads this on every heartbeat. Pick the first unchecked [ ] item.
 # IMPORTANT: You are a CODE AGENT. Write code in lab/ and workflows/. Do NOT run scanner commands.
 
@@ -22,39 +22,58 @@ You have more capability than you think. Here's what's actually mounted in your 
 /mnt/polysignal/brain/         → /opt/loop/brain/         (read/write)
 ```
 
-## NEW: Skills Available
+## Skills Available
 
-Three skills have been deployed to help you work faster. Read them at:
 - `/mnt/polysignal/lab/openclaw/skills/polysignal-pytest/SKILL.md` — pytest commands
 - `/mnt/polysignal/lab/openclaw/skills/polysignal-data/SKILL.md` — DB and prediction queries
 - `/mnt/polysignal/lab/openclaw/skills/polysignal-git/SKILL.md` — git read-only commands
 
-## SESSION 14 CHANGES
+## SESSION 15 CHANGES
 
-**MasterLoop short-circuit**: When `TRADING_ENABLED=false`, the graph now exits after
-prediction_node. Draft/review/risk_gate are skipped entirely. This saves 2 LLM calls per
-cycle and eliminates all Telegram spam. Perception + prediction still run for data collection.
+**XGBoost TRAINED.** 91.3% test accuracy (87.3% +/- 12% CV). Model saved to `/opt/loop/data/models/xgboost_baseline.pkl`.
+Top features: `price_delta_24h` (0.29), `trend_strength` (0.22), `observation_density` (0.15).
+
+**Accuracy forensics revealed critical patterns:**
+- Market 824952: 39% accuracy (91 evals) — **actively wrong, dragging system down**
+- Market 556108: 89% accuracy (27 evals) — **star performer**
+- 4h horizon: 0% accuracy (0W/17L) — **broken, needs removal**
+- Bearish: 67% vs Bullish: 38% — **directional bias**
+- Second half: 59% vs First half: 43% — **improving over time**
+
+**Research findings (see `lab/ecosystem_research.md`):**
+- py-clob-client Level 0 methods can enhance perception NOW (orderbook depth, spread)
+- PolyClaw (chainstacklabs) is an OpenClaw skill for Polymarket trading — needs vetting
+- News retrieval is the #1 accuracy improvement per academic research (arxiv 2402.18563)
+- High-probability bond detection (>95% markets near resolution) is free alpha
 
 ---
 
 ## Active Tasks
 
-- [ ] **Task 1: Data status report (5 min — quick win)**
+- [ ] **Task 1: Review XGBoost training results (15 min)**
 
-  Use the polysignal-data skill to check current system state. Report on Telegram:
-  1. How many total observations in the DB?
-  2. How many predictions in prediction_outcomes.json? How many evaluated?
-  3. What time horizons are the pending predictions using?
-  4. When will the oldest pending prediction be evaluable?
-  5. How many distinct markets are being tracked?
+  The XGBoost model was trained on 112 samples (89 train, 23 test).
+  Training metrics are at `/mnt/polysignal/data/models/training_metrics.json`.
 
-  **Commands**: See `polysignal-data/SKILL.md` for exact queries.
+  **Review checklist:**
+  1. Read the training metrics JSON and report accuracy, precision, recall, F1
+  2. Check feature importance — do the top features make intuitive sense?
+  3. Check: is `price_delta_24h` causing data leakage? (Should only use observations BEFORE prediction time)
+  4. Read `lab/feature_engineering.py` lines 340-380 (`build_labeled_dataset`) — verify temporal correctness
+  5. Run `tests/test_xgboost_baseline.py` to confirm tests pass
+  6. Report findings + recommendation (wire into masterloop or wait for more data?) on Telegram
 
-- [x] **Task 2: Build `lab/data_readiness.py`** — DONE by Claude Code (Session 14)
-  `lab/data_readiness.py` + `tests/test_data_readiness.py` (14 tests). Use it:
-  ```bash
-  cd /mnt/polysignal && PYTHONPATH=/mnt/polysignal:/mnt/polysignal/.venv/lib/python3.12/site-packages /usr/local/bin/python3 -m lab.data_readiness
-  ```
+- [ ] **Task 2: Per-market accuracy analysis (20 min)**
+
+  Using the polysignal-data skill, analyze which markets are predictable.
+
+  **Analysis:**
+  1. Query prediction_outcomes.json for per-market win/loss rates
+  2. Market 824952 has 39% accuracy on 91 evals — investigate why. What is this market about?
+  3. Market 556108 has 89% accuracy — what makes it predictable?
+  4. The 4h time horizon is 0% accuracy (0W/17L). Investigate whether these are all from one market.
+  5. Write findings to `lab/market_analysis.md`
+  6. Recommend: which markets should we keep tracking, which should we drop?
 
 - [ ] **Task 3: Review masterloop short-circuit (code review)**
 
@@ -64,15 +83,23 @@ cycle and eliminates all Telegram spam. Perception + prediction still run for da
   1. Read the new `route_after_prediction()` function (~line 574)
   2. Read the updated `build_masterloop()` graph assembly (~line 608)
   3. Verify: does the conditional edge correctly route to `draft` when `TRADING_ENABLED=true`?
-  4. Verify: does perception_node's `evaluate_outcomes()` still fire? (It should — it's before the short-circuit)
-  5. Verify: does prediction_node's `record_predictions()` still fire? (Same — before short-circuit)
-  6. Read the updated tests in `tests/test_masterloop_e2e.py`
-  7. Run pytest: use polysignal-pytest skill, filter with `-k 'test_masterloop'`
-  8. Report findings on Telegram
+  4. Verify: does perception_node's `evaluate_outcomes()` still fire?
+  5. Verify: does prediction_node's `record_predictions()` still fire?
+  6. Run pytest: `-k 'test_masterloop'`
+  7. Report findings on Telegram
 
-- [x] **Task 4: Dead code audit (lab/ and workflows/)** — DONE by Claude Code (Session 14)
-  Result: **No dead code found.** Every import, function, and file is actively used.
-  Report: `lab/dead_code_audit.md`
+- [ ] **Task 4: Evaluate PolyClaw skill for integration (research)**
+
+  PolyClaw (github.com/chainstacklabs/polyclaw) is an OpenClaw skill for Polymarket trading.
+  It has 166 GitHub stars, MIT license, last updated Jan 2026.
+
+  **What to do:**
+  1. Read the SKILL.md at `/mnt/polysignal/lab/ecosystem_research.md` for details
+  2. Assess: does PolyClaw's architecture fit our OpenClaw sandbox?
+  3. What dependencies does it need? (py-clob-client, web3.py, OpenRouter API)
+  4. Security: does it fetch remote instructions? Does it have exec permissions?
+  5. Write a risk assessment to `lab/polyclaw_assessment.md`
+  6. Recommend: install as skill, fork and strip, or skip?
 
 ---
 
@@ -85,6 +112,11 @@ cycle and eliminates all Telegram spam. Perception + prediction still run for da
 - After completing a task, mark it [x] in this file and move to the next one.
 
 ---
+
+## Completed Tasks (Session 15)
+- [x] XGBoost trained: 91.3% accuracy, model saved (Claude Code)
+- [x] Accuracy forensics: per-market/horizon/hypothesis breakdown (Claude Code)
+- [x] Ecosystem research: py-clob-client, PolyClaw, arxiv, strategies (Claude Code)
 
 ## Completed Tasks (Session 14)
 - [x] Task 2: data_readiness.py built (Claude Code) — 14 tests
