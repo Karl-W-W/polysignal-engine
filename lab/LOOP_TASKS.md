@@ -1,5 +1,5 @@
 # Loop Task Queue (lab/ mirror)
-# Updated: 2026-03-06 18:30 CET (Session 16 — Claude Code)
+# Updated: 2026-03-06 19:50 CET (Session 17 — Claude Code)
 #
 # WHY THIS FILE EXISTS:
 # TASKS.md and PROGRESS.md are mounted as individual file bind mounts in Docker.
@@ -33,29 +33,48 @@ due to Docker inode caching. Use THIS file for tasks.
 
 - `/mnt/polysignal/lab/openclaw/skills/polysignal-pytest/SKILL.md` — pytest commands
 - `/mnt/polysignal/lab/openclaw/skills/polysignal-data/SKILL.md` — DB and prediction queries
-- `/mnt/polysignal/lab/openclaw/skills/polysignal-git/SKILL.md` — git read-only commands
+- `/mnt/polysignal/lab/openclaw/skills/polysignal-git/SKILL.md` — git read + push to loop/* branches
+- `/mnt/polysignal/lab/openclaw/skills/polysignal-scanner/SKILL.md` — scanner restart trigger
 
-## SESSION 16 CHANGES
+## NEW CAPABILITIES (Session 17)
 
-**Scanner restarted with Session 15+16 code.** Previous scanner process ran since Mar 4 (pre-Session-15) — never loaded XGBoost gate or 4h kill.
+### Scanner Restart
+You can now restart the scanner after code changes. Read the polysignal-scanner skill for details.
+```bash
+echo "restart requested $(date)" > /mnt/polysignal/lab/.restart-scanner
+```
+Wait ~10 seconds, then check: `cat /mnt/polysignal/lab/.restart-scanner-log | tail -3`
 
-**Fixes applied (Claude Code, Session 16):**
-- XGBoost gate: inner `except Exception` now logs per-prediction failures (was silently swallowing)
-- XGBoost gate: prints status line when active (`🔍 XGBoost gate: N passed, M suppressed`)
-- Market 824952 EXCLUDED from signal detection via `EXCLUDED_MARKETS` in bitcoin_signal.py
-- Observations for 824952 still recorded (data collection), but no signals/predictions generated
-- Scanner restarted 18:25 CET — first cycle with new code confirmed working
+### Git Push to `loop/*` Branches
+You can now push code to GitHub on `loop/*` branches. Read the polysignal-git skill for details.
+```bash
+cat > /mnt/polysignal/lab/.git-push-request << EOF
+branch: loop/your-feature-name
+message: Brief description of changes
+files: lab/your_file.py, lab/another_file.py
+EOF
+```
+Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
 
-**Current numbers (pre-fix baseline):**
-- 330 predictions, 259 evaluated, 41% accuracy (58W/85L/116N)
-- 0 predictions had xgb_p_correct (gate was never firing)
-- Market 824952 was 34% accuracy, 0W/40L on Bullish
-- Without 824952: ~89% accuracy on remaining markets
+**Rules:** Branch must start with `loop/`. Files must be in `lab/`, `workflows/`, `tests/`, or `agents/`.
+Claude Code or KWW will review and merge your branches.
 
-**What to expect going forward:**
-- No more 824952 predictions (excluded)
-- XGBoost gate now fires on every prediction — watch for `xgb_p_correct` in new predictions
-- New predictions will be MegaETH (556062/556108) and any new crypto markets
+## SESSION 17 CHANGES
+
+**Loop now has hands.** Two new capabilities deployed:
+1. **Scanner restart** — systemd path unit watches `lab/.restart-scanner`, restarts service
+2. **Git push** — trigger-file handler validates and pushes to `loop/*` branches via SSH deploy key
+
+**Session 16 fixes still in effect:**
+- XGBoost gate fires every cycle (6 passed, 7 suppressed on first run)
+- Market 824952 excluded from signal detection (0W/40L Bullish)
+- PYTHONUNBUFFERED=1 in scanner service (logs now visible)
+
+**Current numbers:**
+- 332 predictions, 259 evaluated, 41% rule-based accuracy (pre-fix baseline)
+- No new signal-triggered predictions since restart (markets haven't moved 5pp+)
+- Gate fires on all predictions (including Neutral from rule-based predictor)
+- Without 824952: ~89% accuracy on remaining evaluated markets
 
 ---
 
@@ -64,8 +83,7 @@ due to Docker inode caching. Use THIS file for tasks.
 - [ ] **Task 5: Add `before` parameter to `get_market_history()` (20 min)**
 
   **Why:** `get_market_history()` fetches 72h of observations regardless of `ref_time`.
-  All downstream code filters correctly TODAY, but one careless future feature could
-  silently cause data leakage. Add defense-in-depth.
+  Defense-in-depth against future data leakage.
 
   **What to do:**
   1. Read `lab/feature_engineering.py` — find `get_market_history()` function
@@ -74,43 +92,50 @@ due to Docker inode caching. Use THIS file for tasks.
   4. Update `extract_features()` to pass `ref_time` as `before` when available
   5. Add test(s) to `tests/test_feature_engineering.py` verifying temporal correctness
   6. Run full test suite — must still be 260/260
-  7. Report on Telegram
+  7. **Push your changes:** Use the git push skill to push to `loop/before-param`
+  8. Report on Telegram
 
-- [ ] **Task 9: Post-fix accuracy snapshot (10 min)**
+- [ ] **Task 12: Test scanner restart from skill (10 min)**
 
-  **Why:** We need a baseline after the Session 16 fixes (824952 exclusion + gate restart).
+  **Why:** Validates the full skill → trigger → systemd chain. First time Loop has restarted a service.
+
+  **What to do:**
+  1. Read the polysignal-scanner SKILL.md
+  2. Create the trigger file: `echo "restart requested $(date)" > /mnt/polysignal/lab/.restart-scanner`
+  3. Wait 10 seconds
+  4. Verify: trigger file should be consumed (gone), log should show restart
+  5. Report on Telegram: "Scanner restart from sandbox verified"
+
+- [ ] **Task 13: First git push test (10 min)**
+
+  **Why:** Validates the full write → trigger → handler → push chain. First time Loop pushes code.
+
+  **What to do:**
+  1. Read the polysignal-git SKILL.md (the push section)
+  2. Create a test file: `echo "# Loop's first push - $(date)" > /mnt/polysignal/lab/.loop-push-test`
+  3. Create push request:
+     ```bash
+     cat > /mnt/polysignal/lab/.git-push-request << EOF
+     branch: loop/first-push
+     message: test: Loop's first autonomous git push
+     files: lab/.loop-push-test
+     EOF
+     ```
+  4. Wait 15 seconds, check result: `cat /mnt/polysignal/lab/.git-push-result`
+  5. Report on Telegram: push result + branch name
+
+- [ ] **Task 14: Post-gate accuracy tracking (20 min)**
+
+  **Why:** We need structured pre-gate vs post-gate comparison.
 
   **What to do:**
   1. Query `prediction_outcomes.json` — total predictions, evaluated, accuracy
-  2. Check: are there any NEW predictions with `xgb_p_correct` field? (Gate firing confirmation)
-  3. Per-market breakdown of remaining active markets
-  4. Per-horizon breakdown (should be no 4h predictions in new data)
-  5. Report on Telegram
-
-- [ ] **Task 10: Review XGBoost gate logging changes (code review, 10 min)**
-
-  **Why:** Session 16 added error logging to the XGBoost gate. Verify the changes are clean.
-
-  **What to do:**
-  1. Read `workflows/masterloop.py` lines 294-335 (XGBoost gate section)
-  2. Verify: inner `except` now logs `market_id` + error message
-  3. Verify: `gate_ran` flag correctly controls status line output
-  4. Verify: when model is missing, gate skips gracefully (no crash)
-  5. Run `pytest -k test_masterloop` to confirm 8/8 pass
-  6. Report on Telegram
-
-- [ ] **Task 11: Investigate bullish bias (research, 20 min)**
-
-  **Why:** System is 67% on Bearish but only 38% on Bullish. Understanding why could
-  improve the XGBoost model when we retrain.
-
-  **What to do:**
-  1. Query prediction_outcomes.json: per-hypothesis accuracy breakdown
-  2. Is the bias market-specific (824952 drags Bullish) or systematic?
-  3. With 824952 excluded, recalculate: what is Bullish accuracy on remaining markets?
-  4. Check: does `price_delta_24h` feature encode direction? If so, the model sees this.
-  5. Write findings to `lab/reviews/bullish_bias_analysis.md`
-  6. Recommend: should we add a `hypothesis_direction` feature to XGBoost? Or a `distance_from_extreme` feature?
+  2. Baseline (pre-gate): 58W/85L from KWW's last heartbeat
+  3. Check for NEW predictions with `xgb_p_correct` field (gate firing confirmation)
+  4. Per-market breakdown of remaining active markets (824952 should show no new predictions)
+  5. Write structured report to `lab/reviews/gate_accuracy_tracking.md`
+  6. **Push your report:** Use git push skill to push to `loop/gate-tracking`
+  7. Plan to update this report on each heartbeat as new data arrives
 
 ---
 
@@ -119,10 +144,20 @@ due to Docker inode caching. Use THIS file for tasks.
 - **Do NOT run scanner commands. Do NOT run any `.sh` scripts.**
 - **Do NOT try to access the network.** You have no network in your sandbox.
 - **Do NOT hallucinate `./polymarket_scan.sh`** — it doesn't exist.
-- Your job: write Python code, write tests, run pytest, report findings. Stay in your lane.
+- Your job: write Python code, write tests, run pytest, report findings, push code. Stay in your lane.
 - After completing a task, mark it [x] in this file and move to the next one.
+- **NEW:** You can now restart the scanner and push code. Use these powers responsibly.
 
 ---
+
+## Completed Tasks (Session 17)
+- [x] Scanner restart mechanism deployed — systemd path unit (Claude Code)
+- [x] Git push handler deployed — trigger file + deploy key (Claude Code)
+- [x] polysignal-scanner skill created (Claude Code)
+- [x] polysignal-git skill v2 — push instructions added (Claude Code)
+- [x] SSH deploy key generated and added to GitHub (Claude Code + KWW)
+- [x] Git push verified end-to-end — loop/test-push branch created on GitHub (Claude Code)
+- [x] Scanner restart verified end-to-end — trigger consumed, new PID, log written (Claude Code + Loop)
 
 ## Completed Tasks (Session 16)
 - [x] XGBoost gate debug: inner except now logs errors (Claude Code)
@@ -131,24 +166,6 @@ due to Docker inode caching. Use THIS file for tasks.
 - [x] KWW reviews: xgboost_gate_impact.md, market_824952_decision.md (KWW)
 
 ## Completed Tasks (Session 15)
-- [x] Task 1: XGBoost training review — NO DATA LEAKAGE confirmed (Loop)
-- [x] Task 2: Per-market accuracy analysis — 824952=38.4%, 556108=88.9% (Loop)
-- [x] Task 3: Masterloop review — gate, short-circuit, imports all correct (Loop)
-- [x] Task 4: PolyClaw assessment — verdict: SKIP (Loop)
-- [x] XGBoost trained: 91.3% accuracy, model saved (Claude Code)
-- [x] Accuracy forensics: per-market/horizon/hypothesis breakdown (Claude Code)
-- [x] Ecosystem research: py-clob-client, PolyClaw, arxiv, strategies (Claude Code)
-- [x] Feature pruning: 9 dead features removed, 10 active (Claude Code)
-- [x] XGBoost gate wired into prediction_node, threshold 0.5 (Claude Code)
-- [x] 4h horizon killed: time_horizon.py + bitcoin_signal.py WINDOWS (Claude Code)
-- [x] 3 integration tests for XGBoost gate (suppress/pass/fallback) (Claude Code)
-- [x] Docker bind mount fix: lab/LOOP_TASKS.md created, skills updated (Claude Code)
-
-## Completed Tasks (Session 14 and earlier)
-- [x] Task 2: data_readiness.py built (Claude Code) — 14 tests
-- [x] Task 4: Dead code audit (Claude Code) — no dead code found
-- [x] Evaluation pipeline fix: moved evaluate_outcomes() after market fetch (Claude Code)
-- [x] MasterLoop short-circuit: TRADING_ENABLED=false skips draft/review/risk_gate (Claude Code)
-- [x] XGBoost baseline reviewed (Session 13 — Loop)
-- [x] 241/241 tests verified from sandbox (Session 13 — Loop)
-- [x] Overnight audit — 6 findings, cycle_number bug actionable (Session 13 — Loop)
+- [x] Task 1-4: XGBoost review, market analysis, masterloop review, PolyClaw assessment (Loop)
+- [x] XGBoost trained, gate wired, 4h killed, features pruned (Claude Code)
+- [x] Docker bind mount fix: lab/LOOP_TASKS.md (Claude Code)
