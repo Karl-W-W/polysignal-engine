@@ -295,6 +295,7 @@ def prediction_node(state: LoopState) -> LoopState:
         # Meta-predictor: evaluates P(this prediction will be CORRECT).
         # Suppresses predictions where the model expects them to fail.
         suppressed = 0
+        gate_ran = False
         try:
             from lab.xgboost_baseline import load_model as xgb_load, select_features
             from lab.feature_engineering import extract_features
@@ -318,15 +319,17 @@ def prediction_node(state: LoopState) -> LoopState:
                         suppressed += 1
                         continue
                     gated.append(pred)
-                except Exception:
+                except Exception as e:
+                    print(f"  ⊘ XGBoost gate: {market_id} feature extraction failed: {e}")
                     gated.append(pred)
             predictions = gated
+            gate_ran = True
         except Exception as e:
             print(f"  ⊘ XGBoost gate skipped: {e}")
 
         state["predictions"] = predictions
-        if suppressed:
-            print(f"  🔍 XGBoost gate: {suppressed} low-confidence predictions suppressed")
+        if gate_ran:
+            print(f"  🔍 XGBoost gate: {len(predictions)} passed, {suppressed} suppressed")
         print(f"  ✓ {len(predictions)} hypotheses ({enhanced} signal-enhanced)")
 
         # ── Record predictions for future outcome evaluation (non-blocking) ──

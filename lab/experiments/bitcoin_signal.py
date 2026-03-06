@@ -30,6 +30,12 @@ from lab.time_horizon import derive_time_horizon
 DB_PATH           = os.getenv("DB_PATH", "/data/polysignal.db")
 SIGNAL_THRESHOLD  = float(os.getenv("SIGNAL_THRESHOLD", "0.05"))   # 5pp
 SEARCH_KEYWORDS   = ["bitcoin", "btc", "crypto", "ethereum", "eth"]
+
+# Markets excluded from signal detection (still recorded for observation data).
+# Market 824952: "MicroStrategy sells any Bitcoin" — 34% accuracy, Bullish 0W/40L.
+EXCLUDED_MARKETS  = set(
+    m.strip() for m in os.getenv("EXCLUDED_MARKETS", "824952").split(",") if m.strip()
+)
 TELEGRAM_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID  = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -143,6 +149,10 @@ def detect_signals(markets: list) -> list:
             "INSERT INTO observations (market_id, title, price, volume, raw_data) VALUES (?, ?, ?, ?, ?)",
             (market_id, f"{m['title']} — {m['outcome']}", current_price, m["volume"], json.dumps(m))
         )
+
+        # Skip excluded markets (observation already recorded above for data collection)
+        if market_id in EXCLUDED_MARKETS:
+            continue
 
         # Find the best (largest absolute) delta across all time windows
         best_delta     = 0.0
