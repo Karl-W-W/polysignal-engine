@@ -90,9 +90,12 @@ git stash --include-untracked 2>/dev/null || true
 git fetch origin main 2>/dev/null || true
 git checkout -B "$branch" origin/main 2>/dev/null || git checkout -B "$branch"
 
+# Restore stashed files (includes Loop's new/modified files)
+git stash pop 2>/dev/null || true
+
 # Stage and commit
 for f in "${VALID_FILES[@]}"; do
-    git add "$f"
+    git add "$f" || { log "ERROR: Cannot stage $f"; continue; }
     log "Staged: $f"
 done
 
