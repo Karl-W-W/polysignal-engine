@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-05 23:00 CET | Session 15 (closing)
+# Last updated: 2026-03-06 19:00 CET | Session 17 (in progress)
 # Session history: See HISTORY.md
 
 ---
@@ -246,9 +246,20 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ---
 
-## NEXT STEPS (Session 16)
+## Session 16 Accomplishments (2026-03-06)
 
-**XGBoost confidence gate LIVE. Loop verified: no data leakage, all code correct. Market 824952 is the #1 problem.**
+**Root cause found: scanner ran stale pre-Session-15 code for 10 days. XGBoost gate confirmed firing after fix.**
+
+| What | Impact |
+|------|--------|
+| XGBoost gate debug | Inner `except Exception` was silently swallowing — now logs per-prediction failures |
+| Gate confirmed firing | First production run: 6 passed, 7 suppressed |
+| Market 824952 excluded | `EXCLUDED_MARKETS` env var in bitcoin_signal.py. Bullish 0W/40L eliminated. |
+| Scanner restarted | Process ran since Mar 4 (pre-Session-15). Python caches imports → code changes invisible. |
+| `PYTHONUNBUFFERED=1` | Added to scanner service. `print()` output was fully buffered, invisible in journald. |
+| KWW reviews | xgboost_gate_impact.md + market_824952_decision.md (filed manually) |
+
+**Data at Session 16 close:** 332 predictions, 259 evaluated, 41% rule-based accuracy (pre-fix baseline). Without 824952: ~89%.
 
 ### Session 15 Accomplishments
 | What | Impact |
@@ -261,38 +272,47 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Accuracy forensics | Per-market/horizon/hypothesis breakdown of 134 predictions |
 | Ecosystem research | py-clob-client, PolyClaw, arxiv, trading strategies documented |
 
-### Loop's Key Findings (Session 15)
-- **No data leakage** in XGBoost — `build_labeled_dataset()` correctly filters by ref_time. 91.3% is real.
-- **Market 824952 = 53 of 55 losses.** Excluding it raises rule-based accuracy from ~50% to ~75%.
-- **PolyClaw: SKIP.** Too many credential vectors, needs network access, fetches untrusted content.
-- **`get_market_history()` needs `before` parameter** for defense-in-depth against future leakage.
+---
 
-### Immediate (Session 16)
-1. **Exclude/invert market 824952** — single biggest accuracy win, eliminates 53/55 losses deterministically
-2. **Add `before` param to `get_market_history()`** — prevent future data leakage (Loop recommendation)
-3. **py-clob-client Level 0** — enhance perception_node with orderbook depth/spread (no wallet needed)
-4. **Monitor XGBoost gate impact** — need 24h of gated predictions before knowing if it helps live
+## Session 17: Loop Operator Upgrade (in progress)
 
-### Near-term (Session 17-18)
-5. **News retrieval pipeline** — single biggest accuracy multiplier (arxiv 2402.18563)
-6. **High-probability bond detection** — free alpha (>95% markets near resolution, 5% per trade)
-7. **Retrain XGBoost at 200+ evals** — model will stabilize with more data
-8. **Loop network access** — Squid proxy with domain allowlist (human approval needed)
-9. **Backtesting engine** — validate strategies before live trading
+**Goal: Close the gap between what Loop SEES and what Loop can DO.**
+
+### Session 17 Accomplishments
+| What | Impact |
+|------|--------|
+| Scanner restart trigger | systemd path unit watches `lab/.restart-scanner` — Loop can restart after code changes |
+| Git push on `loop/*` branches | Deploy key + trigger-file handler — Loop can push code for review |
+| polysignal-scanner skill | New skill: documents trigger-file restart mechanism |
+| polysignal-git skill v2 | Updated: push instructions via trigger file, branch/path validation |
+| SSH deploy key | ed25519 key generated for `polysignal-loop@dgx-spark` |
+
+### Loop's New Capabilities (Session 17)
+| Capability | Mechanism | Security |
+|-----------|-----------|----------|
+| Restart scanner | Write `lab/.restart-scanner` → systemd path unit restarts service | Trigger content ignored. Fixed command. |
+| Push code | Write `lab/.git-push-request` → handler validates + pushes to `loop/*` | Branch must be `loop/`. Files restricted to lab/, workflows/, tests/, agents/. |
+| Read git | Existing polysignal-git skill (unchanged) | Read-only .git/ |
+| Run tests | Existing polysignal-pytest skill (unchanged) | Sandbox Python 3.12.3 |
+
+### Deferred to Session 18
+- **Squid proxy** — high risk, not blocking (scanner runs on host with full network)
+- **py-clob-client Level 0** — goes into scanner pipeline (host-side), not Loop sandbox
+- **News retrieval pipeline** — research complete (arxiv 2402.18563), multi-session implementation
 
 ### Requires Human
-10. **Polymarket wallet + CLOB auth** — gates all live trading
-11. **MoltBook JWT** — Twitter verification → env var
-12. **DNS CNAME** — polysignal.app → cname.vercel-dns.com
-13. **Squid proxy allowlist approval** — domains for Loop internet access
+- **Polymarket wallet + CLOB auth** — gates all live trading
+- **MoltBook JWT** — Twitter verification → env var
+- **DNS CNAME** — polysignal.app → cname.vercel-dns.com
+- **Squid proxy domain allowlist** — when ready for Loop network access
 
 ### Known Bugs
 - `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)
 
 ### Revenue Critical Path
 ```
-Exclude 824952 → Monitor gate 24h → Retrain at 200 evals → Polymarket wallet (human)
-    ↓                                                              ↓
+Monitor gate impact → Retrain at 200+ evals → Polymarket wallet (human)
+    ↓                                                    ↓
 py-clob-client L0 → orderbook features → retrain with richer data
     ↓
 MoltBook JWT (human) → Live publishing → Reputation → First trades
