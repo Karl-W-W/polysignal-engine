@@ -100,7 +100,8 @@ for f in "${VALID_FILES[@]}"; do
 done
 
 GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o StrictHostKeyChecking=no" \
-    git commit -m "$message
+    git -c user.name="Loop Agent" -c user.email="loop@polysignal.app" \
+    commit -m "$message
 
 Pushed by Loop agent via git-push-handler.sh" || {
     log "NOTICE: Nothing to commit (files unchanged)"
