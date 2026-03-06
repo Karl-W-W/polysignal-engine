@@ -110,7 +110,7 @@ Pushed by Loop agent via git-push-handler.sh" || {
 }
 
 GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o StrictHostKeyChecking=no" \
-    git push -u origin "$branch" --force-with-lease 2>&1 | tee -a "$LOG_FILE" || {
+    git push -u git@github.com:Karl-W-W/polysignal-engine.git "$branch" --force-with-lease 2>&1 | tee -a "$LOG_FILE" || {
     log "ERROR: Push failed"
     echo "FAILED: Push failed, check .git-push-log" > "$RESULT_FILE"
     exit 0
