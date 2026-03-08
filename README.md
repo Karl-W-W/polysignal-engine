@@ -69,7 +69,7 @@ All new capabilities follow: **Build** (in lab/) → **Test** (pytest) → **Rev
 
 - **Python 3.13** with LangGraph, LangChain, Pydantic
 - **XGBoost + scikit-learn** for ML prediction (Phase 2)
-- **NVIDIA DGX Spark** — Ollama with llama3.3:70b for LLM inference
+- **NVIDIA DGX Spark** (Blackwell GB10 GPU) — Ollama with llama3.3:70b for LLM inference
 - **Polymarket Gamma API** — Market data source
 - **Telegram** — Notifications and alerts
 - **OpenClaw** — Autonomous agent (Loop) running on DGX
@@ -97,28 +97,27 @@ python -m workflows.scanner
 
 ## Current Status
 
-**Phase 2** — XGBoost confidence gate LIVE, rule-based predictor + ML meta-predictor.
+**Session 18** — Full infrastructure operational. Loop agent has network, GPU, scanner control, and git push.
 
 | Metric | Value |
 |--------|-------|
 | Tests | 260 passing |
-| Predictions | 254+ accumulated, 134+ evaluated |
-| Rule-based accuracy | ~50.9% (coin flip — early 87% was survivorship bias) |
-| XGBoost accuracy | 91.3% test, 85.5% CV (meta-predictor: predicts whether prediction will be correct) |
-| Markets tracked | 14 crypto markets (2 actively signaling) |
-| Observations | 6,500+ |
+| Predictions | 356 accumulated, 347 evaluated |
+| Accuracy | 41.7% rule-based (63W/88L) — 89% excluding market 824952 |
+| XGBoost gate | LIVE — suppresses P(correct)<0.5 (91.3% test accuracy) |
+| Markets tracked | 14 crypto (market 824952 excluded from predictions) |
+| Observations | 9,691+ across 14 markets |
 | Scanner | Running 24/7 on DGX, 5-min intervals |
+| Loop capabilities | Network (Squid proxy), GPU (Blackwell GB10), scanner restart, git push |
 
-**Key insight:** Market 824952 accounts for 53 of 55 total losses (38.4% accuracy). Excluding it raises accuracy to ~75%. The XGBoost gate may auto-suppress it.
-
-**Next:** Exclude market 824952, monitor gate impact, add orderbook depth features via py-clob-client.
+**Next:** Anthropic credit refill → Loop validates network → py-clob-client orderbook features → XGBoost retrain on GPU → MoltBook JWT → first published signal.
 
 ## Multi-Agent System
 
 Three agents collaborate on development:
 
 - **Claude Code** — Architect. Strategy, complex implementations, code quality, testing.
-- **Loop** (OpenClaw on DGX) — Autonomous agent. Code reviews, data analysis, proactive monitoring. Runs 24/7 on heartbeat.
+- **Loop** (OpenClaw on DGX) — Autonomous agent. Code reviews, data analysis, live market data fetch, proactive monitoring. Runs 24/7 on heartbeat with network access (Squid proxy), GPU (Blackwell GB10), scanner restart, and git push to `loop/*` branches.
 - **Antigravity** — Infrastructure agent. DGX operations, Docker, deployments, systemd services.
 
 Agents coordinate through `lab/LOOP_TASKS.md` (Loop's task queue), `PROGRESS.md` (shared state), `lab/reviews/` (Loop's review output), and Telegram.

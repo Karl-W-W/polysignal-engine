@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-08 22:00 CET | Session 18
+# Last updated: 2026-03-08 23:30 CET | Session 18 (closing)
 # Session history: See HISTORY.md
 
 ---
@@ -309,7 +309,8 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Sandbox memory: 16GB | Was uncapped (~2GB practical). ML workloads possible. |
 | GPU: nvidia default runtime | NVIDIA GB10 visible in all containers. CUDA 13.0, driver 580.95.05. |
 | Passwordless sudo | docker, nvidia-ctk, systemctl restart, squid, tee — agents never need password again |
-| Proxy env vars | http_proxy/https_proxy auto-set in sandbox via openclaw.json |
+| Proxy env vars baked into image | OpenClaw `env` field doesn't apply — workaround: rebuilt Docker image |
+| GPU devices verified | `/dev/nvidia0` present inside sandbox, `NVIDIA_VISIBLE_DEVICES=all` |
 | LOOP_TASKS.md updated | Tasks 15-17: network test, live market fetch, py-clob-client prototype |
 
 ### Loop's Capability Level After Session 18
@@ -322,6 +323,42 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Git push | Trigger file (Session 17) | Same |
 | Sudo | Password required | Passwordless for docker/nvidia/squid |
 
+### Verified from Inside Sandbox (Session 18 close)
+| Test | Result |
+|------|--------|
+| `/dev/nvidia0` | Present |
+| `NVIDIA_VISIBLE_DEVICES` | `all` |
+| Polymarket API through proxy | 200 OK (5978 bytes) |
+| Google (blocked domain) | Correctly blocked by Squid |
+| `http_proxy` env var | Set via baked Docker image |
+| Bridge network | Connected, proxy TCP reachable |
+
+**Data at Session 18 close:** 356 predictions, 347 evaluated, 41.7% accuracy (63W/88L). 0 gated predictions (markets haven't triggered signal-level moves since Session 16 scanner restart).
+
+**Loop status:** Idle — Anthropic credits ran out. Tasks 5, 12-17 pending. No new reviews since March 2.
+
+---
+
+## NEXT STEPS (Session 19)
+
+**Infrastructure is complete. The bottleneck is now human action and model improvement.**
+
+### Immediate (human action required)
+1. **Anthropic credits refill** — Loop is brain-dead without API credits (console.anthropic.com)
+2. **MoltBook JWT** — Twitter verify → JWT → `MOLTBOOK_JWT` in `/opt/loop/.env`. Revenue path is plumbed and waiting.
+
+### When Loop is back online (after credit refill)
+3. **Task 15: Network verification** — Loop confirms Polymarket API works from sandbox (5 min)
+4. **Task 16: Live market fetch** — Loop writes `lab/live_market_fetch.py` (15 min)
+5. **Task 17: py-clob-client L0 prototype** — orderbook data for richer features (30 min)
+6. **Task 5: `before` parameter** — defense-in-depth against data leakage (20 min)
+7. **Task 14: Post-gate accuracy tracking** — structured pre/post comparison (20 min)
+
+### Near-term (Session 19-20)
+8. **XGBoost retrain on GPU** — 259+ evaluated predictions now (was 112 at first train). Exclude 824952 from training data. GPU available.
+9. **py-clob-client integration into scanner** — orderbook features in perception pipeline (host-side)
+10. **News retrieval pipeline** — #1 accuracy multiplier per arxiv 2402.18563
+
 ### Requires Human
 - **Polymarket wallet + CLOB auth** — gates all live trading
 - **MoltBook JWT** — Twitter verification → env var (revenue path)
@@ -332,9 +369,11 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ### Revenue Critical Path
 ```
-Network LIVE → MoltBook JWT (human) → First published signal
+Anthropic credits (human) → Loop back online → Tasks 15-17
     ↓
-py-clob-client L0 → orderbook features → retrain XGBoost on GPU
+MoltBook JWT (human) → First published signal
+    ↓
+XGBoost retrain on GPU → py-clob-client features → improved accuracy
     ↓
 Polymarket wallet (human) → TRADING_ENABLED=true → First trade
 ```
