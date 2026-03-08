@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-06 19:00 CET | Session 17 (in progress)
+# Last updated: 2026-03-08 22:00 CET | Session 18
 # Session history: See HISTORY.md
 
 ---
@@ -295,25 +295,46 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Read git | Existing polysignal-git skill (unchanged) | Read-only .git/ |
 | Run tests | Existing polysignal-pytest skill (unchanged) | Sandbox Python 3.12.3 |
 
-### Deferred to Session 18
-- **Squid proxy** — high risk, not blocking (scanner runs on host with full network)
-- **py-clob-client Level 0** — goes into scanner pipeline (host-side), not Loop sandbox
-- **News retrieval pipeline** — research complete (arxiv 2402.18563), multi-session implementation
+---
+
+## Session 18: Network + GPU + Autonomy (2026-03-08)
+
+**Loop gets a body.** Network access, GPU visibility, 16GB RAM, passwordless sudo.
+
+### Session 18 Accomplishments
+| What | Impact |
+|------|--------|
+| Squid proxy deployed | Strict allowlist: gamma-api.polymarket.com, clob.polymarket.com, moltbook.com, api.moltbook.com |
+| Sandbox network: bridge | Was `--net=none`. Loop can now reach Squid proxy on host. |
+| Sandbox memory: 16GB | Was uncapped (~2GB practical). ML workloads possible. |
+| GPU: nvidia default runtime | NVIDIA GB10 visible in all containers. CUDA 13.0, driver 580.95.05. |
+| Passwordless sudo | docker, nvidia-ctk, systemctl restart, squid, tee — agents never need password again |
+| Proxy env vars | http_proxy/https_proxy auto-set in sandbox via openclaw.json |
+| LOOP_TASKS.md updated | Tasks 15-17: network test, live market fetch, py-clob-client prototype |
+
+### Loop's Capability Level After Session 18
+| Capability | Before | After |
+|-----------|--------|-------|
+| Network | NONE | 4 domains via Squid proxy |
+| GPU | Invisible | NVIDIA GB10, CUDA 13.0 |
+| Memory | ~2GB | 16GB |
+| Scanner restart | Trigger file (Session 17) | Same |
+| Git push | Trigger file (Session 17) | Same |
+| Sudo | Password required | Passwordless for docker/nvidia/squid |
 
 ### Requires Human
 - **Polymarket wallet + CLOB auth** — gates all live trading
-- **MoltBook JWT** — Twitter verification → env var
+- **MoltBook JWT** — Twitter verification → env var (revenue path)
 - **DNS CNAME** — polysignal.app → cname.vercel-dns.com
-- **Squid proxy domain allowlist** — when ready for Loop network access
 
 ### Known Bugs
 - `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)
 
 ### Revenue Critical Path
 ```
-Monitor gate impact → Retrain at 200+ evals → Polymarket wallet (human)
-    ↓                                                    ↓
-py-clob-client L0 → orderbook features → retrain with richer data
+Network LIVE → MoltBook JWT (human) → First published signal
     ↓
-MoltBook JWT (human) → Live publishing → Reputation → First trades
+py-clob-client L0 → orderbook features → retrain XGBoost on GPU
+    ↓
+Polymarket wallet (human) → TRADING_ENABLED=true → First trade
 ```
