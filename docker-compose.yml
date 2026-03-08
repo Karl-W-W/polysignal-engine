@@ -60,22 +60,25 @@ services:
     runtime: nvidia
     networks:
       - internal-net
+      - public-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: always
     env_file:
       - .env
     environment:
       - PYTHONPATH=/app
-      - http_proxy=http://172.17.0.1:3128
-      - https_proxy=http://172.17.0.1:3128
-      - HTTP_PROXY=http://172.17.0.1:3128
-      - HTTPS_PROXY=http://172.17.0.1:3128
+      - http_proxy=http://host.docker.internal:3128
+      - https_proxy=http://host.docker.internal:3128
+      - HTTP_PROXY=http://host.docker.internal:3128
+      - HTTPS_PROXY=http://host.docker.internal:3128
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]
         limits:
           memory: 16G
     volumes:
