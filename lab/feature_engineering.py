@@ -323,13 +323,23 @@ def extract_all_features(db_path: str = DB_PATH) -> List[FeatureVector]:
 
 
 def build_labeled_dataset(db_path: str = DB_PATH,
-                          outcomes_path: Path = OUTCOMES_FILE) -> List[FeatureVector]:
+                          outcomes_path: Path = OUTCOMES_FILE,
+                          exclude_markets: Optional[set] = None,
+                          gated_only: bool = False) -> List[FeatureVector]:
     """
     Build a labeled dataset by joining feature vectors with prediction outcomes.
 
     This is the key function for Phase 2: it produces the training data.
     Each row is a feature vector at the time a prediction was made,
     labeled with whether that prediction was CORRECT/INCORRECT.
+
+    Args:
+        db_path: Path to observations database
+        outcomes_path: Path to prediction_outcomes.json
+        exclude_markets: Set of market IDs to exclude from training data
+            (e.g., {"824952"} to remove the 0W/40L poison pill)
+        gated_only: If True, only include predictions with xgb_p_correct set
+            (post-gate predictions only — filters pre-gate garbage)
 
     Returns:
         List of FeatureVectors with label and actual_delta populated
@@ -346,6 +356,12 @@ def build_labeled_dataset(db_path: str = DB_PATH,
 
     if not evaluated:
         return []
+
+    # Apply filters (Session 20 — clean training data)
+    if exclude_markets:
+        evaluated = [p for p in evaluated if p.get("market_id") not in exclude_markets]
+    if gated_only:
+        evaluated = [p for p in evaluated if p.get("xgb_p_correct") is not None]
 
     dataset = []
     # Cache histories to avoid repeated DB queries

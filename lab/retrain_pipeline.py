@@ -54,6 +54,9 @@ BACKUP_DIR = MODEL_DIR / "backups"
 # Minimum improvement to replace current model (avoid noise-driven swaps)
 MIN_ACCURACY_IMPROVEMENT = 0.0  # Accept any model that meets the 55% threshold
 
+# Markets to exclude from training data (known poison pills)
+EXCLUDE_MARKETS_FROM_TRAINING = {"824952"}  # 0W/40L, dragged accuracy to 41%
+
 
 def load_retrain_history() -> list:
     """Load retrain history from disk."""
@@ -109,9 +112,14 @@ def retrain() -> dict:
     print(f"Started: {datetime.now(timezone.utc).isoformat()}")
     print("=" * 60)
 
-    # 1. Build labeled dataset
+    # 1. Build labeled dataset (filtered — exclude known bad markets)
     print("\n[1/4] Building labeled dataset...")
-    dataset = build_labeled_dataset(db_path=DB_PATH, outcomes_path=OUTCOMES_FILE)
+    print(f"  Excluding markets: {EXCLUDE_MARKETS_FROM_TRAINING}")
+    dataset = build_labeled_dataset(
+        db_path=DB_PATH,
+        outcomes_path=OUTCOMES_FILE,
+        exclude_markets=EXCLUDE_MARKETS_FROM_TRAINING,
+    )
     summary = dataset_summary(dataset)
     print(f"  Dataset: {summary.get('message', 'unknown')}")
 
