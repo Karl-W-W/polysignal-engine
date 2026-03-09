@@ -14,6 +14,7 @@ from lab.outcome_tracker import (
     evaluate_outcomes,
     get_accuracy_summary,
     get_gated_accuracy,
+    get_per_market_accuracy,
     OutcomeState,
     PredictionRecord,
     MIN_MOVE_THRESHOLD,
@@ -311,3 +312,38 @@ class TestGatedAccuracy:
 
         result = get_gated_accuracy(state_file)
         assert result["post_gate"]["total"] == 1
+
+
+# ============================================================================
+# PER-MARKET ACCURACY
+# ============================================================================
+
+class TestPerMarketAccuracy:
+    def test_splits_by_market(self, state_file):
+        state = OutcomeState()
+        state.predictions = [
+            {"market_id": "btc", "evaluated": True, "outcome": "CORRECT"},
+            {"market_id": "btc", "evaluated": True, "outcome": "INCORRECT"},
+            {"market_id": "eth", "evaluated": True, "outcome": "CORRECT"},
+            {"market_id": "eth", "evaluated": True, "outcome": "CORRECT"},
+        ]
+        state.save(state_file)
+
+        result = get_per_market_accuracy(state_file)
+        assert result["btc"]["accuracy"] == 0.5
+        assert result["eth"]["accuracy"] == 1.0
+
+    def test_empty(self, state_file):
+        result = get_per_market_accuracy(state_file)
+        assert result == {}
+
+    def test_skips_unevaluated(self, state_file):
+        state = OutcomeState()
+        state.predictions = [
+            {"market_id": "btc", "evaluated": False, "outcome": None},
+            {"market_id": "btc", "evaluated": True, "outcome": "CORRECT"},
+        ]
+        state.save(state_file)
+
+        result = get_per_market_accuracy(state_file)
+        assert result["btc"]["total"] == 1

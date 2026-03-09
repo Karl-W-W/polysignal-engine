@@ -79,6 +79,13 @@ class FeatureVector:
     signal_count_24h: int = 0             # Signals detected in last 24 hours
     max_signal_confidence: float = 0.0    # Highest confidence signal in window
 
+    # CLOB orderbook features (Session 20 — populated by clob_prototype.py)
+    clob_spread: float = 0.0             # Best ask - best bid (tighter = more liquid)
+    clob_bid_ask_ratio: float = 0.0      # bid_depth / ask_depth (>1 = buying pressure)
+    clob_depth_imbalance: float = 0.0    # (bid_depth - ask_depth) / total (directional)
+    clob_mid_price: float = 0.0          # Depth-weighted mid price
+    clob_order_count_ratio: float = 0.0  # bid_orders / ask_orders
+
     # Label (for supervised learning)
     label: Optional[str] = None           # "CORRECT", "INCORRECT", "NEUTRAL" or None
     actual_delta: Optional[float] = None  # Actual price move (for regression)

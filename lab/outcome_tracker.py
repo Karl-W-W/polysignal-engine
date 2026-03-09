@@ -295,3 +295,34 @@ def get_gated_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
         b["accuracy"] = round(b["correct"] / directional, 3) if directional > 0 else 0.0
 
     return {"pre_gate": pre_gate, "post_gate": post_gate}
+
+
+def get_per_market_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
+    """Return accuracy breakdown per market_id.
+
+    Enables identifying which markets are predictable vs unpredictable.
+    Only includes evaluated predictions with directional outcomes.
+    """
+    state = OutcomeState.load(state_path)
+    markets: Dict[str, Dict] = {}
+
+    for pred in state.predictions:
+        if not pred.get("evaluated"):
+            continue
+        mid = pred.get("market_id", "unknown")
+        if mid not in markets:
+            markets[mid] = {"correct": 0, "incorrect": 0, "neutral": 0, "total": 0}
+        outcome = pred.get("outcome", "NEUTRAL")
+        markets[mid]["total"] += 1
+        if outcome == "CORRECT":
+            markets[mid]["correct"] += 1
+        elif outcome == "INCORRECT":
+            markets[mid]["incorrect"] += 1
+        else:
+            markets[mid]["neutral"] += 1
+
+    for m in markets.values():
+        directional = m["correct"] + m["incorrect"]
+        m["accuracy"] = round(m["correct"] / directional, 3) if directional > 0 else 0.0
+
+    return markets

@@ -182,10 +182,19 @@ def train_model(
             f"(need {MIN_SAMPLES}). Scanner needs more time to accumulate."
         )
 
-    # Train/test split (stratified to preserve class balance)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
-    )
+    # Temporal train/test split (Session 20) — predictions are time-ordered.
+    # Training on older data, testing on newer data gives realistic accuracy
+    # estimates and prevents future data leakage from random splits.
+    # Dataset is already ordered chronologically from build_labeled_dataset().
+    split_idx = int(len(X) * 0.8)
+    if split_idx < 10 or len(X) - split_idx < 5:
+        # Fallback to random split if not enough data for temporal
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+    else:
+        X_train, X_test = X[:split_idx], X[split_idx:]
+        y_train, y_test = y[:split_idx], y[split_idx:]
 
     # XGBoost with conservative hyperparameters for small datasets
     model = xgb.XGBClassifier(
