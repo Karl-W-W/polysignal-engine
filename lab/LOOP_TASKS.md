@@ -118,7 +118,7 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
 
 ## Active Tasks
 
-- [ ] **Task 5: Add `before` parameter to `get_market_history()` (20 min)**
+- [x] **Task 5: Add `before` parameter to `get_market_history()` (20 min)**
 
   **Why:** `get_market_history()` fetches 72h of observations regardless of `ref_time`.
   Defense-in-depth against future data leakage.

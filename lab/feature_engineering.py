@@ -133,13 +133,24 @@ def _parse_ts(ts_str: str) -> Optional[datetime]:
 
 
 def get_market_history(market_id: str, db_path: str = DB_PATH,
-                       hours_back: float = 48) -> List[Dict]:
-    """Fetch observation history for a market, ordered by time."""
+                       hours_back: float = 48, before: Optional[datetime] = None) -> List[Dict]:
+    """Fetch observation history for a market, ordered by time.
+    
+    Args:
+        market_id: Market to fetch
+        db_path: Database path
+        hours_back: How far back to look (from `before` or now)
+        before: Upper time bound (default: now). Defense against future data leakage —
+                when extracting features for a past prediction, pass ref_time here
+                to ensure no observations after that point are included.
+    """
     conn = _get_db(db_path)
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours_back)).isoformat()
+    anchor = before or datetime.now(timezone.utc)
+    cutoff = (anchor - timedelta(hours=hours_back)).isoformat()
+    anchor_str = anchor.isoformat()
     rows = conn.execute(
-        "SELECT * FROM observations WHERE market_id = ? AND timestamp > ? ORDER BY timestamp ASC",
-        (market_id, cutoff)
+        "SELECT * FROM observations WHERE market_id = ? AND timestamp > ? AND timestamp <= ? ORDER BY timestamp ASC",
+        (market_id, cutoff, anchor_str)
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -231,7 +242,7 @@ def extract_features(market_id: str, ref_time: Optional[datetime] = None,
         ref_time = datetime.now(timezone.utc)
 
     if history is None:
-        history = get_market_history(market_id, db_path, hours_back=48)
+        history = get_market_history(market_id, db_path, hours_back=48, before=ref_time)
 
     if not history:
         return FeatureVector(market_id=market_id, timestamp=ref_time.isoformat())
