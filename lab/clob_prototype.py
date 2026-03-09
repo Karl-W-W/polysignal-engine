@@ -29,7 +29,8 @@ from typing import Dict, List, Optional
 GAMMA_BASE = "https://gamma-api.polymarket.com"
 USER_AGENT = "PolySignal/1.0"
 DB_PATH = os.getenv("DB_PATH", "/mnt/polysignal/data/test.db")
-CACHE_PATH = Path("/mnt/polysignal/data/clob_features_cache.json")
+_data_dir = os.path.dirname(DB_PATH) if DB_PATH != "/data/polysignal.db" else "/opt/loop/data"
+CACHE_PATH = Path(os.getenv("CLOB_CACHE_PATH", os.path.join(_data_dir, "clob_features_cache.json")))
 REQUEST_TIMEOUT = 15
 
 

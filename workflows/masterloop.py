@@ -234,6 +234,17 @@ def perception_node(state: LoopState) -> LoopState:
         state["observations"] = []
         state["errors"].append(f"Perception: {e}")
 
+    # ── Refresh CLOB/microstructure feature cache (non-blocking, Session 20) ──
+    try:
+        from lab.clob_prototype import fetch_market_features, get_tracked_market_ids, save_cache
+        _clob_ids = get_tracked_market_ids()
+        _clob_results = [f for mid in _clob_ids if (f := fetch_market_features(mid))]
+        if _clob_results:
+            save_cache(_clob_results)
+            print(f"  📈 CLOB features refreshed for {len(_clob_results)} markets")
+    except Exception:
+        pass  # CLOB fetch optional — features stay at cached values
+
     # ── Evaluate past predictions against fresh prices (non-blocking) ─────────
     # NOTE: Must run AFTER market fetch so state["observations"] has current prices.
     # Bug fix Session 14: was called before fetch → empty observations → 0 evaluations.

@@ -318,6 +318,19 @@ def extract_features(market_id: str, ref_time: Optional[datetime] = None,
     fv.signal_count_24h = sig_24h
     fv.max_signal_confidence = max(max_conf_1h, max_conf_24h)
 
+    # --- CLOB/microstructure features (Session 20 — from clob_prototype.py cache) ---
+    try:
+        from lab.clob_prototype import get_clob_features_for_market
+        clob = get_clob_features_for_market(market_id)
+        if clob:
+            fv.clob_spread = clob.get("clob_spread", 0.0)
+            fv.clob_bid_ask_ratio = clob.get("clob_bid_ask_ratio", 0.0)
+            fv.clob_depth_imbalance = clob.get("clob_depth_imbalance", 0.0)
+            fv.clob_mid_price = clob.get("clob_mid_price", 0.0)
+            fv.clob_order_count_ratio = clob.get("clob_order_count_ratio", 0.0)
+    except ImportError:
+        pass  # clob_prototype not available — features stay at 0.0
+
     return fv
 
 
