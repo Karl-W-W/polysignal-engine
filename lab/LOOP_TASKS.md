@@ -197,7 +197,7 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
   3. Push to `loop/live-fetch`
   4. Report on Telegram
 
-- [ ] **Task 17: py-clob-client Level 0 prototype (30 min)**
+- [x] **Task 17: py-clob-client Level 0 prototype (30 min)**
 
   **Why:** CLOB orderbook data (bid/ask spread, depth) is the richest signal source.
   py-clob-client is already in requirements.txt. The scanner can't use it (host-side,
