@@ -291,6 +291,68 @@ class TestMasterLoopE2EKillSwitchOn:
             # All predictions should pass through (gate skipped)
             assert len(final["predictions"]) > 0
 
+    def test_excluded_markets_filtered_from_prediction(self):
+        """Markets in EXCLUDED_MARKETS should not produce predictions."""
+        # Patch EXCLUDED_MARKETS to include one of our fake markets
+        with (
+            patch.object(ml_module, "fetch_crypto_markets", side_effect=_fake_markets),
+            patch.object(ml_module, "detect_signals", return_value=[]),  # quiet market
+            patch.object(ml_module, "predict_market_moves", side_effect=_fake_predictions) as mock_predict,
+            patch.object(ml_module, "send_telegram_alert"),
+            patch.object(ml_module, "brain") as mock_brain,
+            patch("lab.experiments.bitcoin_signal.EXCLUDED_MARKETS", {"0xfake_btc"}),
+        ):
+            initial = _build_initial_state("e2e_excluded",
+                                            user_request="Check signals")
+            final, nodes_executed = _run_graph(initial)
+
+            # predict_market_moves should only receive 1 observation (ETH only)
+            call_args = mock_predict.call_args[0][0]
+            market_ids = [o.get("market_id") for o in call_args]
+            assert "0xfake_btc" not in market_ids
+            assert "0xfake_eth" in market_ids
+
+    def test_neutral_predictions_suppressed_by_gate(self):
+        """Neutral predictions should be suppressed when XGBoost gate is active."""
+        import numpy as np
+
+        # Fake predictions that return Neutral
+        def _neutral_predictions(observations):
+            class FakePred:
+                def __init__(self, obs):
+                    self.market_id = obs.get("market_id", "unknown")
+                    self.confidence = 0.5
+                    self.hypothesis = "Neutral"
+                def to_dict(self):
+                    return {"market_id": self.market_id,
+                            "confidence": self.confidence,
+                            "hypothesis": self.hypothesis}
+            return [FakePred(o) for o in observations]
+
+        mock_model = MagicMock()
+        mock_model.predict_proba.return_value = np.array([[0.3, 0.7]])  # Would pass
+
+        with (
+            patch.object(ml_module, "fetch_crypto_markets", side_effect=_fake_markets),
+            patch.object(ml_module, "detect_signals", return_value=[]),  # quiet market — no signal enhancement
+            patch.object(ml_module, "predict_market_moves", side_effect=_neutral_predictions),
+            patch.object(ml_module, "send_telegram_alert"),
+            patch.object(ml_module, "brain") as mock_brain,
+            patch("workflows.masterloop.os.getenv", return_value=":memory:"),
+            patch("lab.xgboost_baseline.load_model", return_value=(mock_model, ["price", "trend_strength"])),
+            patch("lab.feature_engineering.extract_features") as mock_extract,
+        ):
+            mock_fv = MagicMock()
+            mock_fv.to_dict.return_value = {"price": 0.65, "trend_strength": 1.2}
+            mock_extract.return_value = mock_fv
+
+            initial = _build_initial_state("e2e_neutral_gate",
+                                            user_request="Check signals")
+            final, nodes_executed = _run_graph(initial)
+
+            # All predictions are Neutral → all suppressed despite high gate score
+            assert len(final["predictions"]) == 0
+
     def test_short_circuit_no_telegram_spam(self):
         """Short-circuit must not send any Telegram alerts."""
         with (

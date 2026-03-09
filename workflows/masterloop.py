@@ -265,8 +265,20 @@ def prediction_node(state: LoopState) -> LoopState:
         state["predictions"] = []
         return state
 
+    # ── Filter excluded markets BEFORE prediction (Session 19) ────────────
+    # EXCLUDED_MARKETS only filtered signal detection, not prediction input.
+    # 824952 (0W/40L) was still getting predicted and recorded every cycle.
     try:
-        preds = predict_market_moves(observations)
+        from lab.experiments.bitcoin_signal import EXCLUDED_MARKETS
+        pred_obs = [o for o in observations if o.get("market_id") not in EXCLUDED_MARKETS]
+        excluded_count = len(observations) - len(pred_obs)
+        if excluded_count:
+            print(f"  ⊘ {excluded_count} excluded market(s) filtered from prediction input")
+    except ImportError:
+        pred_obs = observations
+
+    try:
+        preds = predict_market_moves(pred_obs)
         predictions = [p.to_dict() for p in preds]
 
         # Enhance Neutral predictions with perception signal data.
@@ -307,6 +319,10 @@ def prediction_node(state: LoopState) -> LoopState:
                 market_id = pred.get("market_id")
                 if not market_id:
                     gated.append(pred)
+                    continue
+                # Skip Neutral — no directional claim to evaluate (Session 19)
+                if pred.get("hypothesis") == "Neutral":
+                    suppressed += 1
                     continue
                 try:
                     fv = extract_features(market_id, db_path=db_path)
