@@ -34,8 +34,8 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | 264/264 PASS | Mac (6.1s) — +4 new Session 19 (xgb_p_correct persistence, gated accuracy split) |
-| Scanner | RUNNING | Cycle 598, up since Mar 6. XGBoost gate FIRING: ~9 passed, ~4 suppressed/cycle |
+| Tests | 266/266 PASS | Mac (6.0s) — +6 new Session 19 (gate persistence, accuracy split, exclusion, Neutral suppress) |
+| Scanner | RUNNING | Gate FIRING: 2 passed, 10 suppressed/cycle. 824952 excluded. Neutral suppressed. |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
@@ -354,11 +354,18 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Post-gate accuracy split | `get_gated_accuracy()` — separates pre-gate garbage from post-gate filtered predictions |
 | Merged loop/live-fetch | Loop's Task 15 (network verify) + Task 16 (live_market_fetch.py) integrated to main |
 | Merged loop/first-autonomous-push | Loop's first git push milestone integrated to main |
-| 4 new tests | xgb_p_correct recording, gated accuracy split (empty, pre/post, unevaluated) |
-| Tests: 264/264 passing | +4 from Session 18's 260 |
+| Fix: 824952 prediction exclusion | EXCLUDED_MARKETS now filters prediction_node input, not just signal detection |
+| Fix: Neutral suppression at gate | Gate rejects Neutral hypotheses (no directional claim to evaluate) |
+| 6 new tests | xgb_p_correct recording, gated accuracy split, excluded markets, Neutral gate suppression |
+| Tests: 266/266 passing | +6 from Session 18's 260 |
 
-### Key Insight: The "42% Accuracy" Is All Pre-Gate Garbage
-All 348 evaluated predictions predate the gate's deployment. Once xgb_p_correct is persisted, we can track post-gate accuracy separately. The gate is actively filtering (suppressing ~30% of predictions per cycle), but we had no way to measure its impact until now.
+### Key Insight: Clean Pipeline Now Live
+All 348 pre-Session-19 predictions are pre-gate garbage (41.7% accuracy). The pipeline now has:
+- **Excluded market filtering** — 824952 (0W/40L) can never produce predictions again
+- **Neutral suppression** — only directional predictions reach the gate
+- **xgb_p_correct persistence** — every prediction carries its gate score
+- **Post-gate accuracy tracking** — `get_gated_accuracy()` for clean measurement
+Gate now suppresses ~83% of predictions per cycle (10/12), passing only high-confidence directional ones.
 
 ### Loop's Contributions (Session 19)
 - Completed Tasks 15-16 autonomously (network verify + live market fetch)

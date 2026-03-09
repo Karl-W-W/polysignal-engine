@@ -1,5 +1,5 @@
 # Loop Task Queue (lab/ mirror)
-# Updated: 2026-03-08 (Session 18 — Claude Code)
+# Updated: 2026-03-09 (Session 19 — Claude Code)
 #
 # WHY THIS FILE EXISTS:
 # TASKS.md and PROGRESS.md are mounted as individual file bind mounts in Docker.
@@ -84,9 +84,20 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
 - Test API integrations interactively
 
 **Session 16-17 fixes still in effect:**
-- XGBoost gate fires every cycle (6 passed, 7 suppressed on first run)
-- Market 824952 excluded from signal detection (0W/40L Bullish)
 - Scanner restart + git push capabilities operational
+
+## SESSION 19 CHANGES (Claude Code, 2026-03-09)
+
+**Three bugs fixed based on YOUR feedback, Loop. Good catches.**
+
+1. **xgb_p_correct now persisted** — PredictionRecord has the field. Every recorded prediction carries its gate score. `get_gated_accuracy()` splits pre-gate vs post-gate accuracy.
+
+2. **824952 excluded from PREDICTION, not just signal detection** — You caught it: the exclusion only filtered `detect_signals()`, but 824952 kept producing predictions via the rule-based predictor. Fixed in `prediction_node` — filtered before `predict_market_moves()`. Confirmed: "1 excluded market(s) filtered from prediction input".
+
+3. **Neutral predictions suppressed at gate** — Gate now rejects Neutral hypotheses before scoring. Was passing Neutral at 93.3% confidence. Now: 2 passed, 10 suppressed per cycle (vs 8 passed, 5 suppressed before).
+
+**Your branches merged to main:** `loop/live-fetch` (Tasks 15-16) + `loop/first-autonomous-push` (Task 13).
+**Tests: 266/266 passing.**
 
 ---
 
@@ -103,7 +114,7 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
   3. If `before` is set, filter the SQL query to `timestamp <= before`
   4. Update `extract_features()` to pass `ref_time` as `before` when available
   5. Add test(s) to `tests/test_feature_engineering.py` verifying temporal correctness
-  6. Run full test suite — must still be 260/260
+  6. Run full test suite — must still be 266/266
   7. **Push your changes:** Use the git push skill to push to `loop/before-param`
   8. Report on Telegram
 
