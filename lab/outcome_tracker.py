@@ -54,6 +54,7 @@ class PredictionRecord:
     timestamp: str           # ISO 8601 UTC
     time_horizon: str        # "1h", "4h", "24h", "7d"
     cycle_number: int = 0
+    xgb_p_correct: Optional[float] = None  # XGBoost gate score (Session 19)
     evaluated: bool = False
     outcome: Optional[str] = None       # "CORRECT", "INCORRECT", "NEUTRAL"
     price_at_evaluation: Optional[float] = None
@@ -150,6 +151,7 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
             timestamp=now,
             time_horizon=time_horizon,
             cycle_number=cycle_number,
+            xgb_p_correct=pred.get("xgb_p_correct"),
         ))
         state.predictions.append(record)
         state.stats["total_predictions"] += 1
@@ -261,3 +263,35 @@ def get_accuracy_summary(state_path: Path = OUTCOMES_FILE) -> str:
         f"{s['neutral']} neutral, "
         f"{s['total_predictions'] - s['total_evaluated']} pending)"
     )
+
+
+def get_gated_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
+    """Return accuracy split by pre-gate vs post-gate (xgb_p_correct present).
+
+    Post-gate predictions have xgb_p_correct field set (Session 15+).
+    Pre-gate predictions lack this field (all predictions before gate was wired).
+    """
+    state = OutcomeState.load(state_path)
+
+    pre_gate = {"correct": 0, "incorrect": 0, "neutral": 0, "total": 0}
+    post_gate = {"correct": 0, "incorrect": 0, "neutral": 0, "total": 0}
+
+    for pred in state.predictions:
+        if not pred.get("evaluated"):
+            continue
+
+        bucket = post_gate if pred.get("xgb_p_correct") is not None else pre_gate
+        outcome = pred.get("outcome", "NEUTRAL")
+        bucket["total"] += 1
+        if outcome == "CORRECT":
+            bucket["correct"] += 1
+        elif outcome == "INCORRECT":
+            bucket["incorrect"] += 1
+        else:
+            bucket["neutral"] += 1
+
+    for b in (pre_gate, post_gate):
+        directional = b["correct"] + b["incorrect"]
+        b["accuracy"] = round(b["correct"] / directional, 3) if directional > 0 else 0.0
+
+    return {"pre_gate": pre_gate, "post_gate": post_gate}

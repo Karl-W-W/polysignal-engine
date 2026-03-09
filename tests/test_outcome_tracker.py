@@ -13,6 +13,7 @@ from lab.outcome_tracker import (
     record_predictions,
     evaluate_outcomes,
     get_accuracy_summary,
+    get_gated_accuracy,
     OutcomeState,
     PredictionRecord,
     MIN_MOVE_THRESHOLD,
@@ -87,6 +88,21 @@ class TestRecordPredictions:
         state = OutcomeState.load(state_file)
         btc = [p for p in state.predictions if p["market_id"] == "0xbtc"][0]
         assert btc["price_at_prediction"] == 0.65
+
+    def test_records_xgb_p_correct(self, sample_observations, state_file):
+        preds = [
+            {"market_id": "0xbtc", "hypothesis": "Bullish", "confidence": 0.82,
+             "time_horizon": "4h", "xgb_p_correct": 0.73},
+            {"market_id": "0xeth", "hypothesis": "Bearish", "confidence": 0.75,
+             "time_horizon": "1h"},  # no xgb_p_correct — pre-gate
+        ]
+        record_predictions(preds, sample_observations,
+                          cycle_number=1, state_path=state_file)
+        state = OutcomeState.load(state_file)
+        btc = [p for p in state.predictions if p["market_id"] == "0xbtc"][0]
+        eth = [p for p in state.predictions if p["market_id"] == "0xeth"][0]
+        assert btc["xgb_p_correct"] == 0.73
+        assert eth["xgb_p_correct"] is None
 
     def test_accumulates_across_cycles(self, sample_predictions,
                                         sample_observations, state_file):
@@ -248,3 +264,50 @@ class TestAccuracySummary:
         summary = get_accuracy_summary(state_file)
         assert "71%" in summary
         assert "5/7" in summary
+
+
+# ============================================================================
+# GATED ACCURACY SPLIT
+# ============================================================================
+
+class TestGatedAccuracy:
+    def test_splits_pre_and_post_gate(self, state_file):
+        state = OutcomeState()
+        state.predictions = [
+            # Pre-gate (no xgb_p_correct)
+            {"market_id": "0x1", "hypothesis": "Bullish", "evaluated": True,
+             "outcome": "CORRECT"},
+            {"market_id": "0x2", "hypothesis": "Bearish", "evaluated": True,
+             "outcome": "INCORRECT"},
+            # Post-gate (has xgb_p_correct)
+            {"market_id": "0x3", "hypothesis": "Bullish", "evaluated": True,
+             "outcome": "CORRECT", "xgb_p_correct": 0.72},
+            {"market_id": "0x4", "hypothesis": "Bearish", "evaluated": True,
+             "outcome": "CORRECT", "xgb_p_correct": 0.65},
+        ]
+        state.save(state_file)
+
+        result = get_gated_accuracy(state_file)
+        assert result["pre_gate"]["correct"] == 1
+        assert result["pre_gate"]["incorrect"] == 1
+        assert result["pre_gate"]["accuracy"] == 0.5
+        assert result["post_gate"]["correct"] == 2
+        assert result["post_gate"]["incorrect"] == 0
+        assert result["post_gate"]["accuracy"] == 1.0
+
+    def test_empty_state(self, state_file):
+        result = get_gated_accuracy(state_file)
+        assert result["pre_gate"]["total"] == 0
+        assert result["post_gate"]["total"] == 0
+
+    def test_skips_unevaluated(self, state_file):
+        state = OutcomeState()
+        state.predictions = [
+            {"market_id": "0x1", "evaluated": False, "xgb_p_correct": 0.8},
+            {"market_id": "0x2", "evaluated": True, "outcome": "CORRECT",
+             "xgb_p_correct": 0.7},
+        ]
+        state.save(state_file)
+
+        result = get_gated_accuracy(state_file)
+        assert result["post_gate"]["total"] == 1

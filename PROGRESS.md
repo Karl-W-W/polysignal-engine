@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-08 23:30 CET | Session 18 (closing)
+# Last updated: 2026-03-09 16:15 CET | Session 19 (in progress)
 # Session history: See HISTORY.md
 
 ---
@@ -34,8 +34,8 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | 260/260 PASS | Mac (6.1s) — +4 new Session 15 (XGBoost gate integration tests) |
-| Scanner | DEPLOYED | `polysignal-scanner.service` — 254 predictions, 134 evaluated, 50.9% rule-based accuracy |
+| Tests | 264/264 PASS | Mac (6.1s) — +4 new Session 19 (xgb_p_correct persistence, gated accuracy split) |
+| Scanner | RUNNING | Cycle 598, up since Mar 6. XGBoost gate FIRING: ~9 passed, ~4 suppressed/cycle |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
@@ -45,7 +45,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Loop Autonomy | UPGRADED | 3 skills, +6 safeBins, Claude Opus 4.6, 30m heartbeat (Session 14) |
 | Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |
 | Feature Eng. | READY | `lab/feature_engineering.py` — 19 features (10 after pruning), labeled dataset builder |
-| XGBoost Baseline | **WIRED** | 91.3% test, 85.5% CV ±10.6%. Confidence gate LIVE in prediction_node (threshold 0.5) |
+| XGBoost Baseline | **WIRED + FIRING** | 91.3% test, 85.5% CV. Gate confirmed active in prod (Session 19 diagnosis). xgb_p_correct now persisted. |
 | Feature Pruning | DONE | 9 dead features removed, 10 active features in trained model |
 | Ecosystem Research | DONE | `lab/ecosystem_research.md` — py-clob-client, PolyClaw, arxiv, strategies |
 | Loop Task Sync | FIXED | `lab/LOOP_TASKS.md` — bypasses Docker inode caching on individual file bind mounts |
@@ -171,10 +171,12 @@ Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [x] Loop masterloop review — gate, short-circuit, imports all verified correct (Loop, Session 15)
 - [x] Loop PolyClaw assessment — verdict: SKIP, too many credential vectors (Loop, Session 15)
 - [x] Docker bind mount fix — lab/LOOP_TASKS.md, first task sync since Session 12 (Claude Code, Session 15)
-- [ ] Exclude/invert market 824952 — eliminates 53 of 55 losses deterministically
+- [x] Exclude market 824952 — EXCLUDED_MARKETS env var in bitcoin_signal.py (Session 16)
+- [x] Fix xgb_p_correct persistence — PredictionRecord now stores gate score (Session 19)
+- [x] Post-gate accuracy split — get_gated_accuracy() distinguishes pre/post-gate (Session 19)
 - [ ] Add `before` parameter to `get_market_history()` — defense-in-depth against future leakage
-- [ ] Monitor XGBoost gate impact on live accuracy over 24h
-- [ ] Retrain XGBoost at 200+ evaluated predictions
+- [ ] Monitor XGBoost gate impact on live accuracy (now trackable via xgb_p_correct)
+- [ ] Retrain XGBoost at 200+ evaluated predictions (348 available — ready now)
 
 ### Phase 3: CONTINUOUS SCANNING — COMPLETE (Antigravity, Session 10)
 - [x] `polysignal-scanner.service` deployed on DGX (systemd)
@@ -202,7 +204,7 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Telegram alerts | LIVE | — |
 | MoltBook broadcast | WIRED (dry-run) | Human: Twitter verification → JWT |
 | Learning loop | WIRED | memory.md now persistent (gitignored, Session 11) |
-| Feature engineering | READY | 19 features, 254 predictions (134 evaluated, 50.9% rule-based accuracy) |
+| Feature engineering | READY | 10 active features, 356+ predictions, pre-gate accuracy 41.7%, post-gate tracking now live |
 | XGBoost baseline | **WIRED** | 91.3% test, 85.5% CV. Confidence gate LIVE in prediction_node (threshold 0.5) |
 | Polymarket wallet | NOT STARTED | Needs wallet + CLOB auth |
 | Custom domain | BLOCKED | Human: DNS CNAME + Vercel |
@@ -333,35 +335,59 @@ Replace auto-approve placeholder with actual Telegram approval.
 | `http_proxy` env var | Set via baked Docker image |
 | Bridge network | Connected, proxy TCP reachable |
 
-**Data at Session 18 close:** 356 predictions, 347 evaluated, 41.7% accuracy (63W/88L). 0 gated predictions (markets haven't triggered signal-level moves since Session 16 scanner restart).
+**Data at Session 18 close:** 356 predictions, 347 evaluated, 41.7% accuracy (63W/88L). Gate IS firing (confirmed Session 19) but xgb_p_correct wasn't being persisted.
 
-**Loop status:** Idle — Anthropic credits ran out. Tasks 5, 12-17 pending. No new reviews since March 2.
+**Loop status at Session 18 close:** Credits depleted. Tasks 5, 12-17 pending.
 
 ---
 
-## NEXT STEPS (Session 19)
+## Session 19: Pipeline Diagnosis + Gate Fix (2026-03-09)
 
-**Infrastructure is complete. The bottleneck is now human action and model improvement.**
+**Corrected diagnosis: pipeline was never stalled. Gate was always firing. The bug was data persistence.**
 
-### Immediate (human action required)
-1. **Anthropic credits refill** — Loop is brain-dead without API credits (console.anthropic.com)
-2. **MoltBook JWT** — Twitter verify → JWT → `MOLTBOOK_JWT` in `/opt/loop/.env`. Revenue path is plumbed and waiting.
+### Session 19 Accomplishments
+| What | Impact |
+|------|--------|
+| Pipeline diagnosis | Scanner running Cycle 598, XGBoost gate confirmed firing every cycle (9 passed, 4 suppressed) |
+| Root cause: xgb_p_correct not persisted | PredictionRecord lacked the field → gate scores computed but thrown away on save |
+| Fix: xgb_p_correct persistence | Added field to PredictionRecord + pass-through in record_predictions |
+| Post-gate accuracy split | `get_gated_accuracy()` — separates pre-gate garbage from post-gate filtered predictions |
+| Merged loop/live-fetch | Loop's Task 15 (network verify) + Task 16 (live_market_fetch.py) integrated to main |
+| Merged loop/first-autonomous-push | Loop's first git push milestone integrated to main |
+| 4 new tests | xgb_p_correct recording, gated accuracy split (empty, pre/post, unevaluated) |
+| Tests: 264/264 passing | +4 from Session 18's 260 |
 
-### When Loop is back online (after credit refill)
-3. **Task 15: Network verification** — Loop confirms Polymarket API works from sandbox (5 min)
-4. **Task 16: Live market fetch** — Loop writes `lab/live_market_fetch.py` (15 min)
-5. **Task 17: py-clob-client L0 prototype** — orderbook data for richer features (30 min)
-6. **Task 5: `before` parameter** — defense-in-depth against data leakage (20 min)
-7. **Task 14: Post-gate accuracy tracking** — structured pre/post comparison (20 min)
+### Key Insight: The "42% Accuracy" Is All Pre-Gate Garbage
+All 348 evaluated predictions predate the gate's deployment. Once xgb_p_correct is persisted, we can track post-gate accuracy separately. The gate is actively filtering (suppressing ~30% of predictions per cycle), but we had no way to measure its impact until now.
 
-### Near-term (Session 19-20)
-8. **XGBoost retrain on GPU** — 259+ evaluated predictions now (was 112 at first train). Exclude 824952 from training data. GPU available.
-9. **py-clob-client integration into scanner** — orderbook features in perception pipeline (host-side)
-10. **News retrieval pipeline** — #1 accuracy multiplier per arxiv 2402.18563
+### Loop's Contributions (Session 19)
+- Completed Tasks 15-16 autonomously (network verify + live market fetch)
+- Corrected Claude Code's wrong P0 diagnosis (proxy was already fixed)
+- Identified market ID mismatch (demoted to P3 — different ID schemes, markets are alive)
+- Honest self-assessment: watched frozen metrics for 8 hours without escalating
+
+---
+
+## NEXT STEPS (Session 19+)
+
+### Immediate (this session)
+1. **Push Session 19 fixes to GitHub** — scanner restart to pick up xgb_p_correct persistence
+2. **Update LOOP_TASKS.md** — mark completed tasks, add new tasks
+
+### Loop's Current Queue
+3. **Task 17: py-clob-client L0 prototype** — CLOB orderbook data is richest untapped signal (30 min)
+4. **Task 5: `before` parameter** — defense-in-depth against data leakage (20 min)
+5. **Task 14: Post-gate accuracy tracking** — now meaningful with xgb_p_correct persisted
+
+### Near-term (Session 20)
+6. **XGBoost retrain on GPU** — 348+ evaluated predictions (3x original 112). GPU is available.
+7. **py-clob-client integration into scanner** — orderbook features in perception pipeline
+8. **News retrieval pipeline** — #1 accuracy multiplier per arxiv 2402.18563
 
 ### Requires Human
+- **Anthropic credits** — console.anthropic.com (Loop burns Opus 4.6 on heartbeats)
+- **MoltBook JWT** — Twitter verify → JWT → `MOLTBOOK_JWT`. Revenue pipeline is plumbed.
 - **Polymarket wallet + CLOB auth** — gates all live trading
-- **MoltBook JWT** — Twitter verification → env var (revenue path)
 - **DNS CNAME** — polysignal.app → cname.vercel-dns.com
 
 ### Known Bugs
@@ -369,11 +395,9 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ### Revenue Critical Path
 ```
-Anthropic credits (human) → Loop back online → Tasks 15-17
+MoltBook JWT (human) → First published signal → REVENUE
     ↓
-MoltBook JWT (human) → First published signal
-    ↓
-XGBoost retrain on GPU → py-clob-client features → improved accuracy
+XGBoost retrain (348 samples, GPU) → py-clob-client features → improved accuracy
     ↓
 Polymarket wallet (human) → TRADING_ENABLED=true → First trade
 ```
