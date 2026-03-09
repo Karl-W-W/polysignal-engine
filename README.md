@@ -19,8 +19,8 @@ PolySignal-OS continuously scans Polymarket crypto markets, detects price signal
 ```
 
 **7-node LangGraph StateGraph pipeline:**
-1. **perception** — Fetch markets from Polymarket Gamma API, evaluate past predictions against outcomes
-2. **prediction** — Detect signals via rolling windows (15m/1h), generate hypotheses, XGBoost confidence gate suppresses P(correct)<0.5, record for tracking
+1. **perception** — Fetch markets from Polymarket Gamma API, refresh CLOB microstructure features (bid/ask/spread/depth), evaluate past predictions against outcomes
+2. **prediction** — Detect signals via rolling windows (15m/1h), filter excluded markets, generate hypotheses, suppress Neutrals, XGBoost confidence gate suppresses P(correct)<0.5, record with gate scores for tracking
 3. **draft** — LLM generates execution plan (skipped when trading disabled)
 4. **review** — LLM supervisor audit with HMAC signature (skipped when trading disabled)
 5. **risk_gate** — Position limits ($10 max), loss caps ($50/day), kill switch enforcement
@@ -41,13 +41,13 @@ core/           Vault — production code (read-only without authorization)
   ...
 
 lab/            Experiment scratchpad — new capabilities start here
-  outcome_tracker.py     Prediction recording + time-horizon evaluation
-  feature_engineering.py 19-feature extraction pipeline (10 active after pruning)
-  xgboost_baseline.py   XGBoost training + inference — 91.3% test accuracy
+  outcome_tracker.py     Prediction recording + evaluation + per-market accuracy
+  feature_engineering.py 15 features (10 price + 5 CLOB microstructure) with temporal safety
+  xgboost_baseline.py   XGBoost training + inference — 91.3% test, temporal train/test split
+  retrain_pipeline.py    Automated retrain: build dataset → train → compare → replace if better
+  clob_prototype.py      Market microstructure features from gamma-api (15 markets live)
   time_horizon.py        Derives signal validity window from market observables
-  data_readiness.py      Monitors progress toward ML training threshold
   moltbook_publisher.py  Signal publishing (dry-run until JWT)
-  ecosystem_research.md  py-clob-client, PolyClaw, arxiv, trading strategies
   LOOP_TASKS.md          Loop's canonical task queue (syncs through directory mount)
   reviews/               Loop's code review output files
   ...
@@ -56,7 +56,7 @@ workflows/      LangGraph pipelines
   masterloop.py   7-node MasterLoop with XGBoost confidence gate
   scanner.py      Continuous scanning service (5-min intervals)
 
-tests/          260 tests (pytest)
+tests/          275 tests (pytest)
 agents/         Telegram bot
 brain/          Runtime memory (gitignored)
 ```
@@ -70,7 +70,8 @@ All new capabilities follow: **Build** (in lab/) → **Test** (pytest) → **Rev
 - **Python 3.13** with LangGraph, LangChain, Pydantic
 - **XGBoost + scikit-learn** for ML prediction (Phase 2)
 - **NVIDIA DGX Spark** (Blackwell GB10 GPU) — Ollama with llama3.3:70b for LLM inference
-- **Polymarket Gamma API** — Market data source
+- **Polymarket Gamma API** — Market data + microstructure features (bid/ask/spread/volume/liquidity)
+- **py-clob-client** — CLOB orderbook access for prediction market trading
 - **Telegram** — Notifications and alerts
 - **OpenClaw** — Autonomous agent (Loop) running on DGX
 - **GitHub Actions** — CI (pytest on push)
@@ -97,27 +98,30 @@ python -m workflows.scanner
 
 ## Current Status
 
-**Session 18** — Full infrastructure operational. Loop agent has network, GPU, scanner control, and git push.
+**Session 21** (March 9, 2026) — Pipeline clean, CLOB microstructure features live, intelligence feedback loop closeable.
 
 | Metric | Value |
 |--------|-------|
-| Tests | 260 passing |
-| Predictions | 356 accumulated, 347 evaluated |
-| Accuracy | 41.7% rule-based (63W/88L) — 89% excluding market 824952 |
-| XGBoost gate | LIVE — suppresses P(correct)<0.5 (91.3% test accuracy) |
-| Markets tracked | 14 crypto (market 824952 excluded from predictions) |
-| Observations | 9,691+ across 14 markets |
-| Scanner | Running 24/7 on DGX, 5-min intervals |
-| Loop capabilities | Network (Squid proxy), GPU (Blackwell GB10), scanner restart, git push |
+| Tests | 275 passing |
+| Predictions | 382 accumulated, 23 with XGBoost gate scores |
+| Pre-gate accuracy | 41.7% (63W/88L) — contaminated by market 824952 (0W/40L, now excluded) |
+| Post-gate accuracy | Accumulating — first evaluable predictions mature ~15:00 UTC March 10 |
+| XGBoost gate | LIVE — suppresses Neutrals + P(correct)<0.5 (91.3% test accuracy) |
+| Markets tracked | 13 active crypto (824952 excluded from predictions + training) |
+| CLOB features | 15 markets with bid/ask/spread/volume/liquidity refreshed every cycle |
+| Observations | 18,000+ across 14 markets |
+| Scanner | Running 24/7 on DGX, 5-min intervals, CLOB refresh per cycle |
+| Retrain pipeline | Built — trigger file + systemd handler, tested, rollback policy |
+| Loop capabilities | Network, GPU, scanner restart, git push, data/ write, CLOB access, retrain trigger |
 
-**Next:** Anthropic credit refill → Loop validates network → py-clob-client orderbook features → XGBoost retrain on GPU → MoltBook JWT → first published signal.
+**Next:** Post-gate evaluation results (March 10) → XGBoost retrain with CLOB features → MoltBook JWT (human) → first published signal → Polymarket wallet (human) → first trade.
 
 ## Multi-Agent System
 
 Three agents collaborate on development:
 
 - **Claude Code** — Architect. Strategy, complex implementations, code quality, testing.
-- **Loop** (OpenClaw on DGX) — Autonomous agent. Code reviews, data analysis, live market data fetch, proactive monitoring. Runs 24/7 on heartbeat with network access (Squid proxy), GPU (Blackwell GB10), scanner restart, and git push to `loop/*` branches.
+- **Loop** (OpenClaw on DGX) — Autonomous agent. Code reviews, data analysis, live market data fetch, CLOB feature extraction, proactive monitoring. Runs 24/7 on heartbeat with network (Squid proxy), GPU (Blackwell GB10), scanner restart, git push, retrain trigger, and data/ write access.
 - **Antigravity** — Infrastructure agent. DGX operations, Docker, deployments, systemd services.
 
 Agents coordinate through `lab/LOOP_TASKS.md` (Loop's task queue), `PROGRESS.md` (shared state), `lab/reviews/` (Loop's review output), and Telegram.
