@@ -130,6 +130,9 @@ def detect_signals(markets: list) -> list:
     c = conn.cursor()
 
     signals = []
+    # Track closest-to-threshold market for status visibility (Session 20)
+    _closest_delta = 0.0
+    _closest_market = None
 
     # Rolling windows: (label, min_age_seconds, max_age_seconds)
     # We look for the closest observation within each window.
@@ -179,6 +182,11 @@ def detect_signals(markets: list) -> list:
                     best_ref_ts    = row["timestamp"]
                     best_window    = window_name
 
+        # Track closest-to-threshold for status visibility
+        if abs(best_delta) > abs(_closest_delta) and abs(best_delta) < SIGNAL_THRESHOLD:
+            _closest_delta = best_delta
+            _closest_market = market_id
+
         if abs(best_delta) >= SIGNAL_THRESHOLD and best_ref_price is not None:
             direction = "📈 Bullish" if best_delta > 0 else "📉 Bearish"
             time_horizon = derive_time_horizon(
@@ -205,7 +213,17 @@ def detect_signals(markets: list) -> list:
     conn.commit()
     conn.close()
 
+    # Store closest-miss for scanner status visibility
+    detect_signals.closest_miss = {
+        "market_id": _closest_market,
+        "delta": round(_closest_delta, 4),
+        "threshold": SIGNAL_THRESHOLD,
+    } if _closest_market else None
+
     return signals
+
+# Initialize attribute
+detect_signals.closest_miss = None
 
 
 # ── Telegram Alert ────────────────────────────────────────────────────────────

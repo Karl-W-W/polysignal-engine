@@ -28,5 +28,8 @@ pydantic>=2.0.0
 xgboost>=2.0.0
 scikit-learn>=1.4.0
 
+# === Polymarket CLOB ===
+py-clob-client>=0.34.0
+
 # === Telegram ===
 python-telegram-bot==21.5

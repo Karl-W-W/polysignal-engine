@@ -96,6 +96,7 @@ def _write_scanner_status(cycle, n_obs, n_preds, n_errors, elapsed, result):
     """Write machine-readable status for Loop to check on heartbeat."""
     try:
         import json
+        from lab.experiments.bitcoin_signal import detect_signals as _ds
         status = {
             "cycle": cycle,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -104,6 +105,7 @@ def _write_scanner_status(cycle, n_obs, n_preds, n_errors, elapsed, result):
             "errors": n_errors,
             "elapsed_seconds": round(elapsed, 1),
             "gate_stats": result.get("stage_timings", {}).get("prediction", 0),
+            "closest_signal": getattr(_ds, "closest_miss", None),
         }
         with open(SCANNER_STATUS_PATH, "w") as f:
             json.dump(status, f, indent=2)
