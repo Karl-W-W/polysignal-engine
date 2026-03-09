@@ -149,7 +149,7 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
   6. **Push your report:** Use git push skill to push to `loop/gate-tracking`
   7. Plan to update this report on each heartbeat as new data arrives
 
-- [ ] **Task 15: Test network access (5 min)**
+- [x] **Task 15: Test network access (5 min)**
 
   **Why:** Session 18 gave you internet through Squid proxy. Verify it works from sandbox.
 
@@ -158,7 +158,7 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
   2. Verify blocked domain: `curl -s https://google.com` (should fail/empty)
   3. Report on Telegram: "Network access verified — Polymarket API reachable, non-allowlisted domains blocked"
 
-- [ ] **Task 16: Live Polymarket data fetch from sandbox (15 min)**
+- [x] **Task 16: Live Polymarket data fetch from sandbox (15 min)**
 
   **Why:** Now that you have network, you can fetch live market data directly.
 
