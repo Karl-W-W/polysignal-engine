@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-09 16:15 CET | Session 19 (in progress)
+# Last updated: 2026-03-09 16:25 CET | Session 19 (closing)
 # Session history: See HISTORY.md
 
 ---
@@ -377,9 +377,9 @@ Gate now suppresses ~83% of predictions per cycle (10/12), passing only high-con
 
 ## NEXT STEPS (Session 19+)
 
-### Immediate (this session)
-1. **Push Session 19 fixes to GitHub** — scanner restart to pick up xgb_p_correct persistence
-2. **Update LOOP_TASKS.md** — mark completed tasks, add new tasks
+### Immediate (this session) — ALL DONE
+1. ~~Push Session 19 fixes to GitHub~~ — DONE (3 commits shipped)
+2. ~~Update LOOP_TASKS.md~~ — DONE (Session 19 changes section added)
 
 ### Loop's Current Queue
 3. **Task 17: py-clob-client L0 prototype** — CLOB orderbook data is richest untapped signal (30 min)
