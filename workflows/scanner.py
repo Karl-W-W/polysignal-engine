@@ -86,6 +86,31 @@ def seconds_until_active() -> int:
     return max(seconds, 60)  # At least 1 minute
 
 
+SCANNER_STATUS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "lab", ".scanner-status.json"
+)
+
+
+def _write_scanner_status(cycle, n_obs, n_preds, n_errors, elapsed, result):
+    """Write machine-readable status for Loop to check on heartbeat."""
+    try:
+        import json
+        status = {
+            "cycle": cycle,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "observations": n_obs,
+            "predictions": n_preds,
+            "errors": n_errors,
+            "elapsed_seconds": round(elapsed, 1),
+            "gate_stats": result.get("stage_timings", {}).get("prediction", 0),
+        }
+        with open(SCANNER_STATUS_PATH, "w") as f:
+            json.dump(status, f, indent=2)
+    except Exception as e:
+        log.warning(f"Failed to write scanner status: {e}")
+
+
 def run_scanner():
     """Main scanner loop."""
     cycle_count = 0
@@ -125,12 +150,16 @@ def run_scanner():
             n_obs = len(result.get("observations", []))
             n_errors = len(result.get("errors", []))
 
+            n_preds = len(result.get("predictions", []))
             log.info(f"--- Cycle {cycle_count} complete: {status} "
-                     f"({n_obs} observations, {n_errors} errors, {elapsed:.1f}s) ---")
+                     f"({n_obs} observations, {n_preds} predictions, {n_errors} errors, {elapsed:.1f}s) ---")
 
             if n_errors > 0:
                 for err in result["errors"]:
                     log.warning(f"  Error: {err}")
+
+            # ── Write status file for Loop visibility (Session 19) ────────
+            _write_scanner_status(cycle_count, n_obs, n_preds, n_errors, elapsed, result)
 
         except Exception as e:
             elapsed = time.time() - start

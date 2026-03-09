@@ -97,7 +97,22 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
 3. **Neutral predictions suppressed at gate** — Gate now rejects Neutral hypotheses before scoring. Was passing Neutral at 93.3% confidence. Now: 2 passed, 10 suppressed per cycle (vs 8 passed, 5 suppressed before).
 
 **Your branches merged to main:** `loop/live-fetch` (Tasks 15-16) + `loop/first-autonomous-push` (Task 13).
-**Tests: 266/266 passing.**
+**Tests: 272/272 passing.**
+
+## SESSION 20 CHANGES (Claude Code, 2026-03-09)
+
+**Intelligence feedback loop is now closeable.**
+
+1. **XGBoost retrain pipeline built** — `lab/retrain_pipeline.py`. Builds labeled dataset, trains new model, compares with current, replaces if better, backs up old. Full automated pipeline.
+
+2. **Retrain trigger** — Write `echo "retrain" > /mnt/polysignal/lab/.retrain-trigger` and the host-side handler will:
+   - Run the retrain pipeline
+   - If model improves: save new model + restart scanner
+   - Write result to `lab/.retrain-result`
+
+3. **Scanner status file** — After each cycle, scanner writes `lab/.scanner-status.json` with cycle number, observations, predictions, errors, timestamp. **Check this instead of guessing pipeline state.**
+
+4. **Retrain handler** — `lab/retrain_handler.sh` (needs systemd path unit setup on DGX — Claude Code will install).
 
 ---
 
@@ -199,6 +214,44 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
   5. Push to `loop/clob-prototype`
   6. Report on Telegram
 
+- [ ] **Task 18: Test XGBoost retrain trigger (5 min)**
+
+  **Why:** Validates the retrain trigger → handler → model comparison pipeline.
+
+  **What to do:**
+  1. Check current model metrics: `cat /mnt/polysignal/data/models/training_metrics.json`
+  2. Trigger retrain: `echo "retrain" > /mnt/polysignal/lab/.retrain-trigger`
+  3. Wait 30 seconds (retrain takes time)
+  4. Check result: `cat /mnt/polysignal/lab/.retrain-result`
+  5. Report: was the model REPLACED or KEPT_CURRENT? What were the accuracy numbers?
+  6. Report on Telegram
+
+- [ ] **Task 19: Scanner status monitoring on heartbeat (10 min)**
+
+  **Why:** You couldn't see scanner state before — you diagnosed a "20-hour stall" that wasn't real. Now `lab/.scanner-status.json` exists.
+
+  **What to do:**
+  1. Read: `cat /mnt/polysignal/lab/.scanner-status.json`
+  2. Verify fields: cycle, timestamp, observations, predictions, errors
+  3. Add to your HEARTBEAT routine: check this file first before reporting pipeline state
+  4. If `predictions == 0` for multiple cycles → flag as potential issue
+  5. If `errors > 0` → report the error count
+  6. Report on Telegram: "Scanner status monitoring active"
+
+- [ ] **Task 20: Explore ClawHub for Polymarket/trading skills (15 min)**
+
+  **Why:** ClawHub has 2,857 skills. Some may have useful Polymarket integration patterns, signal detection algorithms, or trading strategies. We need intelligence from the ecosystem.
+
+  **SECURITY WARNING:** 341/2,857 skills are malicious (12%). DO NOT install anything. Read-only research.
+
+  **What to do:**
+  1. Visit `https://moltbook.com` or check if ClawHub API is reachable through proxy
+  2. Search for: polymarket, prediction market, trading, CLOB, orderbook
+  3. For each interesting skill: note name, author, star count, what it does
+  4. Assess: could any of these patterns improve our signal detection?
+  5. Write findings to `lab/reviews/clawhub_research.md`
+  6. Push to `loop/clawhub-research`
+
 ---
 
 ## Reminders
@@ -207,7 +260,8 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
 - **Network is limited:** Only gamma-api.polymarket.com, clob.polymarket.com, moltbook.com, api.moltbook.com are reachable. Everything else is blocked by Squid proxy.
 - Your job: write Python code, write tests, run pytest, fetch data, report findings, push code.
 - After completing a task, mark it [x] in this file and move to the next one.
-- **NEW:** You have network access, scanner restart, git push, and 16GB RAM. Use them.
+- **NEW:** You have network access, scanner restart, git push, retrain trigger, and 16GB RAM. Use them.
+- **NEW:** Check `lab/.scanner-status.json` on every heartbeat for accurate pipeline state.
 
 ---
 
