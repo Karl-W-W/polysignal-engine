@@ -149,9 +149,11 @@ def retrain() -> dict:
     cv_improvement = new_result.cv_accuracy_mean - old_cv
     more_data = new_result.samples_total > old_samples
 
+    # Replace only if: production-ready AND (better accuracy OR more data with acceptable accuracy)
+    acceptable_with_more_data = more_data and new_result.accuracy >= (old_accuracy - 0.05)
     should_replace = (
         new_result.ready_for_production
-        and (improvement >= MIN_ACCURACY_IMPROVEMENT or more_data)
+        and (improvement >= MIN_ACCURACY_IMPROVEMENT or acceptable_with_more_data)
     )
 
     entry = {
