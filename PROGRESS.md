@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-09 23:30 CET | Session 21 (closing)
+# Last updated: 2026-03-10 ~12:00 CET | Session 22
 # Session history: See HISTORY.md
 
 ---
@@ -34,13 +34,17 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | 275/275 PASS | Mac (6.2s) — +15 new Sessions 19-21 |
+| Tests | 305/305 PASS | Mac (3.6s) — +30 new Session 22 (MoltBook scanner/engagement/solver) |
 | Scanner | RUNNING | Gate FIRING + CLOB refresh (15 markets/cycle). 824952 excluded. Neutral suppressed. |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
-| MoltBook Publisher | WIRED | Non-blocking in commit_node (dry-run until JWT) |
+| MoltBook Publisher | **LIVE** | Non-blocking in commit_node. JWT obtained. polysignal-os registered + verified. |
+| MoltBook Scanner | BUILT | `lab/moltbook_scanner.py` — 10 submolts, sanitized, relevance-scored knowledge base |
+| MoltBook Engagement | BUILT | `lab/moltbook_engagement.py` — subscribe, follow, upvote, comment (rate-limited) |
+| MoltBook Math Solver | BUILT | `lab/moltbook_math_solver.py` — auto-solves verification challenges |
+| Auto-Merge CI | DEPLOYED | `.github/workflows/auto-merge-loop.yml` — loop/* branches auto-merge if tests pass |
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (Session 11 fix) |
 | Loop Autonomy | **FULL** | 4 skills, network, GPU, data/ write, scanner restart, git push, retrain trigger |
 | Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |

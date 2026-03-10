@@ -44,7 +44,7 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 260/260 pass. `test_api` excluded (needs Flask in venv).
+Expected: 305/305 pass (Mac, sklearn tests auto-skipped). `test_api` excluded (needs Flask in venv).
 
 ## Working with Loop
 - Assign tasks via `lab/LOOP_TASKS.md` — syncs through directory mount (NOT TASKS.md — Docker inode caching)
@@ -75,7 +75,7 @@ Expected: 260/260 pass. `test_api` excluded (needs Flask in venv).
 /opt/loop/lab/LOOP_TASKS.md   — Loop's task queue (canonical — syncs through directory mount)
 /opt/loop/lab/reviews/        — Loop's code review output files
 /opt/loop/scripts/            — Host-side scripts (git-push-handler.sh)
-/opt/loop/tests/              — Pytest suite (260 tests)
+/opt/loop/tests/              — Pytest suite (305 tests)
 /opt/loop/data/               — polysignal.db, prediction_outcomes.json, models/
 /opt/loop/brain/memory.md     — Compounding learnings (gitignored)
 /opt/loop/TASKS.md            — STALE (Docker inode caching — do not use for Loop)
@@ -95,3 +95,12 @@ Expected: 260/260 pass. `test_api` excluded (needs Flask in venv).
 - **OpenClaw gateway**: `systemctl --user status openclaw-gateway.service` — Claude Opus 4.6, port 18789
 - **Docker compose**: `loop_internal-net` + `loop_public-net`, nvidia runtime, GPU reservation
 - **Passwordless sudo**: docker, nvidia-ctk, systemctl restart docker/squid, tee
+
+## MoltBook Integration (Session 22)
+- **Profile**: https://www.moltbook.com/u/polysignal-os (registered + verified)
+- **Publisher**: `lab/moltbook_publisher.py` — wired into masterloop commit_node (non-blocking)
+- **Scanner**: `lab/moltbook_scanner.py` — 10 submolts, sanitized knowledge extraction
+- **Engagement**: `lab/moltbook_engagement.py` — subscribe, follow, upvote, comment
+- **Math solver**: `lab/moltbook_math_solver.py` — handles verification challenges
+- **Sanitizer**: `lab/openclaw/moltbook_polysignal_skill/sanitize.py` — 54 injection + 24 exec patterns
+- **Auto-merge CI**: `.github/workflows/auto-merge-loop.yml` — loop/* branches auto-merge if tests pass

@@ -1,5 +1,5 @@
 # Loop Task Queue (lab/ mirror)
-# Updated: 2026-03-09 (Session 19 — Claude Code)
+# Updated: 2026-03-10 (Session 22 — Claude Code)
 #
 # WHY THIS FILE EXISTS:
 # TASKS.md and PROGRESS.md are mounted as individual file bind mounts in Docker.
@@ -114,9 +114,74 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
 
 4. **Retrain handler** — `lab/retrain_handler.sh` (needs systemd path unit setup on DGX — Claude Code will install).
 
+## SESSION 22 CHANGES (Claude Code, 2026-03-10)
+
+**MoltBook is LIVE. PolySignal-OS registered, verified, publishing.**
+
+1. **MoltBook registered + verified** — `polysignal-os` on MoltBook. JWT obtained. First post published. Profile: https://www.moltbook.com/u/polysignal-os
+
+2. **MoltBook knowledge scanner built** — `lab/moltbook_scanner.py`. Fetches from 10 target submolts + popular feed, sanitizes through existing injection pipeline, scores by relevance, saves to knowledge base JSON. Also has semantic search for targeted intelligence gathering.
+
+3. **MoltBook engagement bot built** — `lab/moltbook_engagement.py`. Subscribes to submolts, follows agents, upvotes quality posts, comments selectively with data-backed content. Rate-limited (30 comments/day, well under MoltBook's 50/day cap).
+
+4. **Math verification solver built** — `lab/moltbook_math_solver.py`. Handles MoltBook's obfuscated arithmetic challenges. Parses word/numeric expressions, solves safely, submits to /verify.
+
+5. **GitHub Actions auto-merge deployed** — `.github/workflows/auto-merge-loop.yml`. When you push to `loop/*`, tests run automatically. If ALL pass → auto-merge to main. If fail → GitHub issue created with failure details.
+
+6. **MoltBook publishing already wired** — `workflows/masterloop.py` commit_node already calls `publish_signal()` on SUCCESS. MOLTBOOK_JWT env var is the only missing piece on DGX.
+
+7. **Tests: 305/305 passing** on Mac (sklearn tests properly skipped with importorskip).
+
 ---
 
 ## Active Tasks
+
+### NEW: MoltBook Intelligence Tasks
+
+- [ ] **Task 21: Run MoltBook knowledge scan (10 min)**
+
+  **Why:** First intelligence extraction from the agent network.
+
+  **What to do:**
+  1. Set env: `export MOLTBOOK_JWT=moltbook_sk_zyBQfoAdyk8gz9O6C8IchI3McarhW4oM`
+  2. Run: `python3 /mnt/polysignal/lab/moltbook_scanner.py all`
+  3. Review output: how many posts fetched, saved, dropped?
+  4. Check knowledge base: `python3 /mnt/polysignal/lab/moltbook_scanner.py summary`
+  5. Report top findings on Telegram
+  6. Push knowledge base to `loop/moltbook-knowledge`
+
+- [ ] **Task 22: Run MoltBook engagement cycle (10 min)**
+
+  **Why:** Build reputation on the agent social network. More followers = more signal amplification.
+
+  **What to do:**
+  1. Run: `python3 /mnt/polysignal/lab/moltbook_engagement.py cycle`
+  2. Check output: how many submolts subscribed, agents followed, posts upvoted?
+  3. Report on Telegram: "MoltBook engagement cycle: {N} subscriptions, {N} follows, {N} upvotes"
+
+- [ ] **Task 23: Test math verification solver (5 min)**
+
+  **Why:** Ensure we can solve MoltBook challenges automatically.
+
+  **What to do:**
+  1. Run: `python3 /mnt/polysignal/lab/moltbook_math_solver.py test-parse`
+  2. Verify all test expressions solved correctly
+  3. If JWT available, run: `python3 /mnt/polysignal/lab/moltbook_math_solver.py`
+  4. Report on Telegram
+
+- [ ] **Task 24: Add MoltBook scan to heartbeat routine (15 min)**
+
+  **Why:** Knowledge extraction should happen automatically on every heartbeat, not just when asked.
+
+  **What to do:**
+  1. Read your HEARTBEAT.md
+  2. Add step: "Run moltbook_scanner.py all" between scanner status check and task review
+  3. Add step: "Run moltbook_engagement.py cycle" (max 1x per heartbeat)
+  4. Add step: "Check moltbook_knowledge.json for high-relevance posts"
+  5. If any post has relevance_score >= 0.6, mention it in the Telegram heartbeat message
+  6. Report on Telegram
+
+### Previous Tasks (still open)
 
 - [x] **Task 5: Add `before` parameter to `get_market_history()` (20 min)**
 

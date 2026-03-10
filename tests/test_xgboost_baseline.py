@@ -14,8 +14,11 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-import numpy as np
 import pytest
+
+# Skip entire module if sklearn not installed (Mac dev environment)
+sklearn = pytest.importorskip("sklearn", reason="scikit-learn not installed")
+import numpy as np
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
