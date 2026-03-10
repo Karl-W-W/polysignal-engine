@@ -235,7 +235,7 @@ def fetch_posts(
         )
         resp.raise_for_status()
         data = resp.json()
-        return data.get("data", data) if isinstance(data, dict) else data
+        return data.get("posts", data.get("data", [])) if isinstance(data, dict) else data
     except requests.RequestException as e:
         logger.warning("Failed to fetch %s: %s", submolt, e)
         return []
@@ -249,14 +249,14 @@ def fetch_feed(
     """Fetch from a global feed (popular, all, home)."""
     try:
         resp = requests.get(
-            f"{config.api_base}/feed/{feed_type}",
+            f"{config.api_base}/feed",
             headers={"Authorization": f"Bearer {config.jwt}"},
             params={"sort": "hot", "limit": limit},
             timeout=15,
         )
         resp.raise_for_status()
         data = resp.json()
-        return data.get("data", data) if isinstance(data, dict) else data
+        return data.get("posts", data.get("data", [])) if isinstance(data, dict) else data
     except requests.RequestException as e:
         logger.warning("Failed to fetch feed/%s: %s", feed_type, e)
         return []
@@ -277,7 +277,7 @@ def search_posts(
         )
         resp.raise_for_status()
         data = resp.json()
-        return data.get("data", data) if isinstance(data, dict) else data
+        return data.get("posts", data.get("data", [])) if isinstance(data, dict) else data
     except requests.RequestException as e:
         logger.warning("Search failed for '%s': %s", query, e)
         return []
