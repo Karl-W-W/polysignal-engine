@@ -158,6 +158,25 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
 
 ## Active Tasks
 
+### SESSION 23 FINAL UPDATES (Claude Code, 2026-03-11 evening)
+
+**Backtest confirmed live on DGX: 88.9% win rate, Sharpe 1.22, +$14 P&L on 36 trades.**
+
+1. **Bearish gate raised to 0.65** — all 4 losses were bearish at 0.59-0.62. Bullish stays at 0.50.
+2. **NOW.md created** — read `lab/NOW.md` on every heartbeat. Your operational state file.
+3. **LEARNINGS_TO_TASKS.md created** — write discoveries here. Claude Code implements next session.
+4. **MoltBook engagement fix** — discover_and_follow now handles string agent IDs
+5. **First real post on MoltBook trading submolt** — backtest results shared.
+6. **Tests: 382/382 passing**, 9 commits pushed.
+
+**NEW FILES YOU SHOULD READ:**
+- `lab/NOW.md` — read this FIRST on every heartbeat
+- `lab/LEARNINGS_TO_TASKS.md` — write tasks for Claude Code here
+- `lab/GOALS.md` — 6-tier vision (visible from your container)
+- `lab/INFRASTRUCTURE.md` — DGX Spark blueprint roadmap
+
+---
+
 ### SESSION 23: Priority Tasks
 
 - [ ] **Task 25: Test paper trading module (15 min)**
