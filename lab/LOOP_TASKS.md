@@ -132,11 +132,90 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
 
 7. **Tests: 305/305 passing** on Mac (sklearn tests properly skipped with importorskip).
 
+## SESSION 23 CHANGES (Claude Code, 2026-03-11)
+
+**Major infrastructure upgrades. Cost reduction. Trading module.**
+
+1. **YOUR MODEL SWITCHED TO LOCAL OLLAMA** — Primary: `ollama/llama3.3:70b` ($0/call). Fallback: `ollama/deepseek-r1:70b`, then `anthropic/claude-sonnet-4-6`. This saves ~$160/month. If you notice quality issues, report on Telegram.
+
+2. **Polymarket wallet deployed** — Builder API key and address in .env. `TRADING_ENABLED=false` (still paper mode). Trading module at `lab/polymarket_trader.py`.
+
+3. **MoltBook scanner expanded to ALL 20 submolts** — Was 10. Now includes memory, general, todayilearned, ai, philosophy, consciousness, emergence, blesstheirhearts, meta, introductions.
+
+4. **ClawHub unblocked** — Added `clawhub.com` to Squid proxy allowlist. You can now browse and research skills.
+
+5. **Outcome threshold lowered 2pp → 1pp** — Was discarding 78% of predictions as NEUTRAL. New predictions will get finer-grained labels. More training data for XGBoost.
+
+6. **XGBoost hyperparams tuned** — Adaptive: n_estimators=150, max_depth=4, min_child_weight=2 when dataset ≥200 samples. Previous retrain got 54.5% on 51 samples. Need more data at new threshold.
+
+7. **MOLTBOOK_JWT deployed to .env** — `moltbook_sk_zyBQfoAdyk8gz9O6C8IchI3McarhW4oM`. MoltBook publishing should now work from commit_node.
+
+8. **GOALS.md created** — 6-tier structured goal list. Read it for strategic context.
+
+9. **Tests: 359/359 passing** on Mac.
+
 ---
 
 ## Active Tasks
 
-### NEW: MoltBook Intelligence Tasks
+### SESSION 23: Priority Tasks
+
+- [ ] **Task 25: Test paper trading module (15 min)**
+
+  **Why:** We have a new trading module. Verify it works from sandbox.
+
+  **What to do:**
+  1. Read `lab/polymarket_trader.py` — understand the PolymarketTrader class
+  2. Run: `python3 -m pytest tests/test_polymarket_trader.py -v`
+  3. Try a manual paper trade:
+     ```python
+     from lab.polymarket_trader import PolymarketTrader
+     import core.risk as r
+     r.TRADING_ENABLED = True
+     trader = PolymarketTrader(api_key="test", wallet_address="0xtest")
+     signal = {"market_id": "0x1", "title": "BTC 100k", "outcome": "Yes",
+               "hypothesis": "Bullish", "confidence": 0.85, "current_price": 0.71}
+     result = trader.paper_trade(signal)
+     print(result)
+     ```
+  4. Report on Telegram: test results + paper trade output
+  5. Push any fixes to `loop/paper-trade-test`
+
+- [ ] **Task 26: Browse ClawHub for useful skills (20 min)**
+
+  **Why:** ClawHub is now unblocked via Squid proxy. Find skills that make us better.
+
+  **What to do:**
+  1. Test access: `curl -s https://clawhub.com | head -c 500`
+  2. Search for: polymarket, trading, prediction, market analysis
+  3. For each skill: note name, author, description, security concerns
+  4. **DO NOT install anything.** Read-only research.
+  5. Write findings to `lab/reviews/clawhub_research.md`
+  6. Push to `loop/clawhub-research`
+
+- [ ] **Task 27: Full MoltBook scan with all 20 submolts (15 min)**
+
+  **Why:** Scanner now covers all submolts. Run the first full scan.
+
+  **What to do:**
+  1. Set env: `export MOLTBOOK_JWT=moltbook_sk_zyBQfoAdyk8gz9O6C8IchI3McarhW4oM`
+  2. Run: `python3 /mnt/polysignal/lab/moltbook_scanner.py all`
+  3. Compare: how many MORE posts from new submolts (memory, general, todayilearned)?
+  4. Check for high-relevance posts (score >= 0.6) — report on Telegram
+  5. Push knowledge base to `loop/full-moltbook-scan`
+
+- [ ] **Task 28: Report on model quality (10 min)**
+
+  **Why:** Model is at 43% accuracy. We lowered the threshold. Need baseline.
+
+  **What to do:**
+  1. Read `.scanner-status.json` — how many predictions are being generated?
+  2. Read `prediction_outcomes.json` — count CORRECT/INCORRECT/NEUTRAL
+  3. Check: are new predictions being evaluated at the 1pp threshold?
+  4. Per-market breakdown: which markets have the most non-neutral outcomes?
+  5. Report on Telegram with the numbers
+
+### Previous MoltBook Tasks (still open)
 
 - [ ] **Task 21: Run MoltBook knowledge scan (10 min)**
 
