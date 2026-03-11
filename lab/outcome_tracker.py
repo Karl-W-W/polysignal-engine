@@ -39,7 +39,10 @@ EVAL_HORIZONS = {
 DEFAULT_HORIZON = "4h"
 
 # Minimum price change to count as a directional move (avoid noise)
-MIN_MOVE_THRESHOLD = 0.02  # 2pp
+# Session 23: Lowered from 0.02 → 0.01 because 78% of outcomes were NEUTRAL
+# at 2pp threshold, leaving only 51 training samples. At 1pp we get ~3x more
+# labeled data without introducing pure noise (crypto markets regularly move 1pp).
+MIN_MOVE_THRESHOLD = 0.01  # 1pp (was 2pp — too aggressive for quiet markets)
 
 
 # ── Data Model ───────────────────────────────────────────────────────────────

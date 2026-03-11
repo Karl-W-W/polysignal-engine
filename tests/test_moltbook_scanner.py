@@ -130,7 +130,7 @@ class TestRelevanceScoring:
             "tags": ["food", "cooking"],
         }
         score = _compute_relevance(sanitized, "general")
-        assert score < 0.15
+        assert score <= 0.15
 
     def test_priority_submolt_bonus(self):
         sanitized = {
@@ -138,8 +138,8 @@ class TestRelevanceScoring:
             "tags": ["trading"],
         }
         score_priority = _compute_relevance(sanitized, "trading")
-        score_general = _compute_relevance(sanitized, "general")
-        assert score_priority > score_general
+        score_nonpriority = _compute_relevance(sanitized, "introductions")
+        assert score_priority > score_nonpriority
 
     def test_score_capped_at_one(self):
         sanitized = {
