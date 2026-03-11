@@ -1,5 +1,7 @@
 # PolySignal-OS — Agent Instructions
 
+> **Current system state → `lab/NOW.md`** | Session history → `PROGRESS.md` | Goals → `lab/GOALS.md`
+
 ## What This Is
 PolySignal-OS is an AI-native prediction market intelligence system. It scans Polymarket, detects signals through a 7-node MasterLoop (LangGraph), and surfaces high-confidence signals. Hardware: NVIDIA DGX Spark (Munich, Blackwell GPU). Frontend: Vercel.
 
