@@ -17,10 +17,10 @@
 - **Target**: First trade within 48 hours
 
 ### 1.2 Fix Prediction Accuracy (43% → 65%+)
-- [ ] Retrain XGBoost on 398-sample dataset (3.5x more data)
-- [ ] Tune hyperparams: n_estimators=150, max_depth=4, min_child_weight=2
-- [ ] Per-market accuracy audit — identify and kill toxic markets
-- [ ] Direction-aware analysis (bearish 67% vs bullish 38%)
+- [x] Tune hyperparams: n_estimators=150, max_depth=4, min_child_weight=2
+- [x] Per-market accuracy audit — identify and kill toxic markets (4 excluded: 824952, 556062, 1373744, 965261)
+- [x] Direction-aware analysis — bearish gate raised to 0.65 (was 0.50)
+- [ ] Retrain XGBoost when 50+ non-NEUTRAL evaluations at 1pp threshold
 - [ ] Lower signal delta threshold (0.02 → 0.015) during quiet markets
 - **Target**: 60%+ accuracy within 1 week, 70%+ within 1 month
 
