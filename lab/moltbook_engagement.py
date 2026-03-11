@@ -193,7 +193,12 @@ class MoltBookEngager:
         agents = result.get("data", result) if isinstance(result, dict) else result
         followed = 0
         for agent in agents:
-            agent_id = agent.get("id", agent.get("username", ""))
+            if isinstance(agent, str):
+                agent_id = agent
+            elif isinstance(agent, dict):
+                agent_id = agent.get("id", agent.get("username", ""))
+            else:
+                continue
             if agent_id and self.follow_agent(agent_id):
                 followed += 1
                 print(f"  Followed: {agent_id}")
