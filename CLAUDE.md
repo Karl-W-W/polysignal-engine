@@ -18,7 +18,7 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **Loop** (OpenClaw, Telegram `@OpenClawOnDGX_bot`) — autonomous developer, writes code in lab/workflows
 - **Karl** — router, Vault authorizer, human-only tasks (MoltBook registration, DNS, credentials)
 
-## Loop's Capabilities (Session 18)
+## Loop's Capabilities (Session 22)
 - **Network**: Bridge mode + Squid proxy (4 domains: gamma-api.polymarket.com, clob.polymarket.com, moltbook.com, api.moltbook.com)
 - **GPU**: NVIDIA GB10 Blackwell, CUDA 13.0, driver 580.95.05 (`/dev/nvidia0` visible)
 - **Memory**: 16GB (was ~2GB)
@@ -26,7 +26,10 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **Git push**: Write `lab/.git-push-request` → handler validates + pushes to `loop/*` branches
 - **4 skills**: polysignal-pytest, polysignal-data, polysignal-git (v2 with push), polysignal-scanner
 - **Proxy env vars**: baked into Docker image (`openclaw-sandbox:bookworm-slim`)
-- **Heartbeat**: 30min, active 07:00-01:00 CET, Telegram delivery
+- **Heartbeat**: 30min, active 07:00-01:00 CET, Telegram delivery, MoltBook scan + engagement wired in
+- **MoltBook JWT**: deployed to container environment
+- **Auto-merge CI**: pushes to `loop/*` auto-merge if 305 tests pass (2 successful deploys Session 22)
+- **Retrain trigger**: `echo "retrain" > lab/.retrain-trigger` → systemd watcher (fixed Session 22: execute bit)
 
 ## Folder Rules
 - `core/` — **VAULT. Read-only.** Never modify without Karl's explicit authorization.
@@ -98,9 +101,10 @@ Expected: 305/305 pass (Mac, sklearn tests auto-skipped). `test_api` excluded (n
 
 ## MoltBook Integration (Session 22)
 - **Profile**: https://www.moltbook.com/u/polysignal-os (registered + verified)
-- **Publisher**: `lab/moltbook_publisher.py` — wired into masterloop commit_node (non-blocking)
-- **Scanner**: `lab/moltbook_scanner.py` — 10 submolts, sanitized knowledge extraction
-- **Engagement**: `lab/moltbook_engagement.py` — subscribe, follow, upvote, comment
-- **Math solver**: `lab/moltbook_math_solver.py` — handles verification challenges
+- **Publisher**: `lab/moltbook_publisher.py` — wired into masterloop commit_node (non-blocking). JWT live on DGX.
+- **Scanner**: `lab/moltbook_scanner.py` — 10 submolts, sanitized knowledge extraction. First scan: 275 posts → 138 saved, 49 dropped, 18 high-relevance. Wired into Loop's heartbeat.
+- **Engagement**: `lab/moltbook_engagement.py` — 10 submolts subscribed, 6 agents followed, rate-limited commenting. Wired into heartbeat.
+- **Math solver**: `lab/moltbook_math_solver.py` — handles MoltBook's anti-bot arithmetic challenges
 - **Sanitizer**: `lab/openclaw/moltbook_polysignal_skill/sanitize.py` — 54 injection + 24 exec patterns
-- **Auto-merge CI**: `.github/workflows/auto-merge-loop.yml` — loop/* branches auto-merge if tests pass
+- **Knowledge base**: `/opt/loop/data/moltbook_knowledge.json` — structured, relevance-scored intelligence from agent network
+- **Auto-merge CI**: `.github/workflows/auto-merge-loop.yml` — 2 proven autonomous deploys this session

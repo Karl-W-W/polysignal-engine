@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-10 ~12:00 CET | Session 22
+# Last updated: 2026-03-11 | Session 22 closing
 # Session history: See HISTORY.md
 
 ---
@@ -41,10 +41,10 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
 | MoltBook Publisher | **LIVE** | Non-blocking in commit_node. JWT obtained. polysignal-os registered + verified. |
-| MoltBook Scanner | BUILT | `lab/moltbook_scanner.py` — 10 submolts, sanitized, relevance-scored knowledge base |
-| MoltBook Engagement | BUILT | `lab/moltbook_engagement.py` — subscribe, follow, upvote, comment (rate-limited) |
+| MoltBook Scanner | **LIVE** | `lab/moltbook_scanner.py` — first scan: 275 posts fetched, 138 saved, 49 dropped by sanitizer, 18 high-relevance |
+| MoltBook Engagement | **LIVE** | `lab/moltbook_engagement.py` — 10 submolts subscribed, 6 agents followed, wired into heartbeat |
 | MoltBook Math Solver | BUILT | `lab/moltbook_math_solver.py` — auto-solves verification challenges |
-| Auto-Merge CI | DEPLOYED | `.github/workflows/auto-merge-loop.yml` — loop/* branches auto-merge if tests pass |
+| Auto-Merge CI | **PROVEN** | `.github/workflows/auto-merge-loop.yml` — 2 autonomous deploys this session (scanner-fix + gate-tracking) |
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (Session 11 fix) |
 | Loop Autonomy | **FULL** | 4 skills, network, GPU, data/ write, scanner restart, git push, retrain trigger |
 | Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |
@@ -99,8 +99,8 @@ perception → prediction → draft → review → risk_gate → [approved] → 
 | **Risk Gate** | $10 max, 75% confidence, $50 daily cap | Same | OK |
 | **Wait Approval** | `human_approved = True` (hardcoded) | Telegram YES/NO buttons | **Stub** |
 | **Commit** | Execute via OpenClaw sandbox | Same | OK |
-| **Publish** | MoltBook dry-run (no JWT yet) | Live posts (write-only) | Human blocker (JWT) |
-| **MoltBook Read** | NOT BUILT | Double-layer isolation required | **BLOCKED — see threat model** |
+| **Publish** | MoltBook **LIVE** (JWT deployed) | Live posts (write-only) | Done (Session 22) |
+| **MoltBook Read** | Scanner LIVE (sanitized) | Double-layer isolation + LLM judge | Regex-only sanitizer (no LLM judge yet) |
 | **Learn** | write_memory() + outcome_tracker → labeled data | Feedback loop with accuracy tracking | OK |
 | **Scheduler** | `polysignal-scanner.service` (5min, active hours) | Same | OK |
 
@@ -187,7 +187,8 @@ Replace rule-based predictor with ML. The DGX has a Blackwell GPU sitting idle.
 - [x] Training data filter — exclude_markets + gated_only params (Claude Code, Session 20)
 - [x] Temporal train/test split — chronological 80/20 (Claude Code, Session 21)
 - [x] Per-market accuracy tracking — get_per_market_accuracy() (Claude Code, Session 21)
-- [ ] Monitor XGBoost gate impact on live accuracy (first evaluations ~March 10)
+- [x] Post-gate accuracy baseline established — 47 predictions, mean gate score 0.760, balanced directional split (Loop, Session 22)
+- [ ] Monitor XGBoost gate impact on live accuracy (first evaluations ~March 11)
 - [ ] Retrain XGBoost with CLOB features (when 50+ post-gate evaluations available)
 
 ### Phase 3: CONTINUOUS SCANNING — COMPLETE (Antigravity, Session 10)
@@ -214,7 +215,8 @@ Replace auto-approve placeholder with actual Telegram approval.
 | HMAC audit | LIVE | — |
 | Sandboxed execution | LIVE | — |
 | Telegram alerts | LIVE | — |
-| MoltBook broadcast | WIRED (dry-run) | Human: Twitter verification → JWT |
+| MoltBook broadcast | **LIVE** | JWT deployed, publishing in commit_node |
+| MoltBook knowledge | **LIVE** | 10 submolts scanned, 138 entries in knowledge base |
 | Learning loop | WIRED | memory.md now persistent (gitignored, Session 11) |
 | Feature engineering | **UPGRADED** | 15 features (10 price + 5 CLOB), temporal safety, per-market tracking |
 | XGBoost baseline | **WIRED + RETRAIN READY** | 91.3% test. Retrain pipeline built. CLOB features will add 5 new dimensions. |
@@ -223,9 +225,9 @@ Replace auto-approve placeholder with actual Telegram approval.
 | Custom domain | BLOCKED | Human: DNS CNAME + Vercel |
 
 **To go live (human-only steps):**
-1. MoltBook registration: Twitter verify → JWT → env var `MOLTBOOK_JWT`
+1. ~~MoltBook registration~~ **DONE** (Session 22) — JWT deployed, publishing live
 2. DNS: CNAME `polysignal.app` → `cname.vercel-dns.com` + Vercel dashboard
-3. Polymarket wallet setup (after MoltBook is active)
+3. Polymarket wallet setup — **THE revenue blocker**
 4. `TRADING_ENABLED=true` (only after wallet exists)
 
 ---
@@ -258,6 +260,52 @@ Replace auto-approve placeholder with actual Telegram approval.
 **DGX Caging Gaps (not urgent for write-only):**
 - ⚠️ Network egress: Docker has full access — needs egress filtering before read pipeline
 - ⚠️ Exec isolation: Publisher uses `requests.post()` (fine) — read pipeline would need strict exec=false
+
+---
+
+## Session 22: MoltBook Live + Autonomous Deploys (2026-03-10/11)
+
+**MoltBook registered, verified, publishing. First fully autonomous code deploys. Knowledge extraction operational.**
+
+### Session 22 Accomplishments
+| What | Impact |
+|------|--------|
+| MoltBook registered + verified | `polysignal-os` live on agent social network. JWT deployed to DGX. |
+| MoltBook knowledge scanner | `lab/moltbook_scanner.py` — first scan: 275 posts, 138 saved, 49 dropped by sanitizer, 18 high-relevance |
+| MoltBook engagement bot | `lab/moltbook_engagement.py` — 10 submolts subscribed, 6 agents followed, rate-limited commenting |
+| Math verification solver | `lab/moltbook_math_solver.py` — handles MoltBook's anti-bot arithmetic challenges |
+| Auto-merge CI deployed + proven | `.github/workflows/auto-merge-loop.yml` — 2 autonomous deploys this session |
+| Loop: scanner fix auto-merged | `loop/moltbook-scanner-fix` → CI (305 tests) → auto-merge → `1fcd76f` on main |
+| Loop: Task 14 auto-merged | `loop/gate-tracking` → CI → auto-merge → `942da69` on main. 47 post-gate predictions baselined. |
+| Retrain watcher fixed | Handler script was missing execute bit (`chmod +x`). Watcher now active. |
+| Model confirmed safe | Manual retrain correctly rejected 50% model. 91.3% original preserved. |
+| 824952 leak investigated | Race condition during Session 19 deployment (1 prediction). Not persistent. Filter working. |
+| sklearn test fix | `pytest.importorskip("sklearn")` — Mac gets 305/305 green |
+| MoltBook intelligence findings | "406 predictions, 0 trades" — analysis paralysis identified as top risk |
+| Tests: 305/305 | +30 new (MoltBook scanner, engagement, math solver) |
+
+### Loop's Session 22 Scorecard
+| Done | Task |
+|------|------|
+| Done | MoltBook scanner fix pushed + auto-merged (first autonomous deploy!) |
+| Done | Task 14: Post-gate accuracy tracking report pushed + auto-merged |
+| Done | MoltBook knowledge scan (275 posts, 138 saved) |
+| Done | MoltBook engagement: 10 submolts subscribed, 6 agents followed |
+| Done | Retrain trigger watcher diagnosed + fixed (execute bit) |
+| Done | Model safety verified (manual retrain rejected, 91.3% safe) |
+| Done | 824952 leak investigated (deployment race, not persistent bug) |
+| Done | Heartbeat updated with MoltBook scan + engagement |
+
+### Autonomy Score: ~42% → ~55%
+| Capability | Before | After | Change |
+|-----------|--------|-------|--------|
+| Perceive | 95% | 95% | — |
+| Predict | 45% | 45% | — |
+| Publish | 10% | 60% | +50% (MoltBook LIVE, scanner, engagement) |
+| Execute | 0% | 0% | — (wallet blocker) |
+| Learn | 40% | 50% | +10% (knowledge extraction from agent network) |
+| Monitor | 65% | 70% | +5% (heartbeat wired with MoltBook) |
+| Operate | 20% | 35% | +15% (auto-merge CI, autonomous deploys) |
 
 ---
 
@@ -429,35 +477,38 @@ The excluded market wasn't just the worst predictor (0W/40L) — it was the majo
 
 ---
 
-## NEXT STEPS (Session 22+)
+## NEXT STEPS (Session 23+)
 
-### Waiting (data accumulation)
-1. **Post-gate accuracy results** — first evaluable predictions mature ~15:00 UTC March 10. This is the moment of truth.
-2. **XGBoost retrain with CLOB features** — when 50+ post-gate predictions are evaluated, retrain should improve with 5 new microstructure dimensions.
+### P0: Revenue Unlock (human-only)
+1. **Polymarket wallet** — USDC on Polygon → fund burner wallet → private key in `.env` → `TRADING_ENABLED=true`. This is the ONLY blocker between us and live trades. 406 predictions, 0 trades.
+2. **DNS CNAME** — `polysignal.app` → `cname.vercel-dns.com` (credibility for MoltBook presence)
 
-### Loop's Current Queue
-3. **Task 12: Scanner restart test** — validate trigger file mechanism from sandbox
-4. **Task 14: Post-gate accuracy tracking** — write structured report once evaluations arrive
-5. **Task 18: Retrain trigger test** — verify trigger → handler → model comparison from sandbox
-6. **Task 19: Scanner status in heartbeat** — done, monitoring active
-7. **Task 20: ClawHub/MoltBook skill research** — explore ecosystem for intelligence
+### P1: Waiting (data accumulation)
+3. **Post-gate accuracy results** — 47 predictions queued, first evaluations expected ~48h after March 9 15:02 UTC. If >60%: pipeline validated. If >70%: ship trades immediately.
+4. **XGBoost retrain with CLOB features** — when 50+ post-gate evaluations available. Safety gate working (rejected 50% model, kept 91.3%). Retrain trigger watcher fixed (was missing execute bit on handler).
 
-### Requires Human
-- **MoltBook JWT** — Twitter verify → JWT → `MOLTBOOK_JWT` in `/opt/loop/.env`. Revenue pipeline is plumbed.
-- **Polymarket wallet** — USDC on Polygon → fund burner wallet → private key in `.env`
-- **Anthropic credits** — console.anthropic.com (Loop burns Opus 4.6 on heartbeats)
-- **DNS CNAME** — polysignal.app → cname.vercel-dns.com
+### P2: Loop's Current Queue (autonomous)
+5. ~~**Task 14: Post-gate accuracy tracking**~~ **DONE** — report pushed + auto-merged. 47 predictions, 0 evaluated yet, mean gate score 0.760.
+6. **Tasks 21-24: MoltBook intelligence** — scanner operational (275 posts, 138 saved), engagement live (10 submolts, 6 follows), wired into heartbeat. Ongoing.
+7. **Task 18: Retrain trigger test** — watcher fixed, awaiting more post-gate data.
+8. **Task 20: ClawHub research** — explore ecosystem for reusable skills.
+
+### P3: Claude Code Next Session
+9. **Kelly criterion position sizing** — prep for when `TRADING_ENABLED=true` flips
+10. **LLM judge for sanitizer** — add Haiku as second gate behind regex (monokultur defense)
+11. **Merge any Loop branches** — auto-merge CI handles this now, but verify edge cases
 
 ### Known Bugs
 - `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)
+- Market 824952 had 1 leaked prediction from Session 19 deployment race condition (not persistent — filter confirmed working)
 
 ### Revenue Critical Path
 ```
-Post-gate evaluations (March 10) → first real accuracy number
+Polymarket wallet (human) → TRADING_ENABLED=true → FIRST TRADE
+    ↓
+Post-gate accuracy arrives (~March 11) → validates pipeline
     ↓
 XGBoost retrain with CLOB features → improved model
     ↓
-MoltBook JWT (human) → first published signal → REVENUE
-    ↓
-Polymarket wallet (human) → TRADING_ENABLED=true → first trade
+MoltBook signals publishing (LIVE) → reputation + visibility → REVENUE
 ```

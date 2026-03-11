@@ -4,7 +4,7 @@ Autonomous prediction market intelligence system built on LangGraph.
 
 ## What it does
 
-PolySignal-OS continuously scans Polymarket crypto markets, detects price signals using rolling time-window analysis, generates directional predictions with XGBoost confidence gating, and tracks their accuracy over time. The system runs a trained XGBoost meta-predictor that suppresses low-confidence predictions before they reach the trading pipeline.
+PolySignal-OS continuously scans Polymarket crypto markets, detects price signals using rolling time-window analysis, generates directional predictions with XGBoost confidence gating, publishes intelligence to MoltBook (the agent social network), and tracks accuracy over time. The system runs a trained XGBoost meta-predictor that suppresses low-confidence predictions before they reach the trading pipeline. An autonomous agent (Loop) runs 24/7 on DGX, pushing code through auto-merge CI without human intervention.
 
 ## Architecture
 
@@ -47,7 +47,10 @@ lab/            Experiment scratchpad — new capabilities start here
   retrain_pipeline.py    Automated retrain: build dataset → train → compare → replace if better
   clob_prototype.py      Market microstructure features from gamma-api (15 markets live)
   time_horizon.py        Derives signal validity window from market observables
-  moltbook_publisher.py  Signal publishing (dry-run until JWT)
+  moltbook_publisher.py  Signal publishing to MoltBook (JWT live)
+  moltbook_scanner.py    Knowledge extraction from 10 MoltBook submolts (sanitized)
+  moltbook_engagement.py Subscribe, follow, upvote, comment on agent network
+  moltbook_math_solver.py Auto-solve MoltBook verification challenges
   LOOP_TASKS.md          Loop's canonical task queue (syncs through directory mount)
   reviews/               Loop's code review output files
   ...
@@ -56,7 +59,7 @@ workflows/      LangGraph pipelines
   masterloop.py   7-node MasterLoop with XGBoost confidence gate
   scanner.py      Continuous scanning service (5-min intervals)
 
-tests/          275 tests (pytest)
+tests/          305 tests (pytest)
 agents/         Telegram bot
 brain/          Runtime memory (gitignored)
 ```
@@ -74,7 +77,8 @@ All new capabilities follow: **Build** (in lab/) → **Test** (pytest) → **Rev
 - **py-clob-client** — CLOB orderbook access for prediction market trading
 - **Telegram** — Notifications and alerts
 - **OpenClaw** — Autonomous agent (Loop) running on DGX
-- **GitHub Actions** — CI (pytest on push)
+- **GitHub Actions** — CI (pytest on push) + auto-merge for `loop/*` branches
+- **MoltBook** — Agent social network (publishing, knowledge extraction, engagement)
 
 ## Quick Start
 
@@ -98,30 +102,31 @@ python -m workflows.scanner
 
 ## Current Status
 
-**Session 21** (March 9, 2026) — Pipeline clean, CLOB microstructure features live, intelligence feedback loop closeable.
+**Session 22** (March 10-11, 2026) — MoltBook live, first autonomous deploys, knowledge extraction operational.
 
 | Metric | Value |
 |--------|-------|
-| Tests | 275 passing |
-| Predictions | 382 accumulated, 23 with XGBoost gate scores |
-| Pre-gate accuracy | 41.7% (63W/88L) — contaminated by market 824952 (0W/40L, now excluded) |
-| Post-gate accuracy | Accumulating — first evaluable predictions mature ~15:00 UTC March 10 |
-| XGBoost gate | LIVE — suppresses Neutrals + P(correct)<0.5 (91.3% test accuracy) |
-| Markets tracked | 13 active crypto (824952 excluded from predictions + training) |
+| Tests | 305 passing |
+| Predictions | 406+ accumulated, 47 with post-gate XGBoost scores |
+| Pre-gate accuracy | 42% (63W/88L) — contaminated by market 824952 (0W/40L, now excluded) |
+| Post-gate accuracy | 47 predictions baselined, evaluations expected ~March 11 |
+| XGBoost gate | LIVE — 91.3% test accuracy, mean gate score 0.760, balanced directional split |
+| Markets tracked | 14 active crypto (824952 excluded) |
 | CLOB features | 15 markets with bid/ask/spread/volume/liquidity refreshed every cycle |
-| Observations | 18,000+ across 14 markets |
-| Scanner | Running 24/7 on DGX, 5-min intervals, CLOB refresh per cycle |
-| Retrain pipeline | Built — trigger file + systemd handler, tested, rollback policy |
-| Loop capabilities | Network, GPU, scanner restart, git push, data/ write, CLOB access, retrain trigger |
+| Observations | 19,700+ across 15 markets |
+| MoltBook | LIVE — registered, verified, publishing, scanning 10 submolts, 138 knowledge entries |
+| Auto-merge CI | PROVEN — 2 autonomous deploys (scanner-fix + gate-tracking) |
+| Scanner | Running 24/7, cycle 174+, 0 errors |
+| Loop autonomy | Full: network, GPU, MoltBook, auto-merge, retrain trigger, heartbeat wired |
 
-**Next:** Post-gate evaluation results (March 10) → XGBoost retrain with CLOB features → MoltBook JWT (human) → first published signal → Polymarket wallet (human) → first trade.
+**Next:** Polymarket wallet (human) → `TRADING_ENABLED=true` → first trade. Post-gate accuracy arrives ~March 11. Everything else is ready.
 
 ## Multi-Agent System
 
 Three agents collaborate on development:
 
 - **Claude Code** — Architect. Strategy, complex implementations, code quality, testing.
-- **Loop** (OpenClaw on DGX) — Autonomous agent. Code reviews, data analysis, live market data fetch, CLOB feature extraction, proactive monitoring. Runs 24/7 on heartbeat with network (Squid proxy), GPU (Blackwell GB10), scanner restart, git push, retrain trigger, and data/ write access.
+- **Loop** (OpenClaw on DGX) — Autonomous agent. Code reviews, data analysis, live market data fetch, CLOB feature extraction, MoltBook scanning + engagement, proactive monitoring. Runs 24/7 on heartbeat with network (Squid proxy), GPU (Blackwell GB10), MoltBook JWT, scanner restart, git push (auto-merge CI), retrain trigger, and data/ write access. First autonomous code deploys achieved Session 22.
 - **Antigravity** — Infrastructure agent. DGX operations, Docker, deployments, systemd services.
 
 Agents coordinate through `lab/LOOP_TASKS.md` (Loop's task queue), `PROGRESS.md` (shared state), `lab/reviews/` (Loop's review output), and Telegram.

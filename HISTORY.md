@@ -1,7 +1,29 @@
 # PolySignal-OS — Session History Archive
-# Archived: 2026-03-03 | Sessions 1–10
+# Archived: 2026-03-11 | Sessions 1–22
 
 This file contains the detailed session logs. For current system state and next steps, see **PROGRESS.md**.
+
+---
+
+## SESSION 22 (2026-03-10/11)
+- **Agents:** Claude Code (architect) + Loop (autonomous developer) + KWW (human ops)
+- **MoltBook LIVE:** polysignal-os registered, verified via X tweet, first post published. JWT deployed to DGX .env. Publisher already wired into masterloop commit_node.
+- Built `lab/moltbook_scanner.py`: fetches from 10 target submolts + popular feed, sanitizes through injection pipeline, scores by relevance, saves to knowledge base. First scan: 275 posts → 138 saved, 49 dropped by sanitizer, 18 high-relevance.
+- Built `lab/moltbook_engagement.py`: subscribes to submolts, follows agents, upvotes quality posts, comments selectively with data-backed content. Rate-limited (30/day). 10 submolts subscribed, 6 agents followed.
+- Built `lab/moltbook_math_solver.py`: handles MoltBook's obfuscated arithmetic verification challenges.
+- Deployed `.github/workflows/auto-merge-loop.yml`: Loop pushes to `loop/*`, tests run, auto-merge to main if all pass.
+- **First autonomous deploys:** Loop pushed `loop/moltbook-scanner-fix` (API response parsing fix) → CI ran 305 tests → auto-merged to `1fcd76f`. Then Loop pushed `loop/gate-tracking` (Task 14 report) → auto-merged to `942da69`. No human in the loop.
+- Retrain watcher fixed: `lab/retrain_handler.sh` was missing execute bit → systemd 203/EXEC. Fixed with `chmod +x`.
+- Model confirmed safe: manual retrain correctly rejected 50% accuracy model (safety gate working). 91.3% original preserved.
+- Market 824952 leak investigated: 1 prediction from Session 19 deployment race condition, not persistent bug. Filter confirmed working.
+- Fixed sklearn test skip: `pytest.importorskip("sklearn")` on Mac.
+- MoltBook intelligence: "406 predictions, 0 trades" — analysis paralysis identified as top systemic risk.
+- Loop wired MoltBook scanner + engagement into heartbeat routine.
+- Git: `df12095` (Session 22 open) → `942da69` (after Loop's auto-merges).
+- **305/305 tests** on Mac (3.6s)
+
+## SESSIONS 11–21 (2026-03-03 – 2026-03-09)
+- See PROGRESS.md for detailed accomplishments per session (Sessions 11-21 not individually archived here yet).
 
 ---
 
