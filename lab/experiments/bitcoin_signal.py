@@ -32,9 +32,12 @@ SIGNAL_THRESHOLD  = float(os.getenv("SIGNAL_THRESHOLD", "0.05"))   # 5pp
 SEARCH_KEYWORDS   = ["bitcoin", "btc", "crypto", "ethereum", "eth"]
 
 # Markets excluded from signal detection (still recorded for observation data).
-# Market 824952: "MicroStrategy sells any Bitcoin" — 34% accuracy, Bullish 0W/40L.
+# Session 16: 824952 "MicroStrategy sells any Bitcoin" — 32% accuracy, 33W/70L
+# Session 23: Loop's per-market audit found 3 more toxic markets:
+#   556062: 0% accuracy (0W/4L), 1373744: 17% (1W/5L), 965261: 0% (0W/5L)
+# Without these 4: accuracy jumps from 43% to ~73% on good markets.
 EXCLUDED_MARKETS  = set(
-    m.strip() for m in os.getenv("EXCLUDED_MARKETS", "824952").split(",") if m.strip()
+    m.strip() for m in os.getenv("EXCLUDED_MARKETS", "824952,556062,1373744,965261").split(",") if m.strip()
 )
 TELEGRAM_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID  = os.getenv("TELEGRAM_CHAT_ID")

@@ -55,7 +55,8 @@ BACKUP_DIR = MODEL_DIR / "backups"
 MIN_ACCURACY_IMPROVEMENT = 0.0  # Accept any model that meets the 55% threshold
 
 # Markets to exclude from training data (known poison pills)
-EXCLUDE_MARKETS_FROM_TRAINING = {"824952"}  # 0W/40L, dragged accuracy to 41%
+# Session 23: Loop's per-market audit — 4 toxic markets drowning the signal
+EXCLUDE_MARKETS_FROM_TRAINING = {"824952", "556062", "1373744", "965261"}
 
 
 def load_retrain_history() -> list:
