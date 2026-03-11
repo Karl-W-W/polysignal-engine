@@ -199,6 +199,15 @@ def train_model(
     # XGBoost hyperparameters — tuned for 398+ sample dataset (Session 23)
     # Previous: 100 trees, depth 3, min_child 3 → 43% accuracy on 112 samples
     n_samples = len(X_train)
+
+    # GPU acceleration: use CUDA if available (DGX Spark GB10 Blackwell)
+    try:
+        import subprocess
+        result = subprocess.run(["nvidia-smi"], capture_output=True, timeout=5)
+        _gpu_available = result.returncode == 0
+    except Exception:
+        _gpu_available = False
+
     model = xgb.XGBClassifier(
         n_estimators=150 if n_samples >= 200 else 100,
         max_depth=4 if n_samples >= 200 else 3,
@@ -211,6 +220,7 @@ def train_model(
         eval_metric="logloss",
         random_state=42,
         verbosity=0,
+        device="cuda" if _gpu_available else "cpu",
     )
 
     model.fit(X_train, y_train)
