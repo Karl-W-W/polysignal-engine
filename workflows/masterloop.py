@@ -342,7 +342,13 @@ def prediction_node(state: LoopState) -> LoopState:
                     p_correct = float(proba[1])
                     pred["xgb_p_correct"] = round(p_correct, 3)
 
-                    if p_correct < 0.5:
+                    # Session 23: Directional gate — bearish needs higher
+                    # confidence. Backtest: bullish 100% (27W/0L), bearish
+                    # 56% (5W/4L). All 4 losses were bearish at 0.59-0.62.
+                    gate_threshold = 0.5
+                    if pred.get("hypothesis") == "Bearish":
+                        gate_threshold = 0.65
+                    if p_correct < gate_threshold:
                         suppressed += 1
                         continue
                     gated.append(pred)
