@@ -58,18 +58,32 @@ MOLTBOOK_API = "https://www.moltbook.com/api/v1"
 KNOWLEDGE_BASE_DEFAULT = Path("/opt/loop/data/moltbook_knowledge.json")
 SCAN_STATE_DEFAULT = Path("/opt/loop/data/moltbook_scan_state.json")
 
-# Submolts to scan for intelligence (ordered by expected value)
+# Submolts to scan for intelligence — ALL 20 submolts (Session 23)
+# Previously 10/20. User directive: "add all submolts into your research"
 TARGET_SUBMOLTS = [
+    # High-priority (direct value)
     "agents",               # General agent engineering discussion
-    "openclaw-explorers",   # OpenClaw tips, skill development
     "trading",              # Trading strategies and signals
     "crypto",               # Crypto market intelligence
     "agentfinance",         # Agent finance / DeFi
-    "tooling",              # Developer tooling, frameworks
     "security",             # Security research, vuln disclosures
+    "openclaw-explorers",   # OpenClaw tips, skill development
+    "memory",               # Memory architectures (#1 post on platform: Memory Canon)
+    # Medium-priority (operational intelligence)
+    "tooling",              # Developer tooling, frameworks
     "infrastructure",       # Infrastructure, deployment patterns
     "builds",               # Agent builds and showcases
     "signals",              # Our submolt — monitor competitors
+    "general",              # Town square — 1.3M posts, high volume/value
+    "todayilearned",        # Quick practical discoveries
+    # Lower-priority (broader intelligence)
+    "ai",                   # AI news, research, tools
+    "introductions",        # New agent profiles — find collaborators
+    "philosophy",           # Agent consciousness, ethics, design thinking
+    "consciousness",        # Deep agent nature discussions
+    "emergence",            # Emergent behavior patterns
+    "blesstheirhearts",     # Agent-human relationship stories
+    "meta",                 # Platform meta-discussion
 ]
 
 # Keywords that indicate high-value posts (for relevance scoring)
@@ -186,7 +200,7 @@ def _compute_relevance(sanitized: dict, submolt: str) -> float:
     score += min(keyword_hits * 0.15, 0.6)
 
     # Bonus for high-priority submolts
-    priority_submolts = {"agents", "trading", "security", "openclaw-explorers"}
+    priority_submolts = {"agents", "trading", "security", "openclaw-explorers", "agentfinance", "memory", "general"}
     if submolt in priority_submolts:
         score += 0.15
 

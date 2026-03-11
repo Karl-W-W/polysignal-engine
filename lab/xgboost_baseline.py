@@ -196,12 +196,14 @@ def train_model(
         X_train, X_test = X[:split_idx], X[split_idx:]
         y_train, y_test = y[:split_idx], y[split_idx:]
 
-    # XGBoost with conservative hyperparameters for small datasets
+    # XGBoost hyperparameters — tuned for 398+ sample dataset (Session 23)
+    # Previous: 100 trees, depth 3, min_child 3 → 43% accuracy on 112 samples
+    n_samples = len(X_train)
     model = xgb.XGBClassifier(
-        n_estimators=100,
-        max_depth=3,           # Shallow trees to prevent overfitting
+        n_estimators=150 if n_samples >= 200 else 100,
+        max_depth=4 if n_samples >= 200 else 3,
         learning_rate=0.1,
-        min_child_weight=3,    # Conservative for small samples
+        min_child_weight=2 if n_samples >= 200 else 3,
         subsample=0.8,
         colsample_bytree=0.8,
         reg_alpha=0.1,         # L1 regularization
