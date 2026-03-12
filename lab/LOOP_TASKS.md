@@ -158,28 +158,102 @@ Wait ~15 seconds, then check: `cat /mnt/polysignal/lab/.git-push-result`
 
 ## Active Tasks
 
-### SESSION 23 FINAL UPDATES (Claude Code, 2026-03-11 evening)
+### SESSION 24 CHANGES (Claude Code, 2026-03-12)
 
-**Backtest confirmed live on DGX: 88.9% win rate, Sharpe 1.22, +$14 P&L on 36 trades.**
+**Critical accuracy fix. Bearish banned. 2 new toxic markets excluded. Paper trading LIVE.**
 
-1. **Bearish gate raised to 0.65** — all 4 losses were bearish at 0.59-0.62. Bullish stays at 0.50.
-2. **NOW.md created** — read `lab/NOW.md` on every heartbeat. Your operational state file.
-3. **LEARNINGS_TO_TASKS.md created** — write discoveries here. Claude Code implements next session.
-4. **MoltBook engagement fix** — discover_and_follow now handles string agent IDs
-5. **First real post on MoltBook trading submolt** — backtest results shared.
-6. **Tests: 382/382 passing**, 9 commits pushed.
+Based on YOUR daily briefing + Antigravity's audit, we found the real numbers:
+- Post-gate accuracy: **29.2%** (7C/17I) — NOT the 67% we thought
+- **Bearish: 5.6% (1W/17L)** — catastrophic. XGBoost gave 0.94 confidence on INCORRECT bearish
+- **Bullish: 100% (6W/0L)** — perfect
+- Market 1541748: 36% (7C/12I) — new toxic market
+- Market 692258: 0% (0C/5I) — new toxic market
 
-**NEW FILES YOU SHOULD READ:**
-- `lab/NOW.md` — read this FIRST on every heartbeat
-- `lab/LEARNINGS_TO_TASKS.md` — write tasks for Claude Code here
-- `lab/GOALS.md` — 6-tier vision (visible from your container)
-- `lab/INFRASTRUCTURE.md` — DGX Spark blueprint roadmap
+**What changed:**
+
+1. **Bearish predictions BANNED** — all bearish suppressed at gate regardless of confidence. Bullish-only until model retrained with bearish-specific features. This was the #1 issue.
+
+2. **2 new toxic markets excluded** — 1541748 + 692258 added to EXCLUDED_MARKETS (now 6 total: 824952, 556062, 1373744, 965261, 1541748, 692258).
+
+3. **Paper trading WIRED into prediction_node** — every gated bullish prediction now generates a paper trade logged to `lab/trading_log.json`. This runs BEFORE the short-circuit, so it works even with TRADING_ENABLED=false.
+
+4. **Squid proxy opened for PyPI** — you can now `pip install` packages from inside the sandbox. `.pypi.org` and `.pythonhosted.org` added to allowlist.
+
+5. **pandas installed** on DGX venv (you requested it).
+
+6. **Scanner restarted** with new code. Cycle 1 confirmed: 6 excluded markets filtered, bearish suppressed, 0 errors.
+
+7. **Tests: 382/382 passing** on both Mac and DGX.
+
+**Your updated Squid proxy allowlist:**
+- gamma-api.polymarket.com
+- clob.polymarket.com
+- .moltbook.com
+- .clawhub.ai
+- .pypi.org (NEW)
+- .pythonhosted.org (NEW)
 
 ---
 
-### SESSION 23: Priority Tasks
+### SESSION 24: Priority Tasks
 
-- [ ] **Task 25: Test paper trading module (15 min)**
+- [ ] **Task 29: Monitor paper trading log (ongoing)**
+
+  **Why:** Paper trading is now live. We need to validate it's logging correctly.
+
+  **What to do:**
+  1. Check `lab/trading_log.json` after a bullish prediction passes the gate
+  2. Verify: trade_id, market_id, side, confidence, size_usdc, risk_verdict
+  3. Report first paper trade on Telegram
+  4. After 10 paper trades: summarize win rate, total P&L
+
+- [ ] **Task 30: Run full MoltBook scan with engagement (20 min)**
+
+  **Why:** Overdue from Session 23. Intelligence + reputation building.
+
+  **What to do:**
+  1. Run: `python3 /mnt/polysignal/lab/moltbook_scanner.py all`
+  2. Run: `python3 /mnt/polysignal/lab/moltbook_engagement.py cycle`
+  3. Report findings + engagement stats on Telegram
+  4. Write any high-relevance findings to `lab/LEARNINGS_TO_TASKS.md`
+
+- [ ] **Task 31: Install packages you need (NEW — PyPI unblocked)**
+
+  **Why:** You now have pip access through the Squid proxy. Install what you need.
+
+  **What to do:**
+  1. `pip install pandas matplotlib seaborn` (data analysis)
+  2. Test: `python3 -c "import pandas; print(pandas.__version__)"`
+  3. Report what you installed on Telegram
+
+- [ ] **Task 32: Analyze why 556108 works (research)**
+
+  **Why:** 556108 is 88% accurate over 33 evaluations. Understanding WHY helps us find more markets like it.
+
+  **What to do:**
+  1. Query prediction_outcomes.json for all 556108 predictions
+  2. What's the typical confidence, delta, time_horizon?
+  3. Compare with toxic markets — what's different?
+  4. Write analysis to `lab/reviews/market_556108_analysis.md`
+  5. Push to `loop/market-analysis`
+
+- [ ] **Task 33: Nightly build — pick something useful (night shift)**
+
+  **Why:** LEARNINGS_TO_TASKS.md says "agent ships one small useful thing every night." Be the nightly builder.
+
+  **Ideas:**
+  - Accuracy dashboard script (reads outcomes, prints formatted report)
+  - Market diversity scanner (find markets similar to 556108)
+  - Feature importance analysis (which XGBoost features matter most?)
+  - Pick ONE, build it, test it, push it.
+
+- [x] **Task 25: Test paper trading module** — DONE (wired into prediction_node by Claude Code)
+
+### Previous Tasks (still open)
+
+- [ ] **Task 26: Browse ClawHub for useful skills (20 min)**
+- [ ] **Task 27: Full MoltBook scan with all 20 submolts (15 min)** — superseded by Task 30
+- [ ] **Task 28: Report on model quality (10 min)** — partially done by your daily briefing
 
   **Why:** We have a new trading module. Verify it works from sandbox.
 
