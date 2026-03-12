@@ -29,6 +29,8 @@ You are on Opus 4.6 (NOT Ollama — that experiment failed).
 - **git + curl**: Both installed in sandbox now.
 - **applyPatch**: ENABLED — use OpenClaw's native file editing.
 - **Memory**: brain/memory.md updates EVERY cycle (not just commit_node).
+- **Ollama**: Reachable at `http://172.17.0.1:11434` (no_proxy fixed). 4 models: 3b, 14b, 2x 70B. Zero cost.
+- **Signal threshold**: Lowered to 0.015 (was 0.02). More signals in quiet markets.
 
 ## What You Should Do Every Heartbeat
 **Read `lab/HEARTBEAT.md` for the full protocol.** Summary:

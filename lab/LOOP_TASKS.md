@@ -218,6 +218,8 @@ Based on YOUR daily briefing + Antigravity's audit, we found the real numbers:
 - `pip install` — PyPI reachable, install what you need
 - Paper trading — logs real trades with approved sizes
 - Memory — accumulates every cycle
+- **Ollama** — reachable at `http://172.17.0.1:11434` (bypass proxy with `no_proxy`). Models: llama3.2:3b, qwen2.5:14b, llama3.3:70b, deepseek-r1:70b. Zero cost.
+- **Signal threshold lowered** — 0.015 (was 0.02). More signals in quiet markets.
 
 ---
 
