@@ -35,9 +35,11 @@ SEARCH_KEYWORDS   = ["bitcoin", "btc", "crypto", "ethereum", "eth"]
 # Session 16: 824952 "MicroStrategy sells any Bitcoin" — 32% accuracy, 33W/70L
 # Session 23: Loop's per-market audit found 3 more toxic markets:
 #   556062: 0% accuracy (0W/4L), 1373744: 17% (1W/5L), 965261: 0% (0W/5L)
-# Without these 4: accuracy jumps from 43% to ~73% on good markets.
+# Session 24: Antigravity audit found 2 more toxic markets:
+#   1541748: 36% accuracy (7C/12I), 692258: 0% accuracy (0C/5I)
+# Without these 6: post-exclusion accuracy jumps to ~88% (bullish-only).
 EXCLUDED_MARKETS  = set(
-    m.strip() for m in os.getenv("EXCLUDED_MARKETS", "824952,556062,1373744,965261").split(",") if m.strip()
+    m.strip() for m in os.getenv("EXCLUDED_MARKETS", "824952,556062,1373744,965261,1541748,692258").split(",") if m.strip()
 )
 TELEGRAM_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID  = os.getenv("TELEGRAM_CHAT_ID")

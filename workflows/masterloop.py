@@ -342,12 +342,15 @@ def prediction_node(state: LoopState) -> LoopState:
                     p_correct = float(proba[1])
                     pred["xgb_p_correct"] = round(p_correct, 3)
 
-                    # Session 23: Directional gate — bearish needs higher
-                    # confidence. Backtest: bullish 100% (27W/0L), bearish
-                    # 56% (5W/4L). All 4 losses were bearish at 0.59-0.62.
-                    gate_threshold = 0.5
+                    # Session 24: Ban bearish predictions entirely.
+                    # Live post-gate data: Bullish 100% (6W/0L), Bearish 5.6% (1W/17L).
+                    # XGBoost gives false confidence on bearish (0.94 on INCORRECT).
+                    # Model is fundamentally miscalibrated for bearish direction.
+                    # Bullish-only until bearish-specific model is trained.
                     if pred.get("hypothesis") == "Bearish":
-                        gate_threshold = 0.65
+                        suppressed += 1
+                        continue
+                    gate_threshold = 0.5
                     if p_correct < gate_threshold:
                         suppressed += 1
                         continue
@@ -376,6 +379,25 @@ def prediction_node(state: LoopState) -> LoopState:
                 print(f"  📝 {recorded} predictions recorded for outcome tracking")
         except Exception:
             pass
+
+        # ── Paper trading (Session 24) ─────────────────────────────────────────
+        # Runs on every gated prediction, even when TRADING_ENABLED=false.
+        # This accumulates paper trade data for validation before going live.
+        try:
+            from lab.polymarket_trader import PolymarketTrader
+            trader = PolymarketTrader()
+            paper_count = 0
+            for pred in predictions:
+                if pred.get("hypothesis") == "Neutral":
+                    continue
+                result = trader.paper_trade(pred, proposed_size_usdc=5.0)
+                if result.success:
+                    paper_count += 1
+                    print(f"  📊 Paper trade: {result.side} {result.title[:40]} @ ${result.price_at_entry:.2f}")
+            if paper_count:
+                print(f"  💰 {paper_count} paper trade(s) logged to trading_log.json")
+        except Exception as e:
+            print(f"  ⊘ Paper trading skipped: {e}")
 
     except Exception as e:
         print(f"  ⚠ Prediction failed: {e}")

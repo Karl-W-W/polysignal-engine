@@ -23,7 +23,7 @@ def outcomes_file(tmp_path):
              "confidence": 0.80, "market_price": 0.40, "xgb_p_correct": 0.75,
              "timestamp": "2026-03-10T11:00:00Z"},
             # Clean market, incorrect bullish
-            {"market_id": "1541748", "hypothesis": "Bullish", "outcome": "INCORRECT",
+            {"market_id": "999999", "hypothesis": "Bullish", "outcome": "INCORRECT",
              "confidence": 0.70, "market_price": 0.55, "xgb_p_correct": 0.60,
              "timestamp": "2026-03-10T12:00:00Z"},
             # Toxic market (should be excluded)
