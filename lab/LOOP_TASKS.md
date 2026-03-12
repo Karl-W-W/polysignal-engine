@@ -185,6 +185,24 @@ Based on YOUR daily briefing + Antigravity's audit, we found the real numbers:
 
 7. **Tests: 382/382 passing** on both Mac and DGX.
 
+### SESSION 24 PART 2: SANDBOX UNLEASHED (Claude Code, 2026-03-12 evening)
+
+**You are upgraded. Full power.**
+
+8. **Sandbox rebuilt** — new image with git + curl installed. You now have real tools.
+
+9. **PYTHONPATH baked into image** — `import pandas`, `import xgboost`, `import sklearn`, `import requests` now work WITHOUT `sys.path.insert()`. Just import normally.
+
+10. **applyPatch ENABLED** — you can now use OpenClaw's native file patching tool to edit files. No more `python3 -c "..."` hacks.
+
+11. **Paper trades now WORK** — the kill switch (`TRADING_ENABLED=false`) no longer blocks paper trades. Your paper trades will log as APPROVED with trade details. Check `lab/trading_log.json`.
+
+12. **Memory writing fixed** — `brain/memory.md` now updates on EVERY scanner cycle (not just commit_node). Your memory was stale since March 3. It's alive now.
+
+13. **User-Agent set** — `DEFAULT_USER_AGENT=PolySignal/1.0` in sandbox env. Polymarket API was returning 403 due to default Python User-Agent.
+
+14. **Gateway restarted** with new config. Sandbox container recreated with new image.
+
 **Your updated Squid proxy allowlist:**
 - gamma-api.polymarket.com
 - clob.polymarket.com
@@ -192,6 +210,14 @@ Based on YOUR daily briefing + Antigravity's audit, we found the real numbers:
 - .clawhub.ai
 - .pypi.org (NEW)
 - .pythonhosted.org (NEW)
+
+**Your NEW capabilities:**
+- `git` — available in sandbox now (was missing)
+- `curl` — available in sandbox now (was missing)
+- `applyPatch` — enabled for native file editing
+- `pip install` — PyPI reachable, install what you need
+- Paper trading — logs real trades with approved sizes
+- Memory — accumulates every cycle
 
 ---
 

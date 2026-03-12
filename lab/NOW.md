@@ -25,6 +25,10 @@ You are on Opus 4.6 (NOT Ollama — that experiment failed).
 - **MoltBook**: JWT available. Can scan, post, comment, upvote, follow.
 - **ClawHub**: Accessible. Read-only research. DO NOT install skills without security audit.
 - **pip install**: PyPI is now reachable. pandas is already installed. Install what you need.
+- **PYTHONPATH baked in**: `import pandas`, `import xgboost`, `import sklearn` work WITHOUT sys.path hacks.
+- **git + curl**: Both installed in sandbox now.
+- **applyPatch**: ENABLED — use OpenClaw's native file editing.
+- **Memory**: brain/memory.md updates EVERY cycle (not just commit_node).
 
 ## What You Should Do Every Heartbeat
 **Read `lab/HEARTBEAT.md` for the full protocol.** Summary:
