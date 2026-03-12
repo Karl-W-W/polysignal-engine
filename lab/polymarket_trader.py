@@ -222,7 +222,18 @@ class PolymarketTrader:
             self.log.record(result)
             return result
 
-        verdict = check_risk(proposal, self._risk_tracker)
+        # Session 24: Paper trades bypass TRADING_ENABLED kill switch.
+        # We temporarily enable trading for the risk check, then restore.
+        # This lets paper trades validate confidence, size, and daily caps
+        # while ignoring the kill switch (the whole point of paper mode).
+        import core.risk as _risk_mod
+        _orig_enabled = _risk_mod.TRADING_ENABLED
+        _risk_mod.TRADING_ENABLED = True
+        try:
+            verdict = check_risk(proposal, self._risk_tracker)
+        finally:
+            _risk_mod.TRADING_ENABLED = _orig_enabled
+
         if not verdict.approved:
             result = TradeResult(
                 success=False, mode="paper", trade_id=trade_id,

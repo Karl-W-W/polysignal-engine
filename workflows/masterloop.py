@@ -671,6 +671,30 @@ def route_after_prediction(state: LoopState) -> str:
     from core.risk import TRADING_ENABLED
     if not TRADING_ENABLED:
         print("\n[SHORT-CIRCUIT] TRADING_ENABLED=false — skipping draft/review/risk_gate")
+        # Session 24: Write memory even when short-circuiting.
+        # Previously brain/memory.md only updated in commit_node, which never
+        # fires with TRADING_ENABLED=false. Memory was stale since March 3.
+        try:
+            obs_count = len(state.get("observations", []))
+            pred_count = len(state.get("predictions", []))
+            signals = [o for o in state.get("observations", []) if o.get("direction")]
+            signal_summary = ", ".join(
+                f"{s.get('title', '?')[:40]} ({s.get('direction', '?')})"
+                for s in signals[:3]
+            ) or "none"
+            entry = (
+                f"Cycle #{state.get('cycle_number', '?')} | "
+                f"Obs: {obs_count} | Signals: {len(signals)} | Preds: {pred_count} | "
+                f"Status: SHORT-CIRCUIT | Signals: {signal_summary}"
+            )
+            try:
+                from lab.outcome_tracker import get_accuracy_summary
+                entry += f" | {get_accuracy_summary()}"
+            except Exception:
+                pass
+            write_memory(entry)
+        except Exception:
+            pass
         return END
     return "draft"
 

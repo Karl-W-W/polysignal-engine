@@ -207,11 +207,14 @@ class TestPnL:
 # ============================================================================
 
 class TestRiskGate:
-    def test_kill_switch_blocks(self, trader, bullish_signal):
+    def test_kill_switch_bypassed_for_paper(self, trader, bullish_signal):
+        """Session 24: Paper trades bypass TRADING_ENABLED kill switch."""
         risk_module.TRADING_ENABLED = False
         result = trader.paper_trade(bullish_signal)
-        assert result.success is False
-        assert "kill switch" in (result.risk_verdict or "").lower()
+        assert result.success is True
+        assert result.mode == "paper"
+        # Kill switch should be restored after paper trade
+        assert risk_module.TRADING_ENABLED is False
 
     def test_low_confidence_blocked(self, trader):
         risk_module.TRADING_ENABLED = True
