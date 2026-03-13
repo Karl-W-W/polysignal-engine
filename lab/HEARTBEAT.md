@@ -22,9 +22,19 @@ cat /mnt/polysignal/lab/.scanner-status.json
 - If `errors > 0` → report on Telegram immediately
 - If `predictions > 0` → note the count, check outcomes below
 
-### Step 2: New Predictions Check (1 min)
-```python
-# Check for new evaluated predictions since last heartbeat
+### Step 2: Paper Trading + Predictions Check (1 min)
+```bash
+# Check paper trading log
+python3 -c "
+import json
+with open('/mnt/polysignal/lab/trading_log.json') as f:
+    trades = json.load(f)
+approved = [t for t in trades if t.get('risk_verdict') == 'APPROVED']
+print(f'Paper trades: {len(approved)} approved / {len(trades)} total')
+if approved: print(f'Latest: {approved[-1].get(\"market_id\",\"?\")} {approved[-1].get(\"side\",\"?\")} @ {approved[-1].get(\"confidence\",0):.0%}')
+"
+
+# Check predictions
 python3 -c "
 import json
 with open('/mnt/polysignal/data/prediction_outcomes.json') as f:
@@ -33,6 +43,7 @@ stats = data.get('stats', {})
 print(f'Evaluated: {stats.get(\"evaluated\",0)} | Correct: {stats.get(\"correct\",0)} | Incorrect: {stats.get(\"incorrect\",0)}')
 "
 ```
+- Report new paper trades on Telegram (first real bullish paper trade = milestone)
 - If new evaluations exist → calculate accuracy on clean markets
 - If accuracy drops below 60% → flag on Telegram
 

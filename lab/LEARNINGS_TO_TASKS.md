@@ -15,12 +15,12 @@
 
 ## Pending (Ready for Claude Code)
 
-### P0: Bearish Signal Quality Fix
-- **Source**: Backtest results (Session 23)
-- **Finding**: Bullish 100% (27W/0L), Bearish 56% (5W/4L). All 4 losses = bearish on 556108 at confidence 0.59-0.62.
-- **Action taken**: Raised bearish gate threshold to 0.65 (Session 23)
+### ~~P0: Bearish Signal Quality Fix~~ — IMPLEMENTED (Session 24)
+- **Source**: Backtest results (Session 23) + live post-gate data (Session 24)
+- **Finding**: Live data was worse than backtest: Bearish 5.6% (1W/17L), Bullish 100% (6W/0L).
+- **Action taken**: **Bearish BANNED entirely** at XGBoost gate. Bullish-only mode.
 - **Still needed**: Train direction-aware XGBoost models. Add bearish-specific features (volume spike, spread widening).
-- **Effort**: Medium (2-3 hours)
+- **Effort**: Medium (2-3 hours) — for bearish rehabilitation when data supports it
 
 ### P0: Market Diversity — Only 2 Markets Survive Gates
 - **Source**: Backtest (Session 23) — only 556108 and 1541748 produce profitable trades

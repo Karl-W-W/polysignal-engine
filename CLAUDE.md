@@ -20,18 +20,22 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **Loop** (OpenClaw, Telegram `@OpenClawOnDGX_bot`) — autonomous developer, writes code in lab/workflows
 - **Karl** — router, Vault authorizer, human-only tasks (MoltBook registration, DNS, credentials)
 
-## Loop's Capabilities (Session 22)
-- **Network**: Bridge mode + Squid proxy (4 domains: gamma-api.polymarket.com, clob.polymarket.com, moltbook.com, api.moltbook.com)
+## Loop's Capabilities (Session 24)
+- **Network**: Bridge mode + Squid proxy (6 domains: gamma-api.polymarket.com, clob.polymarket.com, .moltbook.com, .clawhub.ai, .pypi.org, .pythonhosted.org)
 - **GPU**: NVIDIA GB10 Blackwell, CUDA 13.0, driver 580.95.05 (`/dev/nvidia0` visible)
-- **Memory**: 16GB (was ~2GB)
+- **Memory**: 16GB
 - **Scanner restart**: Write `lab/.restart-scanner` → systemd path unit restarts service
 - **Git push**: Write `lab/.git-push-request` → handler validates + pushes to `loop/*` branches
 - **4 skills**: polysignal-pytest, polysignal-data, polysignal-git (v2 with push), polysignal-scanner
-- **Proxy env vars**: baked into Docker image (`openclaw-sandbox:bookworm-slim`)
+- **Sandbox image**: `openclaw-sandbox:bookworm-slim` with git, curl, PYTHONPATH, User-Agent baked in
 - **Heartbeat**: 30min, active 07:00-01:00 CET, Telegram delivery, MoltBook scan + engagement wired in
 - **MoltBook JWT**: deployed to container environment
-- **Auto-merge CI**: pushes to `loop/*` auto-merge if 305 tests pass (2 successful deploys Session 22)
-- **Retrain trigger**: `echo "retrain" > lab/.retrain-trigger` → systemd watcher (fixed Session 22: execute bit)
+- **Auto-merge CI**: pushes to `loop/*` auto-merge if 382 tests pass
+- **Retrain trigger**: `echo "retrain" > lab/.retrain-trigger` → systemd watcher
+- **applyPatch**: ENABLED — native file editing from sandbox
+- **Ollama**: Reachable at `http://172.17.0.1:11434` (4 models: 3b, 14b, 2x 70B, zero cost)
+- **Paper trading**: Wired into prediction_node, logs to `lab/trading_log.json`, bypasses kill switch
+- **Memory writing**: Every scanner cycle (not just commit_node)
 
 ## Folder Rules
 - `core/` — **VAULT. Read-only.** Never modify without Karl's explicit authorization.
@@ -49,7 +53,7 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 305/305 pass (Mac, sklearn tests auto-skipped). `test_api` excluded (needs Flask in venv).
+Expected: 382/382 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
 
 ## Working with Loop
 - Assign tasks via `lab/LOOP_TASKS.md` — syncs through directory mount (NOT TASKS.md — Docker inode caching)

@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-11 | Session 23 closing
+# Last updated: 2026-03-12 | Session 24 closing
 # Session history: See HISTORY.md
 
 ---
@@ -34,8 +34,8 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | **382/382 PASS** | Mac (8.3s) — +52 new Session 23 (trader, backtester) |
-| Scanner | RUNNING | 4 toxic markets excluded. Bearish gate 0.65. 1pp threshold. CLOB refresh (15 markets/cycle). |
+| Tests | **382/382 PASS** | Mac (8.1s) + DGX (21.8s) — Session 24 verified |
+| Scanner | RUNNING | **6** toxic markets excluded. **Bearish BANNED**. 0.015 threshold (was 0.02). CLOB refresh (15 markets/cycle). |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
@@ -46,10 +46,10 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | MoltBook Math Solver | BUILT | `lab/moltbook_math_solver.py` — auto-solves verification challenges |
 | Auto-Merge CI | **PROVEN** | `.github/workflows/auto-merge-loop.yml` — 2 autonomous deploys this session (scanner-fix + gate-tracking) |
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (Session 11 fix) |
-| Loop Autonomy | **FULL** | 4 skills, network, GPU, data/ write, scanner restart, git push, retrain trigger |
+| Loop Autonomy | **UNLEASHED** | 4 skills, network, GPU, git+curl, PyPI, applyPatch, Ollama (4 models), paper trading, memory writes |
 | Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |
 | Feature Eng. | READY | `lab/feature_engineering.py` — 15 features (10 price + 5 CLOB), temporal safety (`before` param) |
-| XGBoost Baseline | **WIRED + FIRING** | 91.3% test. Gate active. xgb_p_correct persisted. Temporal train/test split. |
+| XGBoost Baseline | **WIRED + FIRING** | 91.3% test. Gate active. **Bearish BANNED** (5.6% live). Bullish-only mode (100% live). |
 | Retrain Pipeline | BUILT | `lab/retrain_pipeline.py` — trigger file + systemd handler. Tested: 90% on filtered 48 samples. Rollback policy active. |
 | CLOB Features | **LIVE** | `lab/clob_prototype.py` — 15 markets, bid/ask/spread/volume/liquidity refreshed per cycle. Wired into feature_engineering.py. |
 | Per-Market Accuracy | BUILT | `get_per_market_accuracy()` — breakdown by market_id |
@@ -269,6 +269,46 @@ Replace auto-approve placeholder with actual Telegram approval.
 **DGX Caging Gaps (not urgent for write-only):**
 - ⚠️ Network egress: Docker has full access — needs egress filtering before read pipeline
 - ⚠️ Exec isolation: Publisher uses `requests.post()` (fine) — read pipeline would need strict exec=false
+
+---
+
+## Session 24: Bearish Ban + Sandbox Unleashed + Full Autonomy Audit (2026-03-12)
+
+**6 commits. 382 tests. Bearish banned. Sandbox rebuilt. Loop autonomy 5.5→7.5/10.**
+
+### Session 24 Accomplishments
+| What | Impact |
+|------|--------|
+| Bearish predictions BANNED | Live data: 5.6% (1W/17L). XGBoost gave 0.94 confidence on INCORRECT. Bullish-only mode: 100% (6W/0L). |
+| 2 new toxic markets excluded | 1541748 (36%) + 692258 (0%). 6 total excluded markets. |
+| Paper trading wired into prediction_node | Every gated bullish prediction → `lab/trading_log.json`. Works with TRADING_ENABLED=false. |
+| Paper trades bypass kill switch | `paper_trade()` temporarily enables TRADING_ENABLED for risk check. 18 approved trades. |
+| Memory writes on short-circuit | `brain/memory.md` updates every cycle (was stale since March 3 — 9 days). |
+| Sandbox rebuilt | `openclaw-sandbox:bookworm-slim` with git, curl, PYTHONPATH, User-Agent baked in. |
+| applyPatch enabled | Loop can use OpenClaw's native file editing tool. |
+| Squid proxy expanded | `.pypi.org` + `.pythonhosted.org` — Loop can pip install. |
+| pandas installed on DGX | 3.0.1 in .venv. |
+| Ollama accessible from sandbox | `no_proxy=172.17.0.1`. 4 models (3b, 14b, 2x 70B) at zero cost. |
+| Signal threshold 0.015 | Was 0.02. Markets were producing 0 signals — now 63% closer to triggering. |
+| User-Agent fix | `DEFAULT_USER_AGENT=PolySignal/1.0` — Cloudflare WAF was blocking Python default. |
+| Full DGX autonomy audit | Comprehensive audit of sandbox mounts, GPU, packages, env, systemd, containers. |
+
+### Key Findings
+- **Post-gate accuracy was 29.2%, not 67%**: Bearish (1W/17L) was the poison. Bullish (6W/0L) is the real signal.
+- **XGBoost is fundamentally miscalibrated for bearish**: Model gave 0.94 confidence on INCORRECT bearish predictions.
+- **Backtest vs live discrepancy**: 88.9% backtest included historical bearish wins. Live post-gate bearish was catastrophic.
+- **Loop confirmed on Opus 4.6**: Ollama experiment (Session 23) reverted. Primary=Opus, fallback=Sonnet.
+- **Loop discovered Ollama from sandbox**: 4 models accessible at zero cost for sub-tasks.
+- **Markets extremely quiet**: Closest delta 0.005 vs 0.015 threshold. Pipeline is data-starved.
+
+### Autonomy Score: ~55% → ~75%
+| Capability | Before | After | Change |
+|-----------|--------|-------|--------|
+| Tools | 6/10 | 9/10 | +3 (git, curl, pip, applyPatch) |
+| Persistence | 5/10 | 7/10 | +2 (memory writes every cycle) |
+| Intelligence | 7/10 | 8/10 | +1 (Ollama for cheap reasoning) |
+| Execution | 5/10 | 6/10 | +1 (paper trading wired) |
+| Data | 5/10 | 5/10 | — (markets quiet, threshold lowered) |
 
 ---
 
@@ -523,38 +563,37 @@ The excluded market wasn't just the worst predictor (0W/40L) — it was the majo
 
 ---
 
-## NEXT STEPS (Session 23+)
+## NEXT STEPS (Session 24+)
 
-### P0: Revenue Unlock (human-only)
-1. **Polymarket wallet** — USDC on Polygon → fund burner wallet → private key in `.env` → `TRADING_ENABLED=true`. This is the ONLY blocker between us and live trades. 406 predictions, 0 trades.
-2. **DNS CNAME** — `polysignal.app` → `cname.vercel-dns.com` (credibility for MoltBook presence)
+### P0: Prove Bullish-Only Pipeline
+1. **Wait for bullish predictions to accumulate** — threshold lowered to 0.015, bearish banned. Need 20+ bullish post-ban evaluations.
+2. **Monitor paper trades** — `lab/trading_log.json`. Loop has Tasks 29-33 queued.
 
-### P1: Waiting (data accumulation)
-3. **Post-gate accuracy results** — 47 predictions queued, first evaluations expected ~48h after March 9 15:02 UTC. If >60%: pipeline validated. If >70%: ship trades immediately.
-4. **XGBoost retrain with CLOB features** — when 50+ post-gate evaluations available. Safety gate working (rejected 50% model, kept 91.3%). Retrain trigger watcher fixed (was missing execute bit on handler).
+### P1: Revenue Unlock (human-only)
+3. **Polymarket wallet funding** — USDC on Polygon → fund burner wallet → `TRADING_ENABLED=true`.
+4. **DNS CNAME** — `polysignal.app` → `cname.vercel-dns.com`.
 
-### P2: Loop's Current Queue (autonomous)
-5. ~~**Task 14: Post-gate accuracy tracking**~~ **DONE** — report pushed + auto-merged. 47 predictions, 0 evaluated yet, mean gate score 0.760.
-6. **Tasks 21-24: MoltBook intelligence** — scanner operational (275 posts, 138 saved), engagement live (10 submolts, 6 follows), wired into heartbeat. Ongoing.
-7. **Task 18: Retrain trigger test** — watcher fixed, awaiting more post-gate data.
-8. **Task 20: ClawHub research** — explore ecosystem for reusable skills.
+### P2: Loop's Current Queue (autonomous — Tasks 29-33)
+5. **Task 29: Monitor paper trading log** — validate first real bullish paper trade.
+6. **Task 30: Full MoltBook scan** — overdue since Session 22. 20 submolts.
+7. **Task 32: Analyze why 556108 works** — 88% over 33 evaluations. Find the pattern.
+8. **Task 33: Nightly build** — ship one useful thing per night.
 
 ### P3: Claude Code Next Session
-9. **Kelly criterion position sizing** — prep for when `TRADING_ENABLED=true` flips
-10. **LLM judge for sanitizer** — add Haiku as second gate behind regex (monokultur defense)
-11. **Merge any Loop branches** — auto-merge CI handles this now, but verify edge cases
+9. **PyTorch + Blackwell** — GPU at 0%. NGC container or nightly build needed.
+10. **XGBoost retrain** — when 50+ bullish-only evaluations available.
+11. **Kelly criterion position sizing** — prep for `TRADING_ENABLED=true`.
 
 ### Known Bugs
 - `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)
-- Market 824952 had 1 leaked prediction from Session 19 deployment race condition (not persistent — filter confirmed working)
 
 ### Revenue Critical Path
 ```
-Polymarket wallet (human) → TRADING_ENABLED=true → FIRST TRADE
+Bullish-only predictions accumulate → prove >60% accuracy
     ↓
-Post-gate accuracy arrives (~March 11) → validates pipeline
+Polymarket wallet funded (human) → TRADING_ENABLED=true → FIRST TRADE
     ↓
-XGBoost retrain with CLOB features → improved model
+XGBoost retrain with clean data → improved model
     ↓
-MoltBook signals publishing (LIVE) → reputation + visibility → REVENUE
+MoltBook signals publishing → reputation → REVENUE
 ```

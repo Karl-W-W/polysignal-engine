@@ -9,19 +9,19 @@
 ### 1.1 First Polymarket Trade
 - [x] Builder API key deployed to DGX .env
 - [x] Wallet address configured (0xdec8...2eff)
-- [ ] Build `lab/polymarket_trader.py` — py-clob-client Level 1 wrapper
-- [ ] Wire trader into MasterLoop commit_node (after risk_gate approval)
-- [ ] Paper trade 10 signals (log trades, don't execute)
+- [x] Build `lab/polymarket_trader.py` — py-clob-client Level 1 wrapper
+- [x] Wire trader into prediction_node (paper trades before short-circuit)
+- [ ] Paper trade 10 signals (log trades, don't execute) — wired, waiting for signals
 - [ ] First live trade with $1 max (proof of life)
 - [ ] Scale to $5/trade with risk gate guardrails
 - **Target**: First trade within 48 hours
 
 ### 1.2 Fix Prediction Accuracy (43% → 65%+)
 - [x] Tune hyperparams: n_estimators=150, max_depth=4, min_child_weight=2
-- [x] Per-market accuracy audit — identify and kill toxic markets (4 excluded: 824952, 556062, 1373744, 965261)
-- [x] Direction-aware analysis — bearish gate raised to 0.65 (was 0.50)
+- [x] Per-market accuracy audit — identify and kill toxic markets (**6 excluded**: 824952, 556062, 1373744, 965261, 1541748, 692258)
+- [x] Direction-aware analysis — **bearish BANNED** (5.6% live). Bullish-only mode (100% live).
 - [ ] Retrain XGBoost when 50+ non-NEUTRAL evaluations at 1pp threshold
-- [ ] Lower signal delta threshold (0.02 → 0.015) during quiet markets
+- [x] Lower signal delta threshold (0.02 → 0.015) during quiet markets
 - **Target**: 60%+ accuracy within 1 week, 70%+ within 1 month
 
 ### 1.3 Signal-as-a-Service (x402)
@@ -43,7 +43,7 @@
 ## TIER 2: REDUCE COSTS ($460 in 11 days is unsustainable)
 
 ### 2.1 Route Loop Through Local Ollama ($160/month savings)
-- [ ] Expose Ollama API to Loop's sandbox (proxy or Docker network)
+- [x] Expose Ollama API to Loop's sandbox (no_proxy=172.17.0.1, 4 models accessible)
 - [ ] Configure OpenClaw: primary=ollama/llama3.3:70b, fallback=anthropic/claude-opus-4-6
 - [ ] Use deepseek-r1:70b for complex reasoning tasks (code review, strategy)
 - [ ] Use llama3.2:3b for heartbeat checks (~$0 vs $0.10/heartbeat)
