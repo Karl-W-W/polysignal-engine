@@ -63,3 +63,37 @@ The XGBoost model learned to predict when the toy predictor accidentally aligns 
    - Split by time, not random (prevent leakage)
    - Features: all from feature_engineering.py + market_id embedding
    - Target: predict DIRECTION, not predict-if-direction-correct
+
+## Addendum: Leave-One-Market-Out Validation (LOMO)
+
+### Result: 44.7% — WORSE than 47.5% baseline
+
+The direction predictor CANNOT generalize across markets:
+
+| Market  | Accuracy | Baseline | Beat? |
+|---------|----------|----------|-------|
+| 824952  | 56%      | 71%      | ❌    |
+| 556108  | 16%      | 86%      | ❌    |
+| 1541748 | 11%      | 95%      | ❌    |
+| 1373744 | 83%      | 100%     | ❌    |
+
+No market beats its own baseline when trained without its own data.
+
+### Implication
+The 73% time-series CV was leaking same-market patterns across folds.
+The 96.7% shuffled CV was pure memorization.
+The model learns market-specific patterns that don't transfer.
+
+### What This Means
+1. **A universal direction predictor won't work** with 7 heterogeneous markets
+2. **Per-market models** might work but need enough samples per market
+3. **The feature set is not predictive of cross-market direction** — clob_depth_imbalance is market-specific, not universal
+4. **We need more markets OR market-specific models** to make progress
+5. The current toy predictor's 17.4% is not because it's simple — it's because direction prediction across heterogeneous prediction markets is fundamentally hard
+
+### Revised Recommendation
+Instead of replacing predict_market_moves with ML, focus on:
+1. Per-market models where we have 50+ samples (only 824952 qualifies)
+2. Better market selection (556108 has 86% bullish base rate — just always predict UP)
+3. Market-specific thresholds instead of universal gates
+4. More markets to find ones where features actually predict
