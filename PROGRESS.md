@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-13 | Session 25 in progress
+# Last updated: 2026-03-14 | Session 25 closed
 # Session history: See HISTORY.md
 
 ---
@@ -272,26 +272,37 @@ Replace auto-approve placeholder with actual Telegram approval.
 
 ---
 
-## Session 25: Base Rate Predictor + Cost Discipline (2026-03-13)
+## Session 25: Base Rate Predictor + Security Architecture + Full Autonomy (2026-03-13/14)
 
-**392 tests. Base rate predictor WIRED. Cost investigation complete. Loop's best overnight work.**
+**4 commits. 392 tests. Base rate predictor LIVE. Polymarket CLOB authenticated. ClawHub CLI installed. Security hardened.**
 
 ### Session 25 Accomplishments
 | What | Impact |
 |------|--------|
-| Base rate predictor wired into prediction_node | Replaces toy momentum check (17.4% → 79.9% expected). Loop built it, Claude Code wired it. |
-| Loop's pipeline audit (AUDIT_SESSION25.md) | Root cause found: architecture backwards (XGBoost gates garbage). Best analytical work from Loop. |
-| Loop proved ML doesn't generalize | LOMO validation: 44.7% (below baseline). Cross-market prediction is fundamentally hard. |
-| Loop shipped base_rate_predictor.py | Dead-simple per-market bias predictor. 6 tests. 5 auto-merged pushes overnight. |
-| OpenClaw cost investigation | `cacheRetention` not supported in v2026.2.12. Haiku 4.5 added to model list. |
-| Heartbeat cost discipline | HEARTBEAT.md rewritten: "if nothing changed, ONE LINE and stop." |
-| +10 tests (392 total) | 8 from Loop (direction predictor + base rate) + 2 integration tests. |
+| Base rate predictor wired into production | Replaces toy momentum check (17.4% → 79.9% expected). Scanner confirmed live. |
+| Polymarket CLOB authenticated | `derive_api_key()` resolved wallet mismatch. Wallet `0x5175...a092`. |
+| ClawHub CLI installed + scouted | v0.8.0, 10 Polymarket skills found. argus-edge (Kelly), polyedge (correlation). |
+| Security penetration test | Found 7 critical vulnerabilities with gateway exec. Python can read all secrets. |
+| Secrets locked with root ownership | `chown root:root` on .env. Loop gets PermissionError. Cannot chmod back. |
+| Deploy trigger handler | `scripts/deploy-handler.sh` + systemd watcher. Pulls, tests, restarts safely. |
+| Haiku 4.5 registered | In OpenClaw model list. Not yet routed for heartbeats. |
+| Gateway exec explored + reverted | 3 flip-flops. Final: sandbox (Loop's docs use /mnt/polysignal/ paths). |
+| Heartbeat cost discipline | HEARTBEAT.md rewritten for cost awareness. |
+| Loop shipped 5 branches overnight | Pipeline audit, direction predictor, LOMO, base rate analysis, base rate predictor. |
 
 ### Key Findings
-- **Per-market base rates are the real alpha**: Each market has a strong directional bias. Predicting the majority class = 79.9%.
-- **The toy predictor was actively harmful**: It predicted AGAINST dominant trends on most markets.
-- **OpenClaw v2026.2.12 doesn't support `cacheRetention`**: Can't configure prompt caching from config.
-- **Real cost savings are model routing**: Haiku for monitoring, Opus for reasoning. Not yet implemented.
+- **Per-market base rates = real alpha**: 79.9% vs 17.4% production. Simplest strategy wins.
+- **Gateway exec + python3 = full shell access**: Owner can chmod any owned file. Only root ownership truly locks secrets.
+- **Gateway vs sandbox path mismatch**: Loop's docs reference `/mnt/polysignal/` (sandbox). Gateway needs `/opt/loop/`. Can't mix.
+- **OpenClaw v2026.2.12**: No `cacheRetention`, `ask` values are `off`/`on-miss`/`always` only.
+- **Polymarket has TWO wallets**: Magic.Link (`0xdec8`, unexportable) and proxy (`0x5175`, exportable). Use `derive_api_key()`.
+
+### Security Architecture (Final State)
+- Secrets: `~/.polysignal-secrets/.env` owned by `root:root`, chmod 600
+- Exec: sandbox mode (Docker container with bind mounts)
+- Network: Squid proxy (6 domains)
+- Wallet: Protected by root file ownership (not just chmod)
+- Next: trading sidecar, iptables egress filtering, MoltBook quarantine LLM
 
 ---
 
@@ -586,26 +597,27 @@ The excluded market wasn't just the worst predictor (0W/40L) — it was the majo
 
 ---
 
-## NEXT STEPS (Session 25+)
+## NEXT STEPS (Session 26+)
 
-### P0: Prove Base Rate Predictor (PROFIT)
-1. **Validate in production** — scanner needs restart to pick up base rate code. Monitor post-Session-25 accuracy.
-2. **Target: 60%+ accuracy on next 20 evaluations** — base rate expects 79.9%.
-3. **Monitor paper trades** — `lab/trading_log.json`. First paper trade = milestone toward revenue.
+### P0: Security Hardening (protect wallet)
+1. **Trading sidecar** — separate process holds wallet key, Loop sends unsigned trade intents to localhost
+2. **iptables egress filtering** — restrict outbound even with python3 access
+3. **MoltBook quarantine LLM** — sanitize external content before Loop sees it
+4. **Convert scanner to system service** — so it can read root-owned secrets on restart
 
-### P1: Revenue Unlock (human-only)
-4. **Polymarket wallet funding** — USDC on Polygon → fund burner wallet → `TRADING_ENABLED=true`.
-5. **DNS CNAME** — `polysignal.app` → `cname.vercel-dns.com`.
+### P1: Revenue (PROFIT)
+5. **Fund wallet with $5+ USDC** — human-only, last gate to first live trade
+6. **Market expansion** — 8 → 50 markets via gamma API scan. Loop researching candidates overnight.
+7. **Prove base rate accuracy** — track post-Session-25 predictions. Target: 60%+.
 
 ### P2: Cost Reduction (COST)
-6. **Model routing** — Switch Loop primary to Sonnet 4.6, keep Opus as fallback. 40% cheaper.
-7. **Upgrade OpenClaw** — v2026.2.12 doesn't support `cacheRetention`. Newer versions may.
-8. **Heartbeat discipline** — Loop instructed to keep quiet when nothing changes.
+8. **Model routing** — Haiku for heartbeats, Sonnet for tasks, Opus for architect. 80% monitoring cost cut.
+9. **Gateway exec with proper paths** — rewrite Loop's docs to use `/opt/loop/` paths, then re-enable gateway.
 
-### P3: Loop's Current Queue (autonomous — Tasks 34-36)
-9. **Task 34: Validate base rate predictor** in production.
-10. **Task 35: MoltBook engagement** — build trust, stop getting spam-flagged.
-11. **Task 36: Cost-aware heartbeat discipline** — 50%+ productive heartbeats.
+### P3: Loop Overnight (autonomous)
+10. **ClawHub research** — inspect argus-edge, polyedge, prediction-market-aggregator
+11. **MoltBook engagement** — build karma, stop spam flags
+12. **Market expansion candidates** — query gamma API for high-volume biased markets
 
 ### Known Bugs
 - `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)

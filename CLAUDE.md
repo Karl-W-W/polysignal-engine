@@ -96,14 +96,19 @@ Expected: 392/392 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
 /etc/sudoers.d/cube-polysignal — Passwordless sudo for docker/nvidia/squid
 ```
 
-## Infrastructure (Session 18)
-- **Squid proxy**: `systemctl status squid` — 4-domain allowlist, `0.0.0.0:3128`
+## Infrastructure (Session 18, updated Session 25)
+- **Squid proxy**: `systemctl status squid` — 6-domain allowlist (polymarket, moltbook, clawhub, pypi)
 - **Scanner**: `systemctl --user status polysignal-scanner.service` — 5min interval, PYTHONUNBUFFERED=1
 - **Scanner restart**: `polysignal-scanner-restart.{path,service}` — watches `lab/.restart-scanner`
 - **Git push**: `polysignal-git-push.{path,service}` — watches `lab/.git-push-request`
+- **Deploy handler**: `polysignal-deploy.{path,service}` — watches `lab/.deploy-trigger` (Session 25)
 - **OpenClaw gateway**: `systemctl --user status openclaw-gateway.service` — Claude Opus 4.6, port 18789
+- **OpenClaw exec**: `sandbox` mode, `ask: off`, 24 safeBins. Gateway mode explored but reverted (path mismatch).
 - **Docker compose**: `loop_internal-net` + `loop_public-net`, nvidia runtime, GPU reservation
 - **Passwordless sudo**: docker, nvidia-ctk, systemctl restart docker/squid, tee
+- **Secrets**: `~/.polysignal-secrets/.env` — **root:root chmod 600**. Scanner loads via systemd EnvironmentFile drop-in.
+- **ClawHub CLI**: v0.8.0 at `~/.npm-global/bin/clawhub`, authenticated as Karl-W-W
+- **Polymarket CLOB**: Authenticated via `derive_api_key()`. Wallet `0x5175...a092`.
 
 ## MoltBook Integration (Session 22)
 - **Profile**: https://www.moltbook.com/u/polysignal-os (registered + verified)
