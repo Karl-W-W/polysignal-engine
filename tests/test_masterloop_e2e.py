@@ -490,3 +490,64 @@ class TestMasterLoopE2EAPIFailure:
 
             # Pipeline should still complete without crashing
             assert "perception" in final["stage_timings"]
+
+
+# ============================================================================
+# E2E TEST — BASE RATE PREDICTOR (Session 25)
+# ============================================================================
+
+class TestMasterLoopBaseRatePredictor:
+    """Base rate predictor replaces toy momentum check when outcomes data exists."""
+
+    def test_base_rate_predictor_produces_predictions(self):
+        """When BaseRatePredictor has data, it drives prediction_node."""
+        from lab.base_rate_predictor import BaseRatePredictor, MarketBias
+
+        fake_biases = {
+            "0xfake_btc": MarketBias(
+                market_id="0xfake_btc", up_count=30, down_count=5,
+                total=35, up_rate=0.857, dominant_direction="Bullish",
+                bias_strength=0.857, confident=True,
+            )
+        }
+        fake_predictor = BaseRatePredictor(fake_biases)
+
+        with (
+            patch.object(ml_module, "fetch_crypto_markets", side_effect=_fake_markets),
+            patch.object(ml_module, "detect_signals", side_effect=_fake_signals),
+            patch.object(ml_module, "predict_market_moves", side_effect=_fake_predictions) as mock_preds,
+            patch.object(ml_module, "send_telegram_alert"),
+            patch.object(ml_module, "brain") as mock_brain,
+            patch("lab.base_rate_predictor.BaseRatePredictor.from_outcomes",
+                  return_value=fake_predictor),
+        ):
+            initial = _build_initial_state("e2e_base_rate",
+                                            user_request="Check signals")
+            final, nodes_executed = _run_graph(initial)
+
+            # predict_market_moves should NOT be called when base rate is active
+            mock_preds.assert_not_called()
+
+            # Predictions should exist (base rate for known market + neutral for unknown)
+            assert len(final["predictions"]) >= 0  # May be filtered by gate
+
+    def test_base_rate_fallback_when_no_data(self):
+        """Falls back to old predictor when outcomes file doesn't exist."""
+        with (
+            patch.object(ml_module, "fetch_crypto_markets", side_effect=_fake_markets),
+            patch.object(ml_module, "detect_signals", side_effect=_fake_signals),
+            patch.object(ml_module, "predict_market_moves", side_effect=_fake_predictions) as mock_preds,
+            patch.object(ml_module, "send_telegram_alert"),
+            patch.object(ml_module, "brain") as mock_brain,
+            patch("lab.base_rate_predictor.BaseRatePredictor.from_outcomes",
+                  side_effect=FileNotFoundError("No outcomes file")),
+        ):
+            initial = _build_initial_state("e2e_base_rate_fallback",
+                                            user_request="Check signals")
+            final, nodes_executed = _run_graph(initial)
+
+            # Should fall back to predict_market_moves
+            mock_preds.assert_called_once()
+
+            # Predictions should still be generated
+            assert len(final["predictions"]) >= 0

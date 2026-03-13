@@ -289,30 +289,56 @@ def prediction_node(state: LoopState) -> LoopState:
         pred_obs = observations
 
     try:
-        preds = predict_market_moves(pred_obs)
-        predictions = [p.to_dict() for p in preds]
-
-        # Enhance Neutral predictions with perception signal data.
-        # Rule-based predictor returns Neutral when DB history is missing;
-        # perception signals already carry direction + delta from bitcoin_signal.py.
-        obs_signals = {}
-        for obs in observations:
-            mid = obs.get("market_id")
-            direction = obs.get("direction", "")
-            if mid and direction:
-                obs_signals[mid] = obs
+        # ── Base rate predictor (Session 25) ─────────────────────────────────
+        # Loop's audit: majority-class per market = 79.9% vs 17.4% production.
+        # The toy momentum predictor in core/predict.py fights market trends.
+        # Base rate predictor: predict the historically dominant direction.
+        # Falls back to old predict_market_moves + signal enhancement if unavailable.
+        use_base_rate = False
+        try:
+            from lab.base_rate_predictor import BaseRatePredictor
+            predictor = BaseRatePredictor.from_outcomes()
+            if predictor.biases:
+                predictions = []
+                for obs in pred_obs:
+                    mid = obs.get("market_id")
+                    signal_delta = obs.get("change_24h", 0.0)
+                    result = predictor.predict(mid, signal_delta=signal_delta)
+                    predictions.append({
+                        "market_id": mid,
+                        "hypothesis": result.direction,
+                        "confidence": result.confidence,
+                        "reasoning": result.reasoning,
+                        "time_horizon": obs.get("time_horizon", "24h"),
+                    })
+                use_base_rate = True
+                print(f"  📊 Base rate predictor: {len(predictions)} predictions from {len(predictor.biases)} market biases")
+        except Exception:
+            pass
 
         enhanced = 0
-        for pred in predictions:
-            if pred["hypothesis"] == "Neutral" and pred["market_id"] in obs_signals:
-                sig = obs_signals[pred["market_id"]]
-                direction = sig["direction"].lower()
-                pred["hypothesis"] = "Bullish" if "bull" in direction or "📈" in sig.get("direction", "") else "Bearish"
-                delta = abs(sig.get("change_24h", 0.0))
-                pred["confidence"] = round(min(0.55 + delta * 2, 0.85), 2)
-                pred["reasoning"] = f"Signal-enhanced: {sig['direction']} (delta: {sig.get('change_24h', 0):.3f})"
-                pred["time_horizon"] = sig.get("time_horizon", "24h")
-                enhanced += 1
+        if not use_base_rate:
+            preds = predict_market_moves(pred_obs)
+            predictions = [p.to_dict() for p in preds]
+
+            # Enhance Neutral predictions with perception signal data.
+            obs_signals = {}
+            for obs in observations:
+                mid = obs.get("market_id")
+                direction = obs.get("direction", "")
+                if mid and direction:
+                    obs_signals[mid] = obs
+
+            for pred in predictions:
+                if pred["hypothesis"] == "Neutral" and pred["market_id"] in obs_signals:
+                    sig = obs_signals[pred["market_id"]]
+                    direction = sig["direction"].lower()
+                    pred["hypothesis"] = "Bullish" if "bull" in direction or "📈" in sig.get("direction", "") else "Bearish"
+                    delta = abs(sig.get("change_24h", 0.0))
+                    pred["confidence"] = round(min(0.55 + delta * 2, 0.85), 2)
+                    pred["reasoning"] = f"Signal-enhanced: {sig['direction']} (delta: {sig.get('change_24h', 0):.3f})"
+                    pred["time_horizon"] = sig.get("time_horizon", "24h")
+                    enhanced += 1
 
         # ── XGBoost confidence gate (Session 15) ─────────────────────────────
         # Meta-predictor: evaluates P(this prediction will be CORRECT).
@@ -366,7 +392,8 @@ def prediction_node(state: LoopState) -> LoopState:
         state["predictions"] = predictions
         if gate_ran:
             print(f"  🔍 XGBoost gate: {len(predictions)} passed, {suppressed} suppressed")
-        print(f"  ✓ {len(predictions)} hypotheses ({enhanced} signal-enhanced)")
+        predictor_label = "base-rate" if use_base_rate else f"{enhanced} signal-enhanced"
+        print(f"  ✓ {len(predictions)} hypotheses ({predictor_label})")
 
         # ── Record predictions for future outcome evaluation (non-blocking) ──
         try:

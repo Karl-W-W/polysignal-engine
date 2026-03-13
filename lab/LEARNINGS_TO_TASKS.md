@@ -67,6 +67,11 @@
 
 ## Implemented (Done)
 
+### Base Rate Predictor (Session 25)
+- **Source**: Loop's pipeline audit + LOMO validation + per-market base rate analysis
+- **Implementation**: `lab/base_rate_predictor.py` wired into prediction_node as primary predictor
+- **Result**: 79.9% expected accuracy vs 17.4% production (toy momentum check killed)
+
 ### Toxic Market Exclusion
 - **Source**: Loop's per-market accuracy audit (Session 23)
 - **Implementation**: 4 markets excluded from signal detection, prediction, and training

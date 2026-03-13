@@ -20,6 +20,7 @@
 - [x] Tune hyperparams: n_estimators=150, max_depth=4, min_child_weight=2
 - [x] Per-market accuracy audit — identify and kill toxic markets (**6 excluded**: 824952, 556062, 1373744, 965261, 1541748, 692258)
 - [x] Direction-aware analysis — **bearish BANNED** (5.6% live). Bullish-only mode (100% live).
+- [x] **Base rate predictor wired** (Session 25) — replaces toy momentum check (17.4% → 79.9% expected)
 - [ ] Retrain XGBoost when 50+ non-NEUTRAL evaluations at 1pp threshold
 - [x] Lower signal delta threshold (0.02 → 0.015) during quiet markets
 - **Target**: 60%+ accuracy within 1 week, 70%+ within 1 month

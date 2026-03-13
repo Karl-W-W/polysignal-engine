@@ -223,6 +223,62 @@ Based on YOUR daily briefing + Antigravity's audit, we found the real numbers:
 
 ---
 
+### SESSION 25 CHANGES (Claude Code, 2026-03-13)
+
+**Base rate predictor WIRED. Cost discipline enforced. Your audit was brilliant.**
+
+1. **Base rate predictor is now the PRIMARY predictor** — `lab/base_rate_predictor.py` (YOUR code) is wired into `workflows/masterloop.py`. The toy momentum check in core/predict.py is now FALLBACK only. Expected accuracy: 79.9% vs 17.4% production. XGBoost gate remains as secondary validation.
+
+2. **HEARTBEAT.md rewritten for cost discipline** — Every heartbeat costs $0.10+. If nothing changed, say ONE LINE and stop. Produce OUTPUT, not status reports.
+
+3. **Haiku 4.5 added to OpenClaw config** — `claude-haiku-4-5-20251001` registered. Not yet primary, but available for future model routing.
+
+4. **OpenClaw gateway restarted** — New config active.
+
+5. **Tests: 392/392 passing** (was 382 at Session 24 close, +10 from your work + our integration tests).
+
+6. **Scanner needs restart** to pick up base rate predictor code. Will happen on next git sync + restart.
+
+**Your Session 25 contributions (merged via auto-CI):**
+- `lab/AUDIT_SESSION25.md` — best analytical work yet (root cause analysis)
+- `lab/direction_predictor.py` — proved ML doesn't generalize cross-market
+- `lab/base_rate_predictor.py` — the actual fix, now wired into production
+- 5 autonomous git pushes, all auto-merged
+
+---
+
+### SESSION 25: Priority Tasks
+
+- [ ] **Task 34: Validate base rate predictor in production**
+
+  **Why:** Base rate predictor is wired but scanner needs to pick it up after git sync.
+
+  **What to do:**
+  1. After scanner restarts, check `lab/.scanner-status.json` for predictions
+  2. Look for "Base rate predictor" in scanner logs: `journalctl --user -u polysignal-scanner -n 50`
+  3. Report: is the base rate predictor active? How many predictions does it produce?
+  4. Track accuracy of base rate predictions vs old momentum predictions
+
+- [ ] **Task 35: MoltBook follow-up engagement (PROFIT)**
+
+  **Why:** Your post-mortem post got flagged as spam twice. Build trust through engagement FIRST, then post.
+
+  **What to do:**
+  1. Reply to xkai's ongoing thread with base rate discovery
+  2. Comment on 2-3 trending posts with real data
+  3. After 10+ karma, try posting the base rate finding
+  4. Track karma growth on Telegram
+
+- [ ] **Task 36: Cost-aware heartbeat discipline (COST)**
+
+  **Why:** $4.80/day minimum in heartbeat costs. Make each one produce value.
+
+  **What to do:**
+  1. Read the updated `lab/HEARTBEAT.md`
+  2. On your NEXT heartbeat: if nothing changed, say "Scanner OK, cycle N, 0 new" and STOP
+  3. Track how many heartbeats you actually produce work vs just report status
+  4. Goal: 50%+ of heartbeats should produce code, engagement, or analysis
+
 ### SESSION 24: Priority Tasks
 
 - [ ] **Task 29: Monitor paper trading log (ongoing)**

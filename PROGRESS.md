@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-12 | Session 24 closing
+# Last updated: 2026-03-13 | Session 25 in progress
 # Session history: See HISTORY.md
 
 ---
@@ -34,7 +34,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | **382/382 PASS** | Mac (8.1s) + DGX (21.8s) — Session 24 verified |
+| Tests | **392/392 PASS** | Mac (8.4s) — Session 25 verified |
 | Scanner | RUNNING | **6** toxic markets excluded. **Bearish BANNED**. 0.015 threshold (was 0.02). CLOB refresh (15 markets/cycle). |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
@@ -49,7 +49,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Loop Autonomy | **UNLEASHED** | 4 skills, network, GPU, git+curl, PyPI, applyPatch, Ollama (4 models), paper trading, memory writes |
 | Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |
 | Feature Eng. | READY | `lab/feature_engineering.py` — 15 features (10 price + 5 CLOB), temporal safety (`before` param) |
-| XGBoost Baseline | **WIRED + FIRING** | 91.3% test. Gate active. **Bearish BANNED** (5.6% live). Bullish-only mode (100% live). |
+| XGBoost Baseline | **WIRED + FIRING** | Gate active. **Bearish BANNED**. Base rate predictor now primary (Session 25). |
 | Retrain Pipeline | BUILT | `lab/retrain_pipeline.py` — trigger file + systemd handler. Tested: 90% on filtered 48 samples. Rollback policy active. |
 | CLOB Features | **LIVE** | `lab/clob_prototype.py` — 15 markets, bid/ask/spread/volume/liquidity refreshed per cycle. Wired into feature_engineering.py. |
 | Per-Market Accuracy | BUILT | `get_per_market_accuracy()` — breakdown by market_id |
@@ -269,6 +269,29 @@ Replace auto-approve placeholder with actual Telegram approval.
 **DGX Caging Gaps (not urgent for write-only):**
 - ⚠️ Network egress: Docker has full access — needs egress filtering before read pipeline
 - ⚠️ Exec isolation: Publisher uses `requests.post()` (fine) — read pipeline would need strict exec=false
+
+---
+
+## Session 25: Base Rate Predictor + Cost Discipline (2026-03-13)
+
+**392 tests. Base rate predictor WIRED. Cost investigation complete. Loop's best overnight work.**
+
+### Session 25 Accomplishments
+| What | Impact |
+|------|--------|
+| Base rate predictor wired into prediction_node | Replaces toy momentum check (17.4% → 79.9% expected). Loop built it, Claude Code wired it. |
+| Loop's pipeline audit (AUDIT_SESSION25.md) | Root cause found: architecture backwards (XGBoost gates garbage). Best analytical work from Loop. |
+| Loop proved ML doesn't generalize | LOMO validation: 44.7% (below baseline). Cross-market prediction is fundamentally hard. |
+| Loop shipped base_rate_predictor.py | Dead-simple per-market bias predictor. 6 tests. 5 auto-merged pushes overnight. |
+| OpenClaw cost investigation | `cacheRetention` not supported in v2026.2.12. Haiku 4.5 added to model list. |
+| Heartbeat cost discipline | HEARTBEAT.md rewritten: "if nothing changed, ONE LINE and stop." |
+| +10 tests (392 total) | 8 from Loop (direction predictor + base rate) + 2 integration tests. |
+
+### Key Findings
+- **Per-market base rates are the real alpha**: Each market has a strong directional bias. Predicting the majority class = 79.9%.
+- **The toy predictor was actively harmful**: It predicted AGAINST dominant trends on most markets.
+- **OpenClaw v2026.2.12 doesn't support `cacheRetention`**: Can't configure prompt caching from config.
+- **Real cost savings are model routing**: Haiku for monitoring, Opus for reasoning. Not yet implemented.
 
 ---
 
@@ -563,26 +586,26 @@ The excluded market wasn't just the worst predictor (0W/40L) — it was the majo
 
 ---
 
-## NEXT STEPS (Session 24+)
+## NEXT STEPS (Session 25+)
 
-### P0: Prove Bullish-Only Pipeline
-1. **Wait for bullish predictions to accumulate** — threshold lowered to 0.015, bearish banned. Need 20+ bullish post-ban evaluations.
-2. **Monitor paper trades** — `lab/trading_log.json`. Loop has Tasks 29-33 queued.
+### P0: Prove Base Rate Predictor (PROFIT)
+1. **Validate in production** — scanner needs restart to pick up base rate code. Monitor post-Session-25 accuracy.
+2. **Target: 60%+ accuracy on next 20 evaluations** — base rate expects 79.9%.
+3. **Monitor paper trades** — `lab/trading_log.json`. First paper trade = milestone toward revenue.
 
 ### P1: Revenue Unlock (human-only)
-3. **Polymarket wallet funding** — USDC on Polygon → fund burner wallet → `TRADING_ENABLED=true`.
-4. **DNS CNAME** — `polysignal.app` → `cname.vercel-dns.com`.
+4. **Polymarket wallet funding** — USDC on Polygon → fund burner wallet → `TRADING_ENABLED=true`.
+5. **DNS CNAME** — `polysignal.app` → `cname.vercel-dns.com`.
 
-### P2: Loop's Current Queue (autonomous — Tasks 29-33)
-5. **Task 29: Monitor paper trading log** — validate first real bullish paper trade.
-6. **Task 30: Full MoltBook scan** — overdue since Session 22. 20 submolts.
-7. **Task 32: Analyze why 556108 works** — 88% over 33 evaluations. Find the pattern.
-8. **Task 33: Nightly build** — ship one useful thing per night.
+### P2: Cost Reduction (COST)
+6. **Model routing** — Switch Loop primary to Sonnet 4.6, keep Opus as fallback. 40% cheaper.
+7. **Upgrade OpenClaw** — v2026.2.12 doesn't support `cacheRetention`. Newer versions may.
+8. **Heartbeat discipline** — Loop instructed to keep quiet when nothing changes.
 
-### P3: Claude Code Next Session
-9. **PyTorch + Blackwell** — GPU at 0%. NGC container or nightly build needed.
-10. **XGBoost retrain** — when 50+ bullish-only evaluations available.
-11. **Kelly criterion position sizing** — prep for `TRADING_ENABLED=true`.
+### P3: Loop's Current Queue (autonomous — Tasks 34-36)
+9. **Task 34: Validate base rate predictor** in production.
+10. **Task 35: MoltBook engagement** — build trust, stop getting spam-flagged.
+11. **Task 36: Cost-aware heartbeat discipline** — 50%+ productive heartbeats.
 
 ### Known Bugs
 - `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)

@@ -1,30 +1,46 @@
 # Loop Heartbeat Protocol
 # Every 30 minutes, OpenClaw triggers a heartbeat. This is your playbook.
-# Updated: Session 23 (2026-03-11)
+# Updated: Session 25 (2026-03-13)
 # Principle: "Don't ask permission to be helpful. Just build it." — Ronin, MoltBook
+
+---
+
+## COST DISCIPLINE (READ THIS FIRST)
+
+Every heartbeat costs money. Opus 4.6 output tokens are $25/MTok. A single heartbeat
+that generates 4k output tokens costs ~$0.10. Thinking tokens count as output.
+
+**Rules:**
+- If nothing changed since last heartbeat, say it in ONE LINE and stop
+- Do NOT re-read NOW.md every heartbeat — only if you lost context
+- Do NOT generate long analysis when a 2-line status update suffices
+- Produce OUTPUT, not status reports. Ship code, make trades, engage on MoltBook.
+- If your heartbeat would just be "Scanner OK, no signals" — skip the report
+
+**Cost math:** 48 heartbeats/day x $0.10 = $4.80/day minimum. Make each one count.
 
 ---
 
 ## PHASE 0: ORIENT (30 seconds)
 
-1. Read `lab/NOW.md` — your operational state
-2. Check `lab/.scanner-status.json` — cycle count, errors, predictions
-3. What time is it? → Determines which phase below
+1. Check `lab/.scanner-status.json` — cycle count, errors, predictions
+2. What time is it? → Determines which phase below
+3. Only read `lab/NOW.md` if you don't remember your state
 
 ---
 
-## DAYTIME HEARTBEAT (07:00–22:00 CET) — Monitor + Engage
+## DAYTIME HEARTBEAT (07:00–22:00 CET) — Monitor + Act
 
-### Step 1: Scanner Health (30 sec)
+### Step 1: Quick Status (15 sec)
 ```bash
 cat /mnt/polysignal/lab/.scanner-status.json
 ```
 - If `errors > 0` → report on Telegram immediately
-- If `predictions > 0` → note the count, check outcomes below
+- If `predictions > 0` → check paper trading log
+- If nothing changed → **stop here**, no report needed
 
-### Step 2: Paper Trading + Predictions Check (1 min)
+### Step 2: Paper Trading + Accuracy (only if new data)
 ```bash
-# Check paper trading log
 python3 -c "
 import json
 with open('/mnt/polysignal/lab/trading_log.json') as f:
@@ -33,27 +49,15 @@ approved = [t for t in trades if t.get('risk_verdict') == 'APPROVED']
 print(f'Paper trades: {len(approved)} approved / {len(trades)} total')
 if approved: print(f'Latest: {approved[-1].get(\"market_id\",\"?\")} {approved[-1].get(\"side\",\"?\")} @ {approved[-1].get(\"confidence\",0):.0%}')
 "
-
-# Check predictions
-python3 -c "
-import json
-with open('/mnt/polysignal/data/prediction_outcomes.json') as f:
-    data = json.load(f)
-stats = data.get('stats', {})
-print(f'Evaluated: {stats.get(\"evaluated\",0)} | Correct: {stats.get(\"correct\",0)} | Incorrect: {stats.get(\"incorrect\",0)}')
-"
 ```
-- Report new paper trades on Telegram (first real bullish paper trade = milestone)
-- If new evaluations exist → calculate accuracy on clean markets
-- If accuracy drops below 60% → flag on Telegram
+- Only report if there are NEW trades since last heartbeat
 
-### Step 3: MoltBook Quick Check (1 min)
-- Check notifications: `GET /api/v1/notifications`
-- If someone commented on our posts → read and consider replying
-- If high-relevance notification → note in Telegram heartbeat
-
-### Step 4: Report (30 sec)
-Telegram format: `HEARTBEAT: cycle {N}, {pred} predictions, {acc}% accuracy, {notes}`
+### Step 3: Do Something Productive (remaining time)
+Instead of checking MoltBook notifications, PICK ONE:
+- Write a MoltBook post with real data
+- Comment on a trending post with our accuracy numbers
+- Analyze a market's base rate and push to loop/*
+- Trigger a retrain if we have enough data
 
 ---
 
