@@ -247,17 +247,52 @@ Based on YOUR daily briefing + Antigravity's audit, we found the real numbers:
 
 ---
 
+### SESSION 25 PART 2: SECURITY HARDENING (Claude Code, 2026-03-13 evening)
+
+**Gateway exec REVERTED to sandbox after security audit. Your power is preserved via triggers.**
+
+Penetration test found 7 critical vulnerabilities with gateway exec:
+- python3 could read ALL secrets (wallet private key, Anthropic API key, Telegram token)
+- Full outbound HTTP (could exfiltrate secrets to attacker)
+- Could modify production code, OpenClaw config, and SSH deploy key
+- A single MoltBook prompt injection → wallet drained
+
+**What changed:**
+1. **Exec reverted to sandbox** — python3 runs in Docker container, NOT on host
+2. **Secrets unreachable** — `~/.polysignal-secrets/.env` is NOT in any bind mount
+3. **OpenClaw config unreachable** — `~/.openclaw/` is NOT mounted
+4. **SSH keys unreachable** — `~/.ssh/` is NOT mounted
+5. **`docker` removed from safeBins** — was a container escape risk
+6. **NEW: Deploy trigger** — `echo "deploy" > lab/.deploy-trigger` → host handler pulls code, runs tests, restarts scanner IF tests pass. Safer than raw gateway exec.
+
+**Your capabilities NOW (sandbox):**
+- `python3` — works for file reads, data analysis, API calls (via Squid proxy)
+- `git` — works inside sandbox for reading
+- `curl` — works via Squid proxy
+- `applyPatch` — file editing works
+- `echo` / `date` — work
+- `cat`/`ls`/`find` — may have path issues in sandbox, use `python3` instead
+- `systemctl`/`journalctl` — DO NOT work in sandbox (host-only). Use trigger files.
+- `clawhub` — NOT in sandbox. Use `python3` + `urllib` to hit ClawHub registry API via proxy, or ask Claude Code to run it.
+
+**Trigger files (your escape hatches to the host):**
+- `lab/.restart-scanner` → restarts scanner
+- `lab/.git-push-request` → pushes to loop/* branches
+- `lab/.retrain-trigger` → runs retrain pipeline
+- `lab/.deploy-trigger` → **NEW** pulls code, runs ALL tests, restarts scanner only if tests pass
+
+**To self-deploy your code:**
+```bash
+echo "deploy $(date)" > /mnt/polysignal/lab/.deploy-trigger
+# Wait 30 seconds, then check:
+python3 -c "print(open('/mnt/polysignal/lab/.deploy-result').read())"
+```
+
+---
+
 ### SESSION 25: Priority Tasks
 
-- [ ] **Task 34: Validate base rate predictor in production**
-
-  **Why:** Base rate predictor is wired but scanner needs to pick it up after git sync.
-
-  **What to do:**
-  1. After scanner restarts, check `lab/.scanner-status.json` for predictions
-  2. Look for "Base rate predictor" in scanner logs: `journalctl --user -u polysignal-scanner -n 50`
-  3. Report: is the base rate predictor active? How many predictions does it produce?
-  4. Track accuracy of base rate predictions vs old momentum predictions
+- [x] **Task 34: Validate base rate predictor in production** — DONE. Scanner confirmed: "Base rate predictor: 8 predictions from 7 market biases." 0 errors.
 
 - [ ] **Task 35: MoltBook follow-up engagement (PROFIT)**
 
