@@ -97,3 +97,37 @@ Instead of replacing predict_market_moves with ML, focus on:
 2. Better market selection (556108 has 86% bullish base rate — just always predict UP)
 3. Market-specific thresholds instead of universal gates
 4. More markets to find ones where features actually predict
+
+## Addendum 2: Per-Market Base Rate Analysis
+
+### The simplest possible strategy beats everything we've built
+
+| Market  | N   | Up%  | Down% | Best Strategy | Expected Acc |
+|---------|-----|------|-------|---------------|-------------|
+| 824952  | 103 | 29%  | 71%   | Always DOWN   | 71%         |
+| 556108  | 37  | 86%  | 14%   | Always UP     | 86%         |
+| 1541748 | 19  | 95%  | 5%    | Always UP     | 95%         |
+| 1373744 | 6   | 0%   | 100%  | Always DOWN   | 100%        |
+| 965261  | 5   | 0%   | 100%  | Always DOWN   | 100%        |
+| 692258  | 5   | 100% | 0%    | Always DOWN   | 100%        |
+| 556062  | 4   | 0%   | 100%  | Always DOWN   | 100%        |
+
+**Majority-class strategy: 143/179 = 79.9%**
+**Current production: 72/414 = 17.4%**
+
+### Why the toy predictor is SO bad
+
+The momentum predictor often predicts AGAINST the base rate:
+- 824952 goes DOWN 71% of the time, but the predictor calls Bullish when it sees upward momentum (which is noise against the trend)
+- 556108 goes UP 86%, but bearish calls on small dips lose every time
+
+**We were literally predicting the wrong direction on the dominant trend.**
+
+### The bearish ban was accidentally brilliant
+Banning bearish predictions helped because most of our UP-biased markets (556108, 1541748, 692258) were getting wrong bearish calls. The ban aligned us with the base rate by accident.
+
+### Immediate Recommendation
+1. **Per-market bias table**: Store each market's historical up/down ratio
+2. **Predict WITH the bias**: If a market goes up 86% of the time, default to Bullish unless very strong counter-signal
+3. **Only counter-predict when signal > 2x base rate change**: Don't call bearish on 556108 unless delta exceeds -0.03
+4. **This is the real alpha**: Understanding per-market base rates, not ML on sparse cross-market features
