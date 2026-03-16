@@ -313,8 +313,8 @@ def prediction_node(state: LoopState) -> LoopState:
                     })
                 use_base_rate = True
                 print(f"  📊 Base rate predictor: {len(predictions)} predictions from {len(predictor.biases)} market biases")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  ⚠ Base rate predictor failed: {e}")
 
         enhanced = 0
         if not use_base_rate:
@@ -340,58 +340,84 @@ def prediction_node(state: LoopState) -> LoopState:
                     pred["time_horizon"] = sig.get("time_horizon", "24h")
                     enhanced += 1
 
-        # ── XGBoost confidence gate (Session 15) ─────────────────────────────
-        # Meta-predictor: evaluates P(this prediction will be CORRECT).
-        # Suppresses predictions where the model expects them to fail.
+        # ── Confidence gate ──────────────────────────────────────────────────
+        # Session 26: Two gate modes depending on predictor type.
+        #
+        # Base rate gate (use_base_rate=True):
+        #   Uses base rate confidence directly. No bearish ban — the base rate
+        #   predictor predicts WITH market trends (556108 = 94% Bearish).
+        #   The Session 24 bearish ban was correct for the old momentum predictor
+        #   (which fought trends, 5.6% accuracy) but wrong for base rate (which
+        #   aligns with them). XGBoost gate scores are meaningless for base rate
+        #   predictions since the model was trained on old predictor data.
+        #
+        # XGBoost gate (use_base_rate=False, fallback):
+        #   Original gate with bearish ban — still valid for old predictor.
         suppressed = 0
         gate_ran = False
-        try:
-            from lab.xgboost_baseline import load_model as xgb_load, select_features
-            from lab.feature_engineering import extract_features
-            xgb_model, xgb_features = xgb_load()
-            db_path = os.getenv("DB_PATH", "/opt/loop/data/test.db")
 
+        if use_base_rate:
+            # ── Base rate confidence gate (Session 26) ────────────────────────
+            BASE_RATE_GATE_THRESHOLD = 0.60
             gated = []
             for pred in predictions:
-                market_id = pred.get("market_id")
-                if not market_id:
-                    gated.append(pred)
-                    continue
-                # Skip Neutral — no directional claim to evaluate (Session 19)
-                if pred.get("hypothesis") == "Neutral":
+                hyp = pred.get("hypothesis")
+                conf = pred.get("confidence", 0.0)
+                if hyp == "Neutral":
                     suppressed += 1
                     continue
-                try:
-                    fv = extract_features(market_id, db_path=db_path)
-                    X = select_features(fv, xgb_features)
-                    proba = xgb_model.predict_proba(X)[0]
-                    p_correct = float(proba[1])
-                    pred["xgb_p_correct"] = round(p_correct, 3)
-
-                    # Session 24: Ban bearish predictions entirely.
-                    # Live post-gate data: Bullish 100% (6W/0L), Bearish 5.6% (1W/17L).
-                    # XGBoost gives false confidence on bearish (0.94 on INCORRECT).
-                    # Model is fundamentally miscalibrated for bearish direction.
-                    # Bullish-only until bearish-specific model is trained.
-                    if pred.get("hypothesis") == "Bearish":
-                        suppressed += 1
-                        continue
-                    gate_threshold = 0.5
-                    if p_correct < gate_threshold:
-                        suppressed += 1
-                        continue
-                    gated.append(pred)
-                except Exception as e:
-                    print(f"  ⊘ XGBoost gate: {market_id} feature extraction failed: {e}")
-                    gated.append(pred)
+                if conf < BASE_RATE_GATE_THRESHOLD:
+                    suppressed += 1
+                    continue
+                gated.append(pred)
             predictions = gated
             gate_ran = True
-        except Exception as e:
-            print(f"  ⊘ XGBoost gate skipped: {e}")
+            print(f"  🔍 Base rate gate (>={BASE_RATE_GATE_THRESHOLD}): {len(predictions)} passed, {suppressed} suppressed")
+        else:
+            # ── XGBoost confidence gate (Session 15) ──────────────────────────
+            try:
+                from lab.xgboost_baseline import load_model as xgb_load, select_features
+                from lab.feature_engineering import extract_features
+                xgb_model, xgb_features = xgb_load()
+                db_path = os.getenv("DB_PATH", "/opt/loop/data/test.db")
+
+                gated = []
+                for pred in predictions:
+                    market_id = pred.get("market_id")
+                    if not market_id:
+                        gated.append(pred)
+                        continue
+                    if pred.get("hypothesis") == "Neutral":
+                        suppressed += 1
+                        continue
+                    try:
+                        fv = extract_features(market_id, db_path=db_path)
+                        X = select_features(fv, xgb_features)
+                        proba = xgb_model.predict_proba(X)[0]
+                        p_correct = float(proba[1])
+                        pred["xgb_p_correct"] = round(p_correct, 3)
+
+                        # Session 24: Ban bearish for old predictor (fights trends).
+                        if pred.get("hypothesis") == "Bearish":
+                            suppressed += 1
+                            continue
+                        gate_threshold = 0.5
+                        if p_correct < gate_threshold:
+                            suppressed += 1
+                            continue
+                        gated.append(pred)
+                    except Exception as e:
+                        print(f"  ⊘ XGBoost gate: {market_id} feature extraction failed: {e}")
+                        gated.append(pred)
+                predictions = gated
+                gate_ran = True
+            except Exception as e:
+                print(f"  ⊘ XGBoost gate skipped: {e}")
+
+            if gate_ran:
+                print(f"  🔍 XGBoost gate: {len(predictions)} passed, {suppressed} suppressed")
 
         state["predictions"] = predictions
-        if gate_ran:
-            print(f"  🔍 XGBoost gate: {len(predictions)} passed, {suppressed} suppressed")
         predictor_label = "base-rate" if use_base_rate else f"{enhanced} signal-enhanced"
         print(f"  ✓ {len(predictions)} hypotheses ({predictor_label})")
 

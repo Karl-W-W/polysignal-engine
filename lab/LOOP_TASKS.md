@@ -290,6 +290,79 @@ python3 -c "print(open('/mnt/polysignal/lab/.deploy-result').read())"
 
 ---
 
+### SESSION 26 CHANGES (Claude Code, 2026-03-16)
+
+**CRITICAL FIX: Prediction pipeline was deadlocked — 0 predictions since Session 25.**
+
+**Root cause:** The XGBoost gate + bearish ban combined to suppress ALL base rate predictions:
+- 556108 (94% Bearish bias, our strongest market) → Bearish → **banned** by Session 24 rule
+- Other markets had <10 samples → Neutral → **suppressed**
+- Result: 0 predictions passed the gate for 3 days
+
+**The bearish ban was correct for the OLD predictor** (which fought market trends, 5.6% accuracy).
+**But it was WRONG for the base rate predictor** — the base rate predicts WITH the trend.
+556108 goes down 94% of the time. Predicting Bearish = predicting with the 94% trend.
+
+**What changed:**
+1. **Two-mode gate logic** — when base rate predictor is active:
+   - Bearish ban REMOVED (base rate aligns with trends, not against them)
+   - XGBoost gate BYPASSED (trained on old predictor data, meaningless for base rate)
+   - Uses base rate confidence as gate instead (threshold: 0.60)
+   - When base rate fails, old predictor + XGBoost gate + bearish ban still apply
+
+2. **Added error logging** to base rate predictor try/except (was `except Exception: pass` — silent failure)
+
+3. **Three research files written for you:**
+   - `lab/research_gateway_security.md` — OpenClaw gateway hardening (5 layers, exec allowlists, our gaps)
+   - `lab/research_dgx_maximization.md` — DGX Spark benchmarks, TensorRT-LLM, fine-tuning, memory budget
+   - `lab/research_openclaw_autonomy.md` — Real agent deployments, trust escalation, self-deploying code patterns
+
+**Expected behavior after scanner restart:**
+```
+📊 Base rate predictor: 7 predictions from 7 market biases
+🔍 Base rate gate (>=0.60): 1-2 passed (556108 Bearish 94%), N suppressed
+📝 1-2 predictions recorded
+💰 1 paper trade(s) logged
+```
+
+**Tests: 392/392 passing.**
+
+---
+
+### SESSION 26: Priority Tasks
+
+- [ ] **Task 37: Read research files + extract actionable items (30 min)**
+
+  **Why:** KWW did deep research on 3 topics. Your job: extract implementation tasks.
+
+  **What to do:**
+  1. Read `lab/research_gateway_security.md` — extract security improvements
+  2. Read `lab/research_dgx_maximization.md` — extract performance improvements
+  3. Read `lab/research_openclaw_autonomy.md` — extract autonomy improvements
+  4. Write actionable items to `lab/LEARNINGS_TO_TASKS.md` (Pending section)
+  5. Push to `loop/research-extraction`
+
+- [ ] **Task 38: Monitor new base rate predictions (ongoing)**
+
+  **Why:** The gate fix should start producing predictions again. Track accuracy.
+
+  **What to do:**
+  1. Check `lab/.scanner-status.json` — predictions should be > 0 now
+  2. Track new predictions in `prediction_outcomes.json`
+  3. After 24h: report accuracy on Telegram
+  4. After 48h: compare base rate accuracy to old predictor accuracy
+  5. Target: 60%+ accuracy on new predictions
+
+- [ ] **Task 39: First REAL paper trade validation (after predictions resume)**
+
+  **Why:** Paper trades were all on fake markets (test fixtures). Need real ones.
+
+  **What to do:**
+  1. Check `lab/trading_log.json` for new entries with REAL market IDs
+  2. Verify: market_id is NOT `0xfake_*`, title is NOT "Unknown Market"
+  3. Report first real paper trade on Telegram
+  4. After 10 real paper trades: summarize win rate
+
 ### SESSION 25: Priority Tasks
 
 - [x] **Task 34: Validate base rate predictor in production** — DONE. Scanner confirmed: "Base rate predictor: 8 predictions from 7 market biases." 0 errors.
