@@ -163,6 +163,18 @@ def run_scanner():
             # ── Write status file for Loop visibility (Session 19) ────────
             _write_scanner_status(cycle_count, n_obs, n_preds, n_errors, elapsed, result)
 
+            # ── Watchdog checks (Session 26) — self-healing ──────────────
+            # Runs every 12th cycle (~1 hour) to avoid overhead on every 5-min scan
+            if cycle_count % 12 == 0:
+                try:
+                    from lab.watchdog import run_watchdog_checks
+                    alerts = run_watchdog_checks()
+                    if alerts:
+                        for a in alerts:
+                            log.warning(f"  🐕 [{a.severity}] {a.check}: {a.message}")
+                except Exception as wd_err:
+                    log.warning(f"  Watchdog failed: {wd_err}")
+
         except Exception as e:
             elapsed = time.time() - start
             log.error(f"--- Cycle {cycle_count} CRASHED after {elapsed:.1f}s: {e} ---")
