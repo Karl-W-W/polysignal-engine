@@ -90,6 +90,10 @@ SCANNER_STATUS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "lab", ".scanner-status.json"
 )
+EVENTS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "lab", ".events.jsonl"
+)
 
 
 def _write_scanner_status(cycle, n_obs, n_preds, n_errors, elapsed, result):
@@ -111,6 +115,34 @@ def _write_scanner_status(cycle, n_obs, n_preds, n_errors, elapsed, result):
             json.dump(status, f, indent=2)
     except Exception as e:
         log.warning(f"Failed to write scanner status: {e}")
+
+
+def _emit_event(event_type: str, data: dict = None):
+    """Append an event to the event log for Loop to watch.
+
+    Session 26: Event-driven presence — Loop checks this file instead of
+    polling scanner status. Only emits on meaningful state changes.
+    """
+    try:
+        import json
+        event = {
+            "type": event_type,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **(data or {}),
+        }
+        with open(EVENTS_PATH, "a") as f:
+            f.write(json.dumps(event) + "\n")
+        # Cap at 500 lines to prevent unbounded growth
+        try:
+            with open(EVENTS_PATH, "r") as f:
+                lines = f.readlines()
+            if len(lines) > 500:
+                with open(EVENTS_PATH, "w") as f:
+                    f.writelines(lines[-200:])
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 def run_scanner():
@@ -162,6 +194,12 @@ def run_scanner():
 
             # ── Write status file for Loop visibility (Session 19) ────────
             _write_scanner_status(cycle_count, n_obs, n_preds, n_errors, elapsed, result)
+
+            # ── Emit events for meaningful state changes (Session 26) ────
+            if n_preds > 0:
+                _emit_event("prediction_made", {"cycle": cycle_count, "count": n_preds})
+            if n_errors > 0:
+                _emit_event("error_detected", {"cycle": cycle_count, "errors": result.get("errors", [])[:3]})
 
             # ── Watchdog checks (Session 26) — self-healing ──────────────
             # Runs every 12th cycle (~1 hour) to avoid overhead on every 5-min scan

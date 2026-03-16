@@ -1,6 +1,6 @@
 # NOW.md — Loop's Operational State
 # If you wake up confused, read this first.
-# Updated: Session 25 (2026-03-13)
+# Updated: Session 26 (2026-03-16)
 
 ## Who You Are
 You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
@@ -11,14 +11,23 @@ You are on Opus 4.6 (NOT Ollama — that experiment failed).
 - **Scanner**: `systemctl --user status polysignal-scanner.service`
   - 5-min cycles, 14 markets, **6 excluded** (824952, 556062, 1373744, 965261, 1541748, 692258)
   - Status file: `lab/.scanner-status.json`
+  - **Events**: `lab/.events.jsonl` — append-only event log. Check for new events instead of polling.
 - **TRADING_ENABLED**: false (paper mode only)
-- **Paper trading**: LIVE in prediction_node — every gated bullish prediction → `lab/trading_log.json`
-- **Bearish predictions**: BANNED — suppressed at gate regardless of confidence
-- **Predictor**: **BASE RATE** (Session 25) — replaces toy momentum check
-  - Per-market historical bias drives predictions (79.9% expected vs 17.4% old)
-  - XGBoost gate still validates as secondary check
-- **Model**: XGBoost at `/opt/loop/data/models/xgboost_baseline.pkl`
-  - Bullish-only mode. Post-gate bullish: 100% (6W/0L). Bearish was 5.6% (1W/17L) — banned.
+- **Paper trading**: LIVE — every gated prediction → `lab/trading_log.json`
+- **Bearish predictions**: ALLOWED for base rate predictor (Session 26). Still banned for old momentum predictor.
+- **Predictor**: **BASE RATE** (Session 25) — predicts WITH market trends
+  - 556108: Bearish 94% confidence (was blocked, now passes gate)
+  - Two-mode gate: base rate uses confidence >= 0.60 (no XGBoost, no bearish ban)
+  - Old predictor fallback: keeps XGBoost gate + bearish ban
+- **Watchdog**: `lab/watchdog.py` — runs every 12th scanner cycle (~hourly)
+  - Detects: prediction drought, accuracy regression, scanner staleness, fake paper trades
+  - Alerts: `lab/.watchdog-alerts`
+- **Feedback loop**: `lab/feedback_loop.py` — run manually or via trigger
+  - Per-market accuracy, auto-exclude bad markets, flag stars, trigger retrains, EV calc
+  - Report: `lab/.feedback-report`
+- **Evolution tracker**: `lab/evolution_tracker.py` — tracks whether changes actually help
+  - Record hypothesis → wait → measure actual result → confirm/refute
+  - Log: `lab/.evolution-log.jsonl`
 
 ## Your Capabilities — SANDBOX MODE (Session 25 final)
 **You run in Docker sandbox. Paths start with `/mnt/polysignal/`.**
@@ -62,10 +71,15 @@ You are on Opus 4.6 (NOT Ollama — that experiment failed).
 - `lab/LOOP_TASKS.md` — your task queue (ALWAYS read this, NOT /mnt/polysignal/TASKS.md)
 - `lab/NOW.md` — this file (your operational state)
 - `lab/LEARNINGS_TO_TASKS.md` — bridge between intelligence and implementation
-- `lab/trading_log.json` — paper trade history (NEW — monitor this)
-- `lab/backtester.py` — run backtests on prediction data
-- `lab/polymarket_trader.py` — paper/live trading module
+- `lab/trading_log.json` — paper trade history
 - `lab/.scanner-status.json` — scanner health
+- `lab/.events.jsonl` — **NEW** event log (check this instead of polling status)
+- `lab/.watchdog-alerts` — **NEW** failure alerts (check on every heartbeat)
+- `lab/.feedback-report` — **NEW** accuracy analysis (run `python3 -m lab.feedback_loop`)
+- `lab/.evolution-log.jsonl` — **NEW** tracks whether changes helped
+- `lab/research_gateway_security.md` — **NEW** OpenClaw security architecture research
+- `lab/research_dgx_maximization.md` — **NEW** DGX Spark benchmark + optimization research
+- `lab/research_openclaw_autonomy.md` — **NEW** Real agent deployments + trust escalation
 
 ## What NOT To Do
 - Do NOT run `.sh` scripts
