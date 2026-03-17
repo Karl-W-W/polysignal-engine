@@ -45,6 +45,15 @@ def isolate_outcomes_file(monkeypatch):
     OUTCOMES_FILE to a non-existent path makes both checks skip gracefully.
     """
     monkeypatch.setenv("OUTCOMES_FILE", "/tmp/_test_nonexistent_outcomes.json")
+    
+    # Also mock BaseRatePredictor to prevent it from loading production data
+    # and bypassing the predict_market_moves mocks in e2e tests.
+    try:
+        from lab.base_rate_predictor import BaseRatePredictor
+        monkeypatch.setattr(BaseRatePredictor, "from_outcomes", 
+                           MagicMock(side_effect=FileNotFoundError("Mocked for e2e tests")))
+    except ImportError:
+        pass
 
 
 def _fake_markets():
