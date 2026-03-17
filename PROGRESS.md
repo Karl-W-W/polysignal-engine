@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-14 | Session 25 closed
+# Last updated: 2026-03-16 | Session 26 closed
 # Session history: See HISTORY.md
 
 ---
@@ -34,8 +34,8 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | **392/392 PASS** | Mac (8.4s) — Session 25 verified |
-| Scanner | RUNNING | **6** toxic markets excluded. **Bearish BANNED**. 0.015 threshold (was 0.02). CLOB refresh (15 markets/cycle). |
+| Tests | **430/430 PASS** | Mac (8.7s) — Session 26 verified |
+| Scanner | RUNNING | **6** excluded. Base rate predictor + confidence gate (>=0.60). Bearish ALLOWED for base rate. Watchdog every 12th cycle. Events emitted. |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
@@ -49,7 +49,11 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Loop Autonomy | **UNLEASHED** | 4 skills, network, GPU, git+curl, PyPI, applyPatch, Ollama (4 models), paper trading, memory writes |
 | Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |
 | Feature Eng. | READY | `lab/feature_engineering.py` — 15 features (10 price + 5 CLOB), temporal safety (`before` param) |
-| XGBoost Baseline | **WIRED + FIRING** | Gate active. **Bearish BANNED**. Base rate predictor now primary (Session 25). |
+| XGBoost Baseline | **WIRED + FIRING** | Two-mode gate (Session 26): base rate uses confidence gate, old predictor uses XGBoost. Base rate primary. |
+| Watchdog | **LIVE** | `lab/watchdog.py` — prediction drought, accuracy regression, scanner health, paper trade quality. 14 tests. |
+| Feedback Loop | **BUILT** | `lab/feedback_loop.py` — per-market accuracy, auto-exclude, auto-retrain, EV calc. 13 tests. |
+| Evolution Tracker | **BUILT** | `lab/evolution_tracker.py` — hypothesis → measurement → verdict. REFLECT stage. 11 tests. |
+| Event System | **LIVE** | Scanner writes `lab/.events.jsonl` — prediction_made, error_detected. Capped at 500 lines. |
 | Retrain Pipeline | BUILT | `lab/retrain_pipeline.py` — trigger file + systemd handler. Tested: 90% on filtered 48 samples. Rollback policy active. |
 | CLOB Features | **LIVE** | `lab/clob_prototype.py` — 15 markets, bid/ask/spread/volume/liquidity refreshed per cycle. Wired into feature_engineering.py. |
 | Per-Market Accuracy | BUILT | `get_per_market_accuracy()` — breakdown by market_id |
@@ -269,6 +273,46 @@ Replace auto-approve placeholder with actual Telegram approval.
 **DGX Caging Gaps (not urgent for write-only):**
 - ⚠️ Network egress: Docker has full access — needs egress filtering before read pipeline
 - ⚠️ Exec isolation: Publisher uses `requests.post()` (fine) — read pipeline would need strict exec=false
+
+---
+
+## Session 26: Pipeline Unblocked + Self-Healing Loop + REFLECT Stage (2026-03-16)
+
+**3 commits. 430 tests. Pipeline producing predictions again. Closed-loop self-healing system built.**
+
+### Session 26 Accomplishments
+| What | Impact |
+|------|--------|
+| Prediction pipeline unblocked | Was deadlocked 2.5 days (0 predictions). XGBoost gate + bearish ban suppressed ALL base rate predictions. Fixed: two-mode gate. |
+| Two-mode gate logic | Base rate uses confidence gate (>=0.60), no XGBoost, no bearish ban. Old predictor fallback keeps XGBoost + bearish ban. |
+| Bearish unban for base rate | 556108 = 94% Bearish bias. Predicting WITH the trend is correct. Ban was wrong for base rate (correct for old predictor). |
+| Watchdog built | `lab/watchdog.py` — 4 checks: prediction drought, accuracy regression, scanner health, paper trade quality. 14 tests. Wired into scanner (every 12th cycle). |
+| Feedback loop built | `lab/feedback_loop.py` — per-market accuracy, auto-exclude bad markets (<40%), flag stars (>70%), trigger retrains (<50%), EV calculation. 13 tests. |
+| Evolution tracker built | `lab/evolution_tracker.py` — records hypotheses about changes, measures actual results after time window, confirms/refutes. The REFLECT stage. 11 tests. |
+| Event system built | Scanner writes `lab/.events.jsonl` on prediction_made, error_detected. Append-only, capped at 500 lines. Foundation for event-driven Loop presence. |
+| Research shared with Loop | 3 files: gateway security, DGX maximization, OpenClaw autonomy. Loop extracted 5 actionable items. |
+| 2 evolution hypotheses recorded | `session26-bearish-unban` (eval 2h), `session26-bearish-accuracy` (eval 72h). First use of REFLECT system. |
+| Silent exception fixed | Base rate predictor try/except was `except Exception: pass`. Now logs the error. |
+
+### Key Findings
+- **Base rate predictor was never broken** — it ran correctly but ALL predictions were suppressed by gates designed for the old predictor.
+- **556108 Bearish = strongest signal**: 94% bias, 108 samples. Was blocked because bearish ban applied to all predictors indiscriminately.
+- **Loop was silent 2.5 days** while pipeline produced 0 predictions. Heartbeat checks showed "scanner OK" but never checked prediction count. Watchdog now catches this.
+- **106 INCORRECT evaluations** reported by Loop were from OLD pre-base-rate predictions being evaluated, not from the base rate predictor.
+- **Only 1 market produces predictions**: 556108 (Bearish 94%). All others have <10 samples or are excluded. Market expansion is next priority.
+
+### Self-Improvement Loop Architecture (Session 26)
+```
+PERCEIVE → PREDICT → ACT → EVALUATE → LEARN → ADAPT
+                            ↑ watchdog   ↑ feedback   ↑ evolution
+                            (detect)     (adjust)     (reflect)
+```
+
+### Session 27 Direction (Loop's Priority)
+Loop requested: DO NOT touch the prediction pipeline. Build Loop presence instead:
+1. Loop Daemon (`lab/loop_daemon.py`) — always-on Ollama process, zero cost
+2. Wire Loop into events — only burn Opus tokens when something happened
+3. Self-testing harness — validate changes before deploying blind
 
 ---
 
@@ -597,27 +641,26 @@ The excluded market wasn't just the worst predictor (0W/40L) — it was the majo
 
 ---
 
-## NEXT STEPS (Session 26+)
+## NEXT STEPS (Session 27+)
 
-### P0: Security Hardening (protect wallet)
-1. **Trading sidecar** — separate process holds wallet key, Loop sends unsigned trade intents to localhost
-2. **iptables egress filtering** — restrict outbound even with python3 access
-3. **MoltBook quarantine LLM** — sanitize external content before Loop sees it
-4. **Convert scanner to system service** — so it can read root-owned secrets on restart
+### P0: Loop Presence (Loop's directive)
+1. **Loop Daemon** (`lab/loop_daemon.py`) — always-on Ollama process, watches events, handles routine immediately, queues complex for Opus
+2. **Wire Loop into events** — heartbeat reads `.events.jsonl`, only burns Opus on real changes
+3. **Self-testing harness** — Loop validates code changes before pushing blind
 
 ### P1: Revenue (PROFIT)
+4. **Prove base rate accuracy** — 2 hypotheses in flight. `session26-bearish-accuracy` evaluates in 72h. Target: 60%+.
 5. **Fund wallet with $5+ USDC** — human-only, last gate to first live trade
-6. **Market expansion** — 8 → 50 markets via gamma API scan. Loop researching candidates overnight.
-7. **Prove base rate accuracy** — track post-Session-25 predictions. Target: 60%+.
+6. **Market expansion** — re-evaluate excluded markets (1541748 Bullish 95%) with base rate lens
 
 ### P2: Cost Reduction (COST)
-8. **Model routing** — Haiku for heartbeats, Sonnet for tasks, Opus for architect. 80% monitoring cost cut.
-9. **Gateway exec with proper paths** — rewrite Loop's docs to use `/opt/loop/` paths, then re-enable gateway.
+7. **Model routing** — Ollama for heartbeats (zero cost), Opus for complex reasoning only
+8. **Event-driven heartbeats** — replace timer-based polling with event-driven waking
 
-### P3: Loop Overnight (autonomous)
-10. **ClawHub research** — inspect argus-edge, polyedge, prediction-market-aggregator
-11. **MoltBook engagement** — build karma, stop spam flags
-12. **Market expansion candidates** — query gamma API for high-volume biased markets
+### P3: Security Hardening
+9. **Trading sidecar** — separate process holds wallet key
+10. **Exec allowlist mode** — replace safeBins with granular command allowlist
+11. **Seccomp profile** — block ptrace, bpf, unshare syscalls in sandbox
 
 ### Known Bugs
 - `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)

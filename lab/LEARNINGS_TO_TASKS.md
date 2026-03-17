@@ -67,6 +67,16 @@
 
 ## Implemented (Done)
 
+### Self-Healing Pipeline (Session 26)
+- **Source**: Loop's 2.5-day silence while predictor was broken
+- **Implementation**: `lab/watchdog.py` (prediction drought, accuracy regression, scanner health, paper trade quality), `lab/feedback_loop.py` (per-market accuracy, auto-exclude, auto-retrain, EV), `lab/evolution_tracker.py` (hypothesis → measurement → verdict)
+- **Result**: Closed the EVALUATE → LEARN → REFLECT loop. First evolution hypotheses recorded.
+
+### Base Rate Gate Fix (Session 26)
+- **Source**: Pipeline deadlock — XGBoost gate + bearish ban suppressed ALL base rate predictions for 2.5 days
+- **Implementation**: Two-mode gate in prediction_node. Base rate uses confidence >= 0.60 (no XGBoost, no bearish ban). Old predictor keeps XGBoost + bearish ban.
+- **Result**: 556108 Bearish (94% confidence) now passes gate. 1 prediction per cycle.
+
 ### Base Rate Predictor (Session 25)
 - **Source**: Loop's pipeline audit + LOMO validation + per-market base rate analysis
 - **Implementation**: `lab/base_rate_predictor.py` wired into prediction_node as primary predictor

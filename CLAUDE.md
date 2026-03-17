@@ -30,7 +30,11 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **Sandbox image**: `openclaw-sandbox:bookworm-slim` with git, curl, PYTHONPATH, User-Agent baked in
 - **Heartbeat**: 30min, active 07:00-01:00 CET, Telegram delivery, MoltBook scan + engagement wired in
 - **MoltBook JWT**: deployed to container environment
-- **Auto-merge CI**: pushes to `loop/*` auto-merge if 382 tests pass
+- **Auto-merge CI**: pushes to `loop/*` auto-merge if 430 tests pass
+- **Watchdog**: `lab/watchdog.py` — runs every 12th scanner cycle, detects failures, writes alerts
+- **Feedback loop**: `lab/feedback_loop.py` — per-market accuracy, auto-exclude, auto-retrain
+- **Evolution tracker**: `lab/evolution_tracker.py` — hypothesis → measurement → verdict (REFLECT)
+- **Event system**: Scanner writes `lab/.events.jsonl` (prediction_made, error_detected)
 - **Retrain trigger**: `echo "retrain" > lab/.retrain-trigger` → systemd watcher
 - **applyPatch**: ENABLED — native file editing from sandbox
 - **Ollama**: Reachable at `http://172.17.0.1:11434` (4 models: 3b, 14b, 2x 70B, zero cost)
@@ -53,7 +57,7 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 392/392 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
+Expected: 430/430 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
 
 ## Working with Loop
 - Assign tasks via `lab/LOOP_TASKS.md` — syncs through directory mount (NOT TASKS.md — Docker inode caching)

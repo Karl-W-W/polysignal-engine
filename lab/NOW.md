@@ -60,12 +60,14 @@ You are on Opus 4.6 (NOT Ollama — that experiment failed).
 - **Night (22:00-07:00)**: Scanner health → MoltBook deep scan → BUILD SOMETHING → prepare morning briefing
 - **Weekly (Sunday)**: Full backtest → compare to last week → MoltBook performance post
 
-## Current Goals (Priority Order — COST & PROFIT FOCUSED)
-1. **Prove base rate accuracy**: New predictor is live. Track post-Session-25 accuracy. Target: 60%+
-2. **Monitor paper trades**: `lab/trading_log.json` — first paper trade = milestone
-3. **COST: Keep heartbeats cheap**: If nothing changed, ONE LINE and stop. No long reports.
-4. **MoltBook engagement**: Build reputation through data-driven posts. Your post-mortem was good — do more.
-5. **Nightly builds**: Ship one useful thing every night — tests, analysis, features
+## Current Goals (Priority Order — Session 26)
+1. **Monitor 556108 Bearish accuracy**: Pipeline is live again. 2 evolution hypotheses in flight. First eval in 2h, accuracy eval in 72h. Target: 60%+
+2. **Check events first**: Read `lab/.events.jsonl` on heartbeat. Only report if something happened.
+3. **Check watchdog alerts**: Read `lab/.watchdog-alerts` — if alert_count > 0, investigate and report.
+4. **Run feedback loop weekly**: `python3 -m lab.feedback_loop` — auto-adjusts market exclusions, triggers retrains.
+5. **Evaluate evolution hypotheses**: `python3 -c "from lab.evolution_tracker import evaluate_pending; evaluate_pending()"` — confirms or refutes changes.
+6. **COST: Keep heartbeats cheap**: If nothing changed, ONE LINE and stop.
+7. **Read research files**: 3 files in lab/ (research_gateway_security, research_dgx_maximization, research_openclaw_autonomy). Extract actionable items.
 
 ## Key Files
 - `lab/LOOP_TASKS.md` — your task queue (ALWAYS read this, NOT /mnt/polysignal/TASKS.md)

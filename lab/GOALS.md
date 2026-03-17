@@ -95,10 +95,12 @@
 ## TIER 4: FULL AUTONOMY (Loop → Jarvis)
 
 ### 4.1 Continuous Agent Loop (replace heartbeat with a brain)
-- [ ] Event-driven architecture: scanner signal → trigger Loop action
+- [x] Event-driven architecture: scanner emits events to `.events.jsonl` (Session 26)
+- [x] Deadlock detection: watchdog detects prediction drought, accuracy regression (Session 26)
+- [ ] Loop Daemon (`lab/loop_daemon.py`) — always-on Ollama process, zero cost **[SESSION 27 P0]**
+- [ ] Wire Loop into events — heartbeat reads events, only burns Opus on changes **[SESSION 27 P1]**
 - [ ] Scheduled tasks: learning (6h), engagement (4h), reporting (12h)
 - [ ] Self-initiated work: Loop picks tasks, executes, reports
-- [ ] Deadlock detection: if Loop is stuck, auto-escalate
 - **Target**: Loop operates 24/7 with meaningful work, not pulse checks
 
 ### 4.2 Deployment Pipeline (Loop ships code)
@@ -117,6 +119,8 @@
 - **Target**: Revenue > costs within 1 month
 
 ### 4.4 Self-Improvement Loop
+- [x] Evolution tracker: hypothesis → measurement → verdict (Session 26)
+- [x] Feedback loop: per-market accuracy → auto-exclude/retrain (Session 26)
 - [ ] MoltBook intelligence → task generation → implementation → verification
 - [ ] Automatic A/B testing of model improvements
 - [ ] Performance dashboards (accuracy, revenue, engagement)
