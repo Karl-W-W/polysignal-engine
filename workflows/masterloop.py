@@ -276,6 +276,35 @@ def prediction_node(state: LoopState) -> LoopState:
         state["predictions"] = []
         return state
 
+    # ── META-GATE: Halt predictions if rolling accuracy is catastrophic ────
+    # Session 27: If recent accuracy is below threshold, auto-halt.
+    # This prevents accumulating wrong predictions while we fix the model.
+    # Only triggers when we have enough evaluated predictions to be confident.
+    META_GATE_MIN_EVALUATED = 20
+    META_GATE_ACCURACY_FLOOR = 0.40
+    try:
+        from lab.outcome_tracker import OutcomeState
+        outcomes_path = Path(os.getenv("OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"))
+        if outcomes_path.exists():
+            outcome_state = OutcomeState.load(outcomes_path)
+            stats = outcome_state.stats
+            total_eval = stats.get("total_evaluated", 0)
+            if total_eval >= META_GATE_MIN_EVALUATED:
+                correct = stats.get("correct", 0)
+                incorrect = stats.get("incorrect", 0)
+                directional = correct + incorrect
+                if directional > 0:
+                    rolling_acc = correct / directional
+                    if rolling_acc < META_GATE_ACCURACY_FLOOR:
+                        print(f"  🚨 META-GATE HALT: Accuracy {rolling_acc:.0%} ({correct}W/{incorrect}L) below {META_GATE_ACCURACY_FLOOR:.0%} floor")
+                        print(f"     Halting predictions until retrain or manual override.")
+                        state["predictions"] = []
+                        state["meta_gate_halted"] = True
+                        state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
+                        return state
+    except Exception as e:
+        print(f"  ⊘ Meta-gate check skipped: {e}")
+
     # ── Filter excluded markets BEFORE prediction (Session 19) ────────────
     # EXCLUDED_MARKETS only filtered signal detection, not prediction input.
     # 824952 (0W/40L) was still getting predicted and recorded every cycle.
@@ -310,6 +339,9 @@ def prediction_node(state: LoopState) -> LoopState:
                         "confidence": result.confidence,
                         "reasoning": result.reasoning,
                         "time_horizon": obs.get("time_horizon", "24h"),
+                        # Session 27: Pass title + price for paper trading
+                        "title": obs.get("title", obs.get("question", "")),
+                        "current_price": obs.get("current_price", obs.get("price", 0.0)),
                     })
                 use_base_rate = True
                 print(f"  📊 Base rate predictor: {len(predictions)} predictions from {len(predictor.biases)} market biases")
@@ -339,6 +371,33 @@ def prediction_node(state: LoopState) -> LoopState:
                     pred["reasoning"] = f"Signal-enhanced: {sig['direction']} (delta: {sig.get('change_24h', 0):.3f})"
                     pred["time_horizon"] = sig.get("time_horizon", "24h")
                     enhanced += 1
+
+        # ── Staleness detection (Session 27) ─────────────────────────────────
+        # If the last N recorded predictions are identical (same market, same
+        # hypothesis, same rounded confidence), the predictor is stuck in a loop.
+        # Skip this cycle to avoid accumulating stale predictions.
+        STALE_LOOKBACK = 10
+        try:
+            from lab.outcome_tracker import OutcomeState
+            outcomes_path = Path(os.getenv("OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"))
+            if outcomes_path.exists():
+                outcome_state = OutcomeState.load(outcomes_path)
+                recent = outcome_state.predictions[-STALE_LOOKBACK:] if len(outcome_state.predictions) >= STALE_LOOKBACK else []
+                if recent:
+                    signatures = set()
+                    for p in recent:
+                        sig = (p.get("market_id"), p.get("hypothesis"), round(p.get("confidence", 0), 2))
+                        signatures.add(sig)
+                    if len(signatures) == 1:
+                        stale_sig = list(signatures)[0]
+                        print(f"  ⚠ STALE: Last {STALE_LOOKBACK} predictions identical: {stale_sig[0]} {stale_sig[1]} @ {stale_sig[2]}")
+                        print(f"     Predictor is stuck. Skipping this cycle.")
+                        state["predictions"] = []
+                        state["stale_detected"] = True
+                        state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
+                        return state
+        except Exception as e:
+            print(f"  ⊘ Staleness check skipped: {e}")
 
         # ── Confidence gate ──────────────────────────────────────────────────
         # Session 26: Two gate modes depending on predictor type.

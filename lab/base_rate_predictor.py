@@ -166,20 +166,22 @@ class BaseRatePredictor:
         confidence = bias.bias_strength
         reasoning = f"Base rate: {bias.dominant_direction} wins {bias.bias_strength:.0%} of the time ({bias.total} samples)"
 
-        # Counter-signal check: only override if signal is strong AND against bias
+        # Counter-signal check: only override if signal is VERY strong AND against bias.
+        # Session 27: Tightened from 3% to 10% threshold. The old 3% threshold
+        # allowed routine intraday moves to flip a 94% confidence Bearish prediction
+        # to Bullish, contributing to the accuracy crisis. A 10pp move in a prediction
+        # market is genuinely significant; anything less should not override base rate.
         if signal_delta != 0.0:
-            # Is the signal going against the base rate?
             signal_bullish = signal_delta > 0
             bias_bullish = bias.dominant_direction == "Bullish"
 
             if signal_bullish != bias_bullish:
-                # Signal conflicts with base rate — only override if very strong
-                if abs(signal_delta) > 0.03:  # 3% move is significant
+                if abs(signal_delta) > 0.10:  # 10pp move — genuinely significant
                     direction = "Bullish" if signal_bullish else "Bearish"
-                    confidence = min(0.65, abs(signal_delta) * 5)
+                    confidence = min(0.65, abs(signal_delta) * 3)
                     reasoning = f"Counter-trend signal ({signal_delta:+.3f}) overrides base rate ({bias.dominant_direction} {bias.bias_strength:.0%})"
                 else:
-                    reasoning += f" (weak counter-signal {signal_delta:+.3f} ignored)"
+                    reasoning += f" (counter-signal {signal_delta:+.3f} below 10pp threshold, ignored)"
 
         return PredictionResult(
             market_id=market_id,

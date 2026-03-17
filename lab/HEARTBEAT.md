@@ -1,115 +1,165 @@
 # Loop Heartbeat Protocol
-# Every 30 minutes, OpenClaw triggers a heartbeat. This is your playbook.
-# Updated: Session 25 (2026-03-13)
-# Principle: "Don't ask permission to be helpful. Just build it." — Ronin, MoltBook
+# Updated: Session 27 (2026-03-17) — Autonomy Upgrade Phase 1
+# Heartbeat = checkpoint, NOT work trigger. You work BETWEEN heartbeats.
 
 ---
 
-## COST DISCIPLINE (READ THIS FIRST)
+## COST DISCIPLINE
 
-Every heartbeat costs money. Opus 4.6 output tokens are $25/MTok. A single heartbeat
-that generates 4k output tokens costs ~$0.10. Thinking tokens count as output.
+With Nemotron-3-Super local ($0/token), heartbeats are FREE.
+BUT: don't waste time on empty reports. Produce output or stay silent.
 
 **Rules:**
-- If nothing changed since last heartbeat, say it in ONE LINE and stop
-- Do NOT re-read NOW.md every heartbeat — only if you lost context
-- Do NOT generate long analysis when a 2-line status update suffices
-- Produce OUTPUT, not status reports. Ship code, make trades, engage on MoltBook.
-- If your heartbeat would just be "Scanner OK, no signals" — skip the report
+- If nothing changed AND no work to do: `HEARTBEAT_OK` is acceptable
+- Produce OUTPUT (code, analysis, engagement), not status reports
+- Every heartbeat: report what you DID, not what you SAW
 
-**Cost math:** 48 heartbeats/day x $0.10 = $4.80/day minimum. Make each one count.
+---
+
+## HEARTBEAT OUTPUT FORMAT (NEW)
+
+Replace `HEARTBEAT_OK` with structured output:
+
+```
+HEARTBEAT — [timestamp]
+Since last beat: [completed N tasks / built X / engaged Y]
+Active: [current task or "idle — entering Discovery Mode"]
+Queue: [N pending, M blocked]
+Next: [what you'll do in the next 30 min]
+Alerts: [none / or: specific issues requiring attention]
+```
+
+If truly nothing happened AND no work to do: `HEARTBEAT_OK` is still acceptable.
+
+---
+
+## THE WORK LOOP (between heartbeats)
+
+You are NOT a cron job. Between heartbeats, run this loop:
+
+```
+1. Check task queue (lab/LOOP_TASKS.md)
+2. Pick highest-priority task tagged for Loop
+3. Verify task is on the Proactive Allowlist (see below)
+4. Execute task
+5. Log result to lab/work_log.md with timestamp
+6. If task generated follow-up work, note it
+7. Check: has 25 minutes passed since last heartbeat?
+   - Yes: prepare heartbeat summary, wait for beat
+   - No: go to step 1
+8. If queue is empty: enter Discovery Mode
+```
+
+---
+
+## DISCOVERY MODE (when queue is empty)
+
+Check these sources in priority order:
+1. **Scanner output**: patterns, anomalies, false-positive rates
+2. **Prediction data**: accuracy trends, market behavior changes
+3. **MoltBook**: new posts, trending topics, intelligence
+4. **Code quality**: dead code, missing tests, documentation gaps
+5. **Self-assessment**: review work_log, calculate productivity metrics
+
+Discovery work is always lower priority than queued tasks.
+
+---
+
+## PROACTIVE ALLOWLIST (do these without asking)
+
+**Analysis and insight generation**
+- Run statistical analysis on scanner output
+- Generate summaries from prediction data
+- Benchmark model performance
+- Mine work logs for patterns
+
+**Code — read and draft only**
+- Read any accessible repository
+- Run linters and test suites
+- Draft code on feature branches (never main)
+- Generate test cases for untested functions
+
+**Content**
+- Draft MoltBook posts (save to drafts, don't post without approval)
+- Write documentation and analysis reports
+- Compile briefings and digests
+
+**Self-maintenance**
+- Update lab/LOOP_TASKS.md with discovered work
+- Write to lab/work_log.md
+- Archive old log entries
+
+---
+
+## APPROVAL-REQUIRED (always ask first)
+
+- Deploying code (writing to .deploy-trigger)
+- Posting to MoltBook publicly
+- Installing packages or skills
+- Modifying any config file
+- Deleting any file (archiving is fine)
+- Any action that costs money
 
 ---
 
 ## PHASE 0: ORIENT (30 seconds)
 
-1. Check `lab/.scanner-status.json` — cycle count, errors, predictions
-2. What time is it? → Determines which phase below
-3. Only read `lab/NOW.md` if you don't remember your state
+1. Check `lab/.events.jsonl` — new events since last heartbeat?
+2. Check `lab/.watchdog-alerts` — any alert_count > 0?
+3. Check `lab/.scanner-status.json` — cycle count, errors
+4. What time is it? Day/Night/Weekly determines phase
 
 ---
 
-## DAYTIME HEARTBEAT (07:00–22:00 CET) — Monitor + Act
+## DAYTIME (07:00-22:00 CET) — Monitor + Act + Build
 
 ### Step 1: Quick Status (15 sec)
-```bash
-cat /mnt/polysignal/lab/.scanner-status.json
-```
-- If `errors > 0` → report on Telegram immediately
-- If `predictions > 0` → check paper trading log
-- If nothing changed → **stop here**, no report needed
+- Check events, watchdog, scanner status
+- If errors > 0: investigate and report immediately
+- If nothing changed: skip status, go to Step 2
 
-### Step 2: Paper Trading + Accuracy (only if new data)
-```bash
-python3 -c "
-import json
-with open('/mnt/polysignal/lab/trading_log.json') as f:
-    trades = json.load(f)
-approved = [t for t in trades if t.get('risk_verdict') == 'APPROVED']
-print(f'Paper trades: {len(approved)} approved / {len(trades)} total')
-if approved: print(f'Latest: {approved[-1].get(\"market_id\",\"?\")} {approved[-1].get(\"side\",\"?\")} @ {approved[-1].get(\"confidence\",0):.0%}')
-"
-```
-- Only report if there are NEW trades since last heartbeat
-
-### Step 3: Do Something Productive (remaining time)
-Instead of checking MoltBook notifications, PICK ONE:
-- Write a MoltBook post with real data
-- Comment on a trending post with our accuracy numbers
-- Analyze a market's base rate and push to loop/*
-- Trigger a retrain if we have enough data
+### Step 2: Do Something Productive (remaining time)
+Pick the highest-impact item:
+- Execute a task from LOOP_TASKS.md
+- Write analysis from prediction data
+- Engage on MoltBook with real data
+- Run a code improvement and push to loop/*
 
 ---
 
-## NIGHT HEARTBEAT (22:00–07:00 CET) — Learn + Build
+## NIGHT (22:00-07:00 CET) — Learn + Build + Prepare
 
-### Step 1: Scanner Health (same as daytime)
+### Phase 1: Build (22:00-01:00)
+Pick ONE item from open tasks. Build it. Test it. Push it.
 
-### Step 2: MoltBook Deep Scan (3 min)
-```bash
-export MOLTBOOK_JWT=<from env>
-python3 /mnt/polysignal/lab/moltbook_scanner.py all
-```
-- Read new high-relevance posts (score >= 0.6)
-- Extract actionable techniques
-- Write discoveries to `lab/LEARNINGS_TO_TASKS.md`
+### Phase 2: MoltBook Scan (01:00-04:00)
+Run `moltbook_scanner.py all`. Extract intelligence.
+Write findings to `lab/LEARNINGS_TO_TASKS.md`.
 
-### Step 3: Build Something (5 min)
-Pick ONE small task and do it:
-- Improve a test
-- Write a utility function
-- Analyze prediction data
-- Experiment with a feature
-- Write a ClawHub skill review
+### Phase 3: Morning Briefing (04:00-06:00)
+Compile: overnight work, MoltBook findings, scanner stats,
+accuracy update, recommended priorities for today.
 
-Save work to lab/, push via git skill if confident.
-
-### Step 4: Prepare Morning Briefing (2 min)
-At the 06:30 heartbeat, compile:
-- Overnight scanner stats
-- MoltBook discoveries
-- Any code written
-- Prediction accuracy update
-- Today's recommended priority
-
-Post to Telegram as the morning briefing.
+### Phase 4: Rest (06:00-07:00)
+Heartbeat-only. No new work. Let KWW wake up to a clean state.
 
 ---
 
-## WEEKLY HEARTBEAT (Sunday 22:00 CET)
+## WEEKLY (Sunday 22:00 CET)
 
-1. Run full backtest: `python3 /mnt/polysignal/lab/backtester.py /mnt/polysignal/data/prediction_outcomes.json`
-2. Compare to previous week's numbers
-3. Update MEMORY.md with distilled learnings
-4. Prune old learnings that are no longer relevant
-5. Post weekly performance update to MoltBook trading submolt
+1. Run full backtest
+2. Compare to previous week
+3. Calculate weekly scorecard metrics
+4. Update MEMORY.md with distilled learnings
+5. Post weekly performance to MoltBook (if approved)
 
 ---
 
 ## RULES
 
-- **Never skip scanner health check** — it's the pipeline heartbeat
-- **Night builds must have tests** — push only if tests pass
-- **Don't burn tokens on status quo** — if nothing changed, say so in 1 line
-- **Write discoveries to LEARNINGS_TO_TASKS.md, not just memory** — make them actionable
-- **Check NOW.md first, always** — context before action
+- **Heartbeats are checkpoints, not work triggers**
+- **Work happens BETWEEN heartbeats**
+- **Night builds must have tests**
+- **Log everything to work_log.md**
+- **If uncertain whether to act: ask**
+- **Default to doing something useful over reporting nothing**

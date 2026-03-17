@@ -63,8 +63,8 @@ class TestBaseRatePredictor:
             )
         }
         predictor = BaseRatePredictor(biases)
-        # Large negative delta SHOULD override
-        result = predictor.predict("m1", signal_delta=-0.05)
+        # Large negative delta SHOULD override (Session 27: threshold raised to 10pp)
+        result = predictor.predict("m1", signal_delta=-0.12)
         assert result.direction == "Bearish"
 
     def test_summary_output(self):
