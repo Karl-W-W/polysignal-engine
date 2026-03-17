@@ -108,3 +108,56 @@
 - **Interest**: Could upgrade our flat-file memory system
 - **Security**: Needs audit.
 - **Action**: Low priority. Current MEMORY.md + learnings files work.
+
+### P0: Security Hardening (from research_gateway_security.md)
+- **Source**: KWW Session 26 research
+- **Findings**:
+  1. Missing `sessions_spawn`/`sessions_send` deny — lateral movement risk
+  2. Exec uses safeBins not allowlist mode — less granular
+  3. No seccomp profile — io_uring/ptrace/bpf attacks possible
+  4. No readOnlyRoot — container filesystem writable
+- **Action needed**:
+  - Add `sessions_spawn`, `sessions_send` to tool deny list
+  - Switch exec to `allowlist` mode with explicit command patterns
+  - Add seccomp profile blocking dangerous syscalls
+  - Set `readOnlyRoot: true` in sandbox config
+- **Effort**: Low-Medium (1h config changes by Claude Code)
+
+### P0: Model Routing / Cost Reduction (from research_dgx_maximization.md)
+- **Source**: KWW Session 26 research + today's self-assessment
+- **Findings**:
+  - Opus on every heartbeat = ~$3-5/day for "HEARTBEAT_OK"
+  - TensorRT-LLM = 2-5x faster than Ollama on DGX Spark
+  - Multi-model serving: GPT-OSS 20B (11GB) + Qwen3-Coder 30B (17GB) fit together
+  - QLoRA fine-tuning of Llama 3.3 70B confirmed possible on Spark
+- **Action needed**:
+  - CC: Wire model routing in OpenClaw (Haiku for heartbeats, Sonnet for tasks, Opus for architect)
+  - CC: Install TensorRT-LLM container (needs NGC API key from KWW)
+  - CC: Try QLoRA on our prediction labeled data
+- **Effort**: Medium (model routing 1h, TRT-LLM 2h, QLoRA 4h)
+
+### P1: Event-Driven Triggers (from research_openclaw_autonomy.md)
+- **Source**: KWW Session 26 research, Felix/Eliason comparison
+- **Findings**:
+  - We're Level 2 (semi-autonomous), top agents are Level 3-4
+  - Missing: self-initiated work, event-driven triggers, cross-agent coordination
+  - Scanner already writes `.events.jsonl` — just need to WATCH it
+  - Sentry→PR pattern could work for scanner errors → auto-fix
+- **Action needed**:
+  - CC: OpenClaw cron or inotify watch on `.events.jsonl` → trigger Loop
+  - Loop: Generate own tasks from MoltBook intelligence (not just execute queue)
+  - CC: Enable `sessions_spawn` for coding sub-agents (with audit)
+- **Effort**: Medium-High (2-3h architecture change)
+
+### P1: Voice/Phone Alert System (KWW request, 2026-03-17)
+- **Source**: KWW direct request — wants phone calls for emergencies/HITL
+- **Findings**: No existing ClawHub skill. Needs telephony integration.
+- **Options**:
+  - Twilio API (voice calls + SMS) — add to Squid allowlist
+  - ElevenLabs TTS + Twilio = natural voice
+  - Telegram voice messages as intermediate step
+- **Action needed**:
+  - Research Twilio pricing + API
+  - Build minimal "call KWW" skill triggered by critical alerts
+  - Wire into watchdog alerts
+- **Effort**: Medium (2-3h for MVP)
