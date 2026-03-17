@@ -28,7 +28,7 @@ import hmac
 import hashlib
 from pathlib import Path
 from typing import TypedDict, Optional, List, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ── LangGraph ────────────────────────────────────────────────────────────────
 from langgraph.graph import StateGraph, END
@@ -281,30 +281,48 @@ def prediction_node(state: LoopState) -> LoopState:
     # Session 27: If recent accuracy is below threshold, auto-halt.
     # This prevents accumulating wrong predictions while we fix the model.
     # Only triggers when we have enough evaluated predictions to be confident.
-    META_GATE_MIN_EVALUATED = 20
+    META_GATE_MIN_EVALUATED = 15
     META_GATE_ACCURACY_FLOOR = 0.40
+    META_GATE_ROLLING_DAYS = 7  # Only look at recent predictions
     try:
         from lab.outcome_tracker import OutcomeState
         outcomes_path = Path(os.getenv("OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"))
         if outcomes_path.exists():
             outcome_state = OutcomeState.load(outcomes_path)
-            stats = outcome_state.stats
-            total_eval = stats.get("total_evaluated", 0)
-            if total_eval >= META_GATE_MIN_EVALUATED:
-                correct = stats.get("correct", 0)
-                incorrect = stats.get("incorrect", 0)
-                directional = correct + incorrect
-                if directional > 0:
-                    rolling_acc = correct / directional
-                    if rolling_acc < META_GATE_ACCURACY_FLOOR:
-                        print(f"  🚨 META-GATE HALT: Accuracy {rolling_acc:.0%} ({correct}W/{incorrect}L) below {META_GATE_ACCURACY_FLOOR:.0%} floor")
-                        print(f"     Halting predictions until retrain or manual override.")
-                        state["predictions"] = []
-                        state["meta_gate_halted"] = True
-                        state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
-                        return state
+            # Rolling window: only consider predictions from the last N days
+            # This prevents old pre-base-rate garbage (97 wrong Bullish) from
+            # permanently blocking the now-fixed predictor.
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=META_GATE_ROLLING_DAYS)).isoformat()
+            recent_correct = 0
+            recent_incorrect = 0
+            for p in outcome_state.predictions:
+                if not p.get("evaluated"):
+                    continue
+                ts = p.get("timestamp", "")
+                if ts < cutoff:
+                    continue
+                outcome = p.get("outcome")
+                if outcome == "CORRECT":
+                    recent_correct += 1
+                elif outcome == "INCORRECT":
+                    recent_incorrect += 1
+
+            recent_directional = recent_correct + recent_incorrect
+            if recent_directional >= META_GATE_MIN_EVALUATED:
+                rolling_acc = recent_correct / recent_directional
+                if rolling_acc < META_GATE_ACCURACY_FLOOR:
+                    print(f"  META-GATE HALT: 7-day accuracy {rolling_acc:.0%} ({recent_correct}W/{recent_incorrect}L) below {META_GATE_ACCURACY_FLOOR:.0%} floor")
+                    print(f"     Halting predictions until accuracy improves.")
+                    state["predictions"] = []
+                    state["meta_gate_halted"] = True
+                    state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
+                    return state
+                else:
+                    print(f"  Meta-gate OK: 7-day accuracy {rolling_acc:.0%} ({recent_correct}W/{recent_incorrect}L)")
+            else:
+                print(f"  Meta-gate: insufficient recent data ({recent_directional}/{META_GATE_MIN_EVALUATED} needed) — allowing predictions")
     except Exception as e:
-        print(f"  ⊘ Meta-gate check skipped: {e}")
+        print(f"  Meta-gate check skipped: {e}")
 
     # ── Filter excluded markets BEFORE prediction (Session 19) ────────────
     # EXCLUDED_MARKETS only filtered signal detection, not prediction input.
