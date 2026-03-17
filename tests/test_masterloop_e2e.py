@@ -36,6 +36,17 @@ def reset_risk_state():
     risk_module.TRADING_ENABLED = original
 
 
+@pytest.fixture(autouse=True)
+def isolate_outcomes_file(monkeypatch):
+    """Prevent meta-gate and staleness detection from reading production data.
+
+    On DGX, /opt/loop/data/prediction_outcomes.json exists and has low accuracy
+    (31%), causing the meta-gate to halt predictions during tests. Pointing
+    OUTCOMES_FILE to a non-existent path makes both checks skip gracefully.
+    """
+    monkeypatch.setenv("OUTCOMES_FILE", "/tmp/_test_nonexistent_outcomes.json")
+
+
 def _fake_markets():
     """Fake Polymarket response — 2 crypto markets."""
     return [
