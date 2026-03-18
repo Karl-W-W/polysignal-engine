@@ -190,7 +190,12 @@ class PolymarketTrader:
 
     @property
     def trading_enabled(self) -> bool:
-        return os.getenv("TRADING_ENABLED", "false").lower() in ("true", "1", "yes")
+        # Session 28: LIVE_TRADING=true enables real trades even with TRADING_ENABLED=false
+        # (TRADING_ENABLED controls the full LLM draft/review pipeline, LIVE_TRADING
+        # controls just the CLOB execution in the paper trading path)
+        te = os.getenv("TRADING_ENABLED", "false").lower() in ("true", "1", "yes")
+        lt = os.getenv("LIVE_TRADING", "false").lower() in ("true", "1", "yes")
+        return te or lt
 
     def _get_clob_client(self) -> ClobClientWrapper:
         if self._clob_client is None:
