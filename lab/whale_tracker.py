@@ -32,9 +32,9 @@ USER_AGENT = "PolySignal/1.0"
 MIN_LIQUIDITY = float(os.getenv("MIN_LIQUIDITY", "50000"))
 WHALE_LOG_PATH = Path(os.getenv("WHALE_LOG_PATH", "/opt/loop/lab/.whale-signals.jsonl"))
 
-# Thresholds for whale detection
-SPREAD_COLLAPSE_THRESHOLD = 0.005   # Spread < 0.5% = someone providing deep liquidity
-VOLUME_SPIKE_THRESHOLD = 3.0        # 24h vol > 3x weekly avg = unusual activity
+# Thresholds for whale detection (Session 28: tightened after first scan showed 266 signals)
+SPREAD_COLLAPSE_THRESHOLD = 0.002   # Spread < 0.2% = very deep liquidity (was 0.5%)
+VOLUME_SPIKE_THRESHOLD = 5.0        # 24h vol > 5x weekly avg = truly unusual (was 3x)
 LIQUIDITY_SURGE_THRESHOLD = 2.0     # Liquidity > 2x normal = someone loading up
 PRICE_MOVE_LOW_VOL_THRESHOLD = 0.05 # 5pp move on below-avg volume = informed trading
 
@@ -132,13 +132,15 @@ def analyze_market(m: dict) -> List[WhaleSignal]:
             current_price=price, volume_24h=vol_24h, liquidity=liquidity, spread=spread,
         ))
 
-    # 3. Extreme price (near 0 or near 1 with high liquidity = confident whale)
-    if liquidity > 100000 and (price > 0.95 or price < 0.05):
+    # 3. Extreme price with volume spike = someone MOVING the market to an extreme
+    # (Not just a longshot sitting at 1% — that's noise. We want price CHANGE + volume.)
+    if liquidity > 200000 and (price > 0.95 or price < 0.05) and avg_daily_vol > 0 and vol_24h / avg_daily_vol >= 2.0:
         direction = "YES" if price > 0.95 else "NO"
+        vol_ratio = vol_24h / avg_daily_vol
         signals.append(WhaleSignal(
             market_id=mid, title=title, signal_type="extreme_conviction",
             severity="high",
-            details=f"Price {price:.2%} with ${liquidity:,.0f} liquidity — market strongly expects {direction}",
+            details=f"Price {price:.2%} with {vol_ratio:.1f}x volume surge + ${liquidity:,.0f} liquidity — active movement toward {direction}",
             current_price=price, volume_24h=vol_24h, liquidity=liquidity, spread=spread,
         ))
 

@@ -805,7 +805,27 @@ def commit_node(state: LoopState) -> LoopState:
 
 def route_after_prediction(state: LoopState) -> str:
     """Skip draft/review/risk_gate when trading disabled — saves 2 LLM calls/cycle."""
-    from core.risk import TRADING_ENABLED
+    import core.risk as _risk
+    # Session 28: Allow env var overrides for risk params without touching Vault.
+    # Only apply if explicitly set (empty string = not set).
+    _te = os.getenv("TRADING_ENABLED", "")
+    if _te.lower() in ("true", "1", "yes"):
+        _risk.TRADING_ENABLED = True
+    elif _te.lower() in ("false", "0", "no"):
+        _risk.TRADING_ENABLED = False
+    try:
+        _mp = os.getenv("MAX_POSITION_USDC", "")
+        if _mp and _mp.replace(".", "", 1).isdigit():
+            _risk.MAX_POSITION_USDC = float(_mp)
+    except (ValueError, TypeError):
+        pass
+    try:
+        _dl = os.getenv("DAILY_LOSS_CAP_USDC", "")
+        if _dl and _dl.replace(".", "", 1).isdigit():
+            _risk.DAILY_LOSS_CAP_USDC = float(_dl)
+    except (ValueError, TypeError):
+        pass
+    TRADING_ENABLED = _risk.TRADING_ENABLED
     if not TRADING_ENABLED:
         print("\n[SHORT-CIRCUIT] TRADING_ENABLED=false — skipping draft/review/risk_gate")
         # Session 24: Write memory even when short-circuiting.
