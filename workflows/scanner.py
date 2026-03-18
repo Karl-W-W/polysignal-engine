@@ -213,6 +213,25 @@ def run_scanner():
                 except Exception as wd_err:
                     log.warning(f"  Watchdog failed: {wd_err}")
 
+            # ── Whale tracker (Session 28) — insider/whale detection ──────
+            # Runs every 12th cycle (offset by 6 to alternate with watchdog)
+            if cycle_count % 12 == 6:
+                try:
+                    from lab.whale_tracker import scan_all as whale_scan
+                    whale_signals = whale_scan()
+                    if whale_signals:
+                        high = [s for s in whale_signals if s.severity == "high"]
+                        if high:
+                            _emit_event("whale_detected", {
+                                "cycle": cycle_count,
+                                "count": len(whale_signals),
+                                "high_severity": len(high),
+                                "markets": [s.market_id for s in high[:5]],
+                            })
+                        log.info(f"  🐋 Whale scan: {len(whale_signals)} signals ({len(high)} high)")
+                except Exception as wh_err:
+                    log.warning(f"  Whale tracker failed: {wh_err}")
+
         except Exception as e:
             elapsed = time.time() - start
             log.error(f"--- Cycle {cycle_count} CRASHED after {elapsed:.1f}s: {e} ---")
