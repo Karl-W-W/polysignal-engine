@@ -257,6 +257,18 @@ def run_watchdog_checks() -> List[WatchdogAlert]:
     # Write alerts to file for Loop visibility
     _write_alerts(alerts)
 
+    # Session 28: Auto-evaluate evolution hypotheses (closes the learning loop)
+    try:
+        from lab.evolution_tracker import evaluate_pending
+        results = evaluate_pending()
+        if results:
+            for r in results:
+                verdict = r.get("verdict", "unknown")
+                cid = r.get("change_id", "?")
+                print(f"  🧬 Evolution: {cid} → {verdict}")
+    except Exception as e:
+        print(f"  ⊘ Evolution eval skipped: {e}")
+
     return alerts
 
 
