@@ -30,6 +30,11 @@ from lab.time_horizon import derive_time_horizon
 DB_PATH           = os.getenv("DB_PATH", "/data/polysignal.db")
 SIGNAL_THRESHOLD  = float(os.getenv("SIGNAL_THRESHOLD", "0.05"))   # 5pp
 SEARCH_KEYWORDS   = ["bitcoin", "btc", "crypto", "ethereum", "eth"]
+# Session 28: Minimum liquidity for market inclusion (USD).
+# Markets below this are too thin to trade or generate reliable signals.
+MIN_LIQUIDITY     = float(os.getenv("MIN_LIQUIDITY", "50000"))  # $50K
+# Session 28: Scan ALL markets (not just crypto) when enabled.
+SCAN_ALL_MARKETS  = os.getenv("SCAN_ALL_MARKETS", "false").lower() in ("true", "1", "yes")
 
 # Markets excluded from signal detection (still recorded for observation data).
 # Session 16: 824952 "MicroStrategy sells any Bitcoin" — 32% accuracy, 33W/70L
@@ -76,7 +81,9 @@ def init_db(conn):
 # ── Polymarket Fetch ──────────────────────────────────────────────────────────
 
 def fetch_crypto_markets(limit: int = 50) -> list:
-    """Fetch Polymarket events and filter for crypto/Bitcoin markets."""
+    """Fetch Polymarket markets. Crypto-only by default, ALL liquid markets when SCAN_ALL_MARKETS=true."""
+    if SCAN_ALL_MARKETS:
+        return fetch_all_liquid_markets()
     try:
         resp = requests.get(
             "https://gamma-api.polymarket.com/events",
@@ -120,6 +127,65 @@ def fetch_crypto_markets(limit: int = 50) -> list:
     crypto_markets.sort(key=lambda x: x["volume"], reverse=True)
     print(f"Found {len(crypto_markets)} crypto markets on Polymarket")
     return crypto_markets
+
+
+def fetch_all_liquid_markets(max_markets: int = 300) -> list:
+    """Session 28: Fetch ALL Polymarket markets above MIN_LIQUIDITY threshold.
+
+    Scans across all categories (politics, sports, crypto, tech, geopolitics, etc.)
+    instead of just crypto keywords. Returns markets sorted by volume.
+    """
+    all_markets = []
+    # Paginate through the /markets endpoint (500 per page)
+    for offset in range(0, 2000, 500):
+        try:
+            resp = requests.get(
+                "https://gamma-api.polymarket.com/markets",
+                params={"closed": "false", "limit": 500, "offset": offset},
+                headers={"User-Agent": "PolySignal/1.0"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            batch = resp.json()
+        except Exception as e:
+            print(f"  ⚠ API page {offset}: {e}")
+            break
+
+        if not batch:
+            break
+
+        for m in batch:
+            liquidity = float(m.get("liquidity", 0) or 0)
+            if liquidity < MIN_LIQUIDITY:
+                continue
+            try:
+                op = m.get("outcomePrices", '["0","0"]')
+                prices = json.loads(op) if isinstance(op, str) else op
+                price = float(prices[0])
+            except Exception:
+                price = 0.0
+
+            slug = m.get("slug") or m.get("conditionId", "")
+            event_slug = m.get("eventSlug") or slug
+            all_markets.append({
+                "id":        str(m.get("id", m.get("conditionId", ""))),
+                "title":     m.get("question", "Unknown"),
+                "outcome":   m.get("groupItemTitle") or "Yes",
+                "price":     price,
+                "volume":    float(m.get("volume", 0) or 0),
+                "liquidity": liquidity,
+                "url":       f"https://polymarket.com/event/{event_slug}",
+            })
+
+        if len(batch) < 500:
+            break
+
+    all_markets.sort(key=lambda x: x["volume"], reverse=True)
+    # Cap to avoid overwhelming the scanner
+    if len(all_markets) > max_markets:
+        all_markets = all_markets[:max_markets]
+    print(f"Found {len(all_markets)} liquid markets on Polymarket (min ${MIN_LIQUIDITY:,.0f} liquidity)")
+    return all_markets
 
 
 # ── Signal Detection ──────────────────────────────────────────────────────────

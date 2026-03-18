@@ -396,6 +396,7 @@ def prediction_node(state: LoopState) -> LoopState:
         # hypothesis, same rounded confidence), the predictor is stuck in a loop.
         # Skip this cycle to avoid accumulating stale predictions.
         STALE_LOOKBACK = 10
+        STALE_COOLDOWN = 6  # Allow 1 prediction every N stale cycles
         try:
             from lab.outcome_tracker import OutcomeState
             outcomes_path = Path(os.getenv("OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"))
@@ -409,12 +410,17 @@ def prediction_node(state: LoopState) -> LoopState:
                         signatures.add(sig)
                     if len(signatures) == 1:
                         stale_sig = list(signatures)[0]
-                        print(f"  ⚠ STALE: Last {STALE_LOOKBACK} predictions identical: {stale_sig[0]} {stale_sig[1]} @ {stale_sig[2]}")
-                        print(f"     Predictor is stuck. Skipping this cycle.")
-                        state["predictions"] = []
-                        state["stale_detected"] = True
-                        state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
-                        return state
+                        # Cooldown: allow 1 prediction through every N cycles
+                        cycle_num = state.get("cycle_number", 0)
+                        if cycle_num % STALE_COOLDOWN != 0:
+                            print(f"  ⚠ STALE: Last {STALE_LOOKBACK} predictions identical: {stale_sig[0]} {stale_sig[1]} @ {stale_sig[2]}")
+                            print(f"     Skipping (cooldown: next allowed at cycle {cycle_num + STALE_COOLDOWN - cycle_num % STALE_COOLDOWN}).")
+                            state["predictions"] = []
+                            state["stale_detected"] = True
+                            state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
+                            return state
+                        else:
+                            print(f"  ⚠ STALE but cooldown expired (cycle {cycle_num}): allowing prediction through.")
         except Exception as e:
             print(f"  ⊘ Staleness check skipped: {e}")
 
