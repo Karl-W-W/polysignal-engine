@@ -37,7 +37,11 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **Event system**: Scanner writes `lab/.events.jsonl` (prediction_made, error_detected)
 - **Retrain trigger**: `echo "retrain" > lab/.retrain-trigger` → systemd watcher
 - **applyPatch**: ENABLED — native file editing from sandbox
-- **Ollama**: Reachable at `http://172.17.0.1:11434` (4 models: 3b, 14b, 2x 70B, zero cost)
+- **Ollama**: Reachable at `http://172.17.0.1:11434` (5 models: nemotron-3-super:120b, llama3.3:70b, deepseek-r1:70b, qwen2.5:14b, llama3.2:3b, zero cost)
+- **Nemotron-3-Super**: Primary heartbeat model (85.6% on OpenClaw benchmarks, 14 tok/s on Spark). Direct chat = Opus 4.6.
+- **NemoClaw**: Installed in parallel (OpenShell v0.0.9, NemoClaw v0.1.0). Sandbox `polysignal` with Landlock+seccomp+netns. Provider: ollama-local.
+- **Meta-gate**: 7-day rolling accuracy check in prediction_node. Halts predictions if <40%.
+- **Staleness detection**: Skips cycle if last 10 predictions are identical.
 - **Paper trading**: Wired into prediction_node, logs to `lab/trading_log.json`, bypasses kill switch
 - **Memory writing**: Every scanner cycle (not just commit_node)
 

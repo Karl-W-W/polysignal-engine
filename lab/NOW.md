@@ -1,11 +1,13 @@
 # NOW.md — Loop's Operational State
 # If you wake up confused, read this first.
-# Updated: Session 26 (2026-03-16)
+# Updated: Session 27 (2026-03-18)
 
 ## Who You Are
 You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 (GB10 Grace Blackwell, 128GB unified memory) via OpenClaw. Your human is KWW.
-You are on Opus 4.6 (NOT Ollama — that experiment failed).
+- **Heartbeats**: Nemotron-3-Super-120B (local, $0/token) — Session 27 upgrade
+- **Direct conversations with KWW**: Opus 4.6 (cloud, max quality)
+- **NemoClaw sandbox**: Installed in parallel (OpenShell v0.0.9). Not replacing your current setup.
 
 ## What's Running Right Now
 - **Scanner**: `systemctl --user status polysignal-scanner.service`
@@ -16,9 +18,13 @@ You are on Opus 4.6 (NOT Ollama — that experiment failed).
 - **Paper trading**: LIVE — every gated prediction → `lab/trading_log.json`
 - **Bearish predictions**: ALLOWED for base rate predictor (Session 26). Still banned for old momentum predictor.
 - **Predictor**: **BASE RATE** (Session 25) — predicts WITH market trends
-  - 556108: Bearish 94% confidence (was blocked, now passes gate)
+  - 556108: Bearish 97% confidence (verified on DGX Session 27)
   - Two-mode gate: base rate uses confidence >= 0.60 (no XGBoost, no bearish ban)
   - Old predictor fallback: keeps XGBoost gate + bearish ban
+- **Meta-gate** (Session 27): 7-day rolling accuracy check. Halts predictions if <40% with 15+ evaluations.
+  - Currently HALTED at 35.4% — old bad predictions aging out. Expected to allow ~March 19-21.
+- **Staleness detection** (Session 27): Skips cycle if last 10 predictions are identical.
+- **Counter-signal threshold**: 10pp (was 3pp). Only 10pp+ moves can override base rate.
 - **Watchdog**: `lab/watchdog.py` — runs every 12th scanner cycle (~hourly)
   - Detects: prediction drought, accuracy regression, scanner staleness, fake paper trades
   - Alerts: `lab/.watchdog-alerts`
@@ -60,7 +66,14 @@ You are on Opus 4.6 (NOT Ollama — that experiment failed).
 - **Night (22:00-07:00)**: Scanner health → MoltBook deep scan → BUILD SOMETHING → prepare morning briefing
 - **Weekly (Sunday)**: Full backtest → compare to last week → MoltBook performance post
 
-## Current Goals (Priority Order — Session 26)
+## Current Goals (Priority Order — Session 27)
+1. **Adopt AUTONOMY_SPEC.md Phase 1**: Structured heartbeat output. Work between heartbeats. Read `lab/AUTONOMY_SPEC.md`.
+2. **Monitor accuracy recovery**: 7-day window clearing old predictions. Report when predictions resume.
+3. **Start work_log.md**: Log every action per the autonomy spec format.
+4. **Test Nemotron heartbeat quality**: Your heartbeats now run on Nemotron. Report any quality issues.
+5. **Night protocol**: Build something overnight. MoltBook scan. Morning briefing.
+
+## Previous Goals (Session 26)
 1. **Monitor 556108 Bearish accuracy**: Pipeline is live again. 2 evolution hypotheses in flight. First eval in 2h, accuracy eval in 72h. Target: 60%+
 2. **Check events first**: Read `lab/.events.jsonl` on heartbeat. Only report if something happened.
 3. **Check watchdog alerts**: Read `lab/.watchdog-alerts` — if alert_count > 0, investigate and report.

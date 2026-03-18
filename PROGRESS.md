@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-16 | Session 26 closed
+# Last updated: 2026-03-18 | Session 27 closed
 # Session history: See HISTORY.md
 
 ---
@@ -25,7 +25,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| DGX Spark | UP | Munich, Blackwell GPU, `llama3.3:70b` on Ollama |
+| DGX Spark | UP | Munich, Blackwell GPU, `nemotron-3-super:120b` + 4 Ollama models |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
 | OpenClaw Sandbox | UP | Docker :9001, 12 bind mounts, Python 3.12.3, 3 skills, 20 safeBins |
 | OpenClaw Gateway | UP | systemd, Claude Opus 4.6, heartbeat 30m |
@@ -34,8 +34,10 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | **430/430 PASS** | Mac (8.7s) — Session 26 verified |
-| Scanner | RUNNING | **6** excluded. Base rate predictor + confidence gate (>=0.60). Bearish ALLOWED for base rate. Watchdog every 12th cycle. Events emitted. |
+| Tests | **431/431 PASS** | DGX (Session 27 verified) |
+| Scanner | RUNNING | **6** excluded. Base rate predictor + confidence gate (>=0.60). Meta-gate (7-day rolling, halts <40%). Staleness detection. Bearish ALLOWED for base rate. |
+| Nemotron-3-Super | **LIVE** | 86GB Q4_K_M on Ollama. Heartbeats at $0/token. Direct chat = Opus 4.6. |
+| NemoClaw | **INSTALLED** | OpenShell v0.0.9, NemoClaw v0.1.0. Sandbox `polysignal` Ready. Parallel to OpenClaw. |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
@@ -273,6 +275,52 @@ Replace auto-approve placeholder with actual Telegram approval.
 **DGX Caging Gaps (not urgent for write-only):**
 - ⚠️ Network egress: Docker has full access — needs egress filtering before read pipeline
 - ⚠️ Exec isolation: Publisher uses `requests.post()` (fine) — read pipeline would need strict exec=false
+
+---
+
+## Session 27: NemoClaw + Nemotron + Self-Protecting Pipeline (2026-03-17/18)
+
+**5 commits (CC) + 2 fixes (Antigravity). 431 tests. Nemotron LIVE. NemoClaw installed. Cost: $460/mo → $30/mo.**
+
+### Session 27 Accomplishments
+| What | Impact |
+|------|--------|
+| Nemotron-3-Super-120B downloaded + serving | Loop heartbeats at $0/token (was $0.10-0.30/each). Saves ~$300-450/month. |
+| NemoClaw + OpenShell installed | NVIDIA's reference agent stack. Landlock+seccomp+netns sandbox. Parallel to OpenClaw. |
+| Meta-gate (7-day rolling window) | Auto-halts predictions if 7-day accuracy <40%. Currently halted at 35.4% — self-protecting. |
+| Staleness detection | Skips cycle if last 10 predictions identical. Catches "stuck predictor" pattern. |
+| Counter-signal threshold 3%→10% | Prevents routine moves from flipping 94% Bearish to Bullish. |
+| Paper trade data fix | Predictions carry title + current_price from observations. |
+| Autonomy spec deployed | Full behavioral architecture for Loop: work loop, discovery mode, proactive allowlist, weekly scorecard. |
+| HEARTBEAT.md rewritten | Structured output format, work between heartbeats, night protocol enforcement. |
+| Base rate predictor verified | Returns Bearish @ 97% for 556108. Confirmed correct on DGX. |
+| Ollama upgraded | v0.13.5 → latest (required for Nemotron). OLLAMA_HOST=0.0.0.0 re-applied. |
+| Docker cgroup fix | `default-cgroupns-mode: host` for NemoClaw/OpenShell on cgroup v2. |
+| /mnt/polysignal symlink | `ln -s /opt/loop /mnt/polysignal` on DGX host. |
+| Dead code archived | langsmith_eval.py + moltbook_register.py → lab/archive/ (420 lines). |
+| SSH access for Claude Code | `ssh dgx-remote` works. Full audit + deployment via SSH. |
+| NemoClaw research | Full analysis of NVIDIA NemoClaw architecture, DGX Spark best practices, Nemotron benchmarks. |
+
+### Key Findings
+- **97 wrong Bullish predictions on 556108** were from the OLD momentum predictor (pre-Session 25), not the base rate predictor.
+- **Nemotron-3-Super-120B**: 85.6% on OpenClaw benchmarks (vs Opus 4.6 at 86.3%). 14 tok/s on DGX Spark. Tool calling works.
+- **llama3.3:70b crashed heartbeats**: Malformed JSON on tool calls → gateway JSONDecodeError. Nemotron handles tool calls cleanly.
+- **lightContext/isolatedSession crashed OpenClaw v2026.2.12** — incompatible with current gateway version.
+- **Loop's `read` tool blocks symlinks** for security. Workaround: `exec + cat`.
+
+### Architecture After Session 27
+```
+KWW (Telegram)
+├── Direct messages → Opus 4.6 (cloud, max quality)
+├── Heartbeats (30m) → Nemotron-3-Super (local, $0)
+└── NemoClaw sandbox → Nemotron (local, parallel pilot)
+
+Scanner (systemd, 5min)
+├── Meta-gate (7-day rolling, halts <40%)
+├── Staleness detection (skips if 10 identical)
+├── Base rate predictor (Bearish @ 97% for 556108)
+└── Counter-signal (10pp threshold)
+```
 
 ---
 
@@ -641,26 +689,28 @@ The excluded market wasn't just the worst predictor (0W/40L) — it was the majo
 
 ---
 
-## NEXT STEPS (Session 27+)
+## NEXT STEPS (Session 28+)
 
-### P0: Loop Presence (Loop's directive)
-1. **Loop Daemon** (`lab/loop_daemon.py`) — always-on Ollama process, watches events, handles routine immediately, queues complex for Opus
-2. **Wire Loop into events** — heartbeat reads `.events.jsonl`, only burns Opus on real changes
-3. **Self-testing harness** — Loop validates code changes before pushing blind
+### P0: Autonomy Phase 2 (Loop becoming proactive)
+1. **Seed Loop's task queue** with 5 operator-defined tasks (analysis-only, no code changes)
+2. **Introduce work_log.md** — Loop logs every action per AUTONOMY_SPEC.md format
+3. **Night protocol enforcement** — MoltBook scan + morning briefing as structured workflow
+4. **Discovery Mode** — Loop finds own work when queue is empty
 
-### P1: Revenue (PROFIT)
-4. **Prove base rate accuracy** — 2 hypotheses in flight. `session26-bearish-accuracy` evaluates in 72h. Target: 60%+.
-5. **Fund wallet with $5+ USDC** — human-only, last gate to first live trade
-6. **Market expansion** — re-evaluate excluded markets (1541748 Bullish 95%) with base rate lens
+### P1: Accuracy Recovery (the pipeline needs to heal)
+5. **Monitor 7-day window** — old bad predictions aging out ~March 19-21. Predictions resume when window clears.
+6. **If accuracy doesn't recover by March 20**: retrain XGBoost or purge pre-Session-25 predictions
+7. **Market expansion** — re-evaluate excluded markets (1541748 Bullish 95%) with base rate lens
+8. **Fund wallet with $5+ USDC** — human-only, last gate to first live trade
 
-### P2: Cost Reduction (COST)
-7. **Model routing** — Ollama for heartbeats (zero cost), Opus for complex reasoning only
-8. **Event-driven heartbeats** — replace timer-based polling with event-driven waking
+### P2: NemoClaw Integration (pilot → production)
+9. **Test OpenClaw agent inside NemoClaw sandbox** — connect the two environments
+10. **Wire NVIDIA API key** into NemoClaw for Privacy Router (local-first, cloud fallback)
+11. **Evaluate OpenShell vs Docker** — compare isolation, policy engine, monitoring
 
 ### P3: Security Hardening
-9. **Trading sidecar** — separate process holds wallet key
-10. **Exec allowlist mode** — replace safeBins with granular command allowlist
-11. **Seccomp profile** — block ptrace, bpf, unshare syscalls in sandbox
+12. **Trading sidecar** — separate process holds wallet key
+13. **Exec allowlist mode** — replace safeBins with granular command allowlist via OpenShell
 
 ### Known Bugs
 - `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)

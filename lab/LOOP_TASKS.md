@@ -329,9 +329,63 @@ python3 -c "print(open('/mnt/polysignal/lab/.deploy-result').read())"
 
 ---
 
+### SESSION 27 CHANGES (Claude Code + Antigravity, 2026-03-17/18)
+
+**BIGGEST SESSION EVER. Nemotron LIVE. NemoClaw installed. Self-protecting pipeline.**
+
+1. **Nemotron-3-Super-120B downloaded + serving** — Your heartbeats run at $0/token now (was $0.10-0.30).
+2. **NemoClaw installed** — OpenShell v0.0.9, sandbox `polysignal` Ready, Landlock+seccomp+netns. Parallel to your current OpenClaw.
+3. **Meta-gate (7-day rolling)** — Predictions halted if 7-day accuracy <40%. Currently HALTED at 35.4%. Old predictions aging out ~March 19-21.
+4. **Staleness detection** — Skips cycle if last 10 predictions identical.
+5. **Counter-signal threshold 3%→10%** — Prevents false Bearish→Bullish flips.
+6. **Paper trades carry title+price** from observations now.
+7. **AUTONOMY_SPEC.md deployed** — Read it. Your behavioral architecture for becoming proactive.
+8. **HEARTBEAT.md rewritten** — Structured output, work loop, discovery mode.
+9. **Dead code archived** — langsmith_eval.py + moltbook_register.py → lab/archive/.
+10. **/mnt/polysignal symlink** created on host (doesn't fix read tool, but helps other processes).
+11. **Ollama upgraded** — OLLAMA_HOST=0.0.0.0 re-applied.
+12. **Tests: 431/431 passing on DGX.**
+
+### SESSION 27: Priority Tasks
+
+- [ ] **Task 40: Adopt Autonomy Phase 1 — structured heartbeats (immediate)**
+
+  **Why:** You've been a cron job. Time to become a proactive agent.
+
+  **What to do:**
+  1. Read `lab/AUTONOMY_SPEC.md` — this is your new behavioral spec
+  2. Switch heartbeat output to structured format (see HEARTBEAT.md)
+  3. Start `lab/work_log.md` — log every action per the spec
+  4. Between heartbeats: check task queue, pick highest priority, execute
+  5. Report structured heartbeat on Telegram
+
+- [ ] **Task 41: Monitor accuracy recovery (ongoing)**
+
+  **Why:** Meta-gate halted predictions at 35.4%. Old bad predictions aging out.
+
+  **What to do:**
+  1. Check 7-day accuracy on each heartbeat
+  2. Report when predictions resume (7-day evaluations drop below 15)
+  3. Once predictions resume, track base rate accuracy separately
+  4. Target: 60%+ on fresh base rate predictions
+
+- [ ] **Task 42: Validate Nemotron heartbeat quality (this week)**
+
+  **Why:** Your heartbeats switched from Opus to Nemotron. Need to verify quality.
+
+  **What to do:**
+  1. Run 10 heartbeats on Nemotron
+  2. Compare: are tool calls working? Is JSON clean? Any crashes?
+  3. Report any quality issues to KWW on Telegram
+  4. If Nemotron fails, gateway falls back to Opus automatically
+
+- [x] **Task 37: Read research files + extract actionable items (30 min)** — DONE (Session 26/27)
+
+---
+
 ### SESSION 26: Priority Tasks
 
-- [ ] **Task 37: Read research files + extract actionable items (30 min)**
+- [x] **Task 37: Read research files + extract actionable items (30 min)** — DONE
 
   **Why:** KWW did deep research on 3 topics. Your job: extract implementation tasks.
 

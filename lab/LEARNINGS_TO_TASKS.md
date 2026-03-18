@@ -133,18 +133,10 @@
   - Set `readOnlyRoot: true` in sandbox config
 - **Effort**: Low-Medium (1h config changes by Claude Code)
 
-### P0: Model Routing / Cost Reduction (from research_dgx_maximization.md)
+### ~~P0: Model Routing / Cost Reduction~~ — IMPLEMENTED (Session 27)
 - **Source**: KWW Session 26 research + today's self-assessment
-- **Findings**:
-  - Opus on every heartbeat = ~$3-5/day for "HEARTBEAT_OK"
-  - TensorRT-LLM = 2-5x faster than Ollama on DGX Spark
-  - Multi-model serving: GPT-OSS 20B (11GB) + Qwen3-Coder 30B (17GB) fit together
-  - QLoRA fine-tuning of Llama 3.3 70B confirmed possible on Spark
-- **Action needed**:
-  - CC: Wire model routing in OpenClaw (Haiku for heartbeats, Sonnet for tasks, Opus for architect)
-  - CC: Install TensorRT-LLM container (needs NGC API key from KWW)
-  - CC: Try QLoRA on our prediction labeled data
-- **Effort**: Medium (model routing 1h, TRT-LLM 2h, QLoRA 4h)
+- **Implementation**: Nemotron-3-Super-120B (86GB) downloaded. OpenClaw heartbeats → `ollama/nemotron-3-super:120b`. Direct chat → Opus 4.6. Cost: $460/mo → ~$30/mo.
+- **Remaining**: TensorRT-LLM (optional), QLoRA fine-tuning (needs 1K+ samples)
 
 ### P1: Event-Driven Triggers (from research_openclaw_autonomy.md)
 - **Source**: KWW Session 26 research, Felix/Eliason comparison
