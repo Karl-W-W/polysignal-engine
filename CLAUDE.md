@@ -41,6 +41,7 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **Nemotron-3-Super**: Primary heartbeat model (85.6% on OpenClaw benchmarks, 14 tok/s on Spark). Direct chat = Opus 4.6.
 - **NemoClaw**: Installed in parallel (OpenShell v0.0.9, NemoClaw v0.1.0). Sandbox `polysignal` with Landlock+seccomp+netns. Provider: ollama-local.
 - **Meta-gate**: 7-day rolling accuracy check in prediction_node. Halts predictions if <40%.
+- **Sandbox Access**: `read` / `write` tools whitelisted for `/mnt/polysignal` and `/opt/loop` (SDK patched).
 - **Staleness detection**: Skips cycle if last 10 predictions are identical.
 - **Paper trading**: Wired into prediction_node, logs to `lab/trading_log.json`, bypasses kill switch
 - **Memory writing**: Every scanner cycle (not just commit_node)
@@ -86,6 +87,7 @@ Expected: 430/430 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
 ## Key Paths on DGX
 ```
 /opt/loop/                    — Project root
+/mnt/polysignal/              — Host symlink to /opt/loop (matches sandbox mounts)
 /opt/loop/core/               — Vault (10 files)
 /opt/loop/workflows/          — MasterLoop + scanner
 /opt/loop/lab/                — Experiments (feature_engineering, xgboost_baseline)

@@ -48,6 +48,7 @@ You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 - **PYTHONPATH baked in**: `import pandas`, `import xgboost`, `import sklearn` work normally.
 - **git + curl**: Both installed in sandbox.
 - **applyPatch**: ENABLED.
+- **Sandbox Access Fix**: `read` / `write` tools now work for `/mnt/polysignal` and `/opt/loop` (SDK patched).
 - **Ollama**: Reachable at `http://172.17.0.1:11434` (no_proxy). 4 models, zero cost.
 - **Signal threshold**: 0.015 (was 0.02). More signals in quiet markets.
 
@@ -95,6 +96,7 @@ You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 - `lab/research_gateway_security.md` — **NEW** OpenClaw security architecture research
 - `lab/research_dgx_maximization.md` — **NEW** DGX Spark benchmark + optimization research
 - `lab/research_openclaw_autonomy.md` — **NEW** Real agent deployments + trust escalation
+- **Loop's `read` tool IS FIXED**: No longer blocks `/mnt/polysignal/` paths.
 
 ## What NOT To Do
 - Do NOT run `.sh` scripts
