@@ -520,19 +520,42 @@ def prediction_node(state: LoopState) -> LoopState:
         # ── Paper trading (Session 24) ─────────────────────────────────────────
         # Runs on every gated prediction, even when TRADING_ENABLED=false.
         # This accumulates paper trade data for validation before going live.
+        # Session 28: LIVE_TRADING=true also executes real trades via CLOB.
+        _live_trading = os.getenv("LIVE_TRADING", "").lower() in ("true", "1", "yes")
+        _max_pos = 2.0
+        try:
+            _mp_env = os.getenv("MAX_POSITION_USDC", "")
+            if _mp_env and _mp_env.replace(".", "", 1).isdigit():
+                _max_pos = float(_mp_env)
+        except (ValueError, TypeError):
+            pass
         try:
             from lab.polymarket_trader import PolymarketTrader
             trader = PolymarketTrader()
             paper_count = 0
+            live_count = 0
             for pred in predictions:
                 if pred.get("hypothesis") == "Neutral":
                     continue
-                result = trader.paper_trade(pred, proposed_size_usdc=5.0)
+                result = trader.paper_trade(pred, proposed_size_usdc=_max_pos)
                 if result.success:
                     paper_count += 1
                     print(f"  📊 Paper trade: {result.side} {result.title[:40]} @ ${result.price_at_entry:.2f}")
+                    # Session 28: Execute real trade if LIVE_TRADING=true
+                    if _live_trading and pred.get("confidence", 0) >= 0.75:
+                        try:
+                            live_result = trader.execute_trade(pred, proposed_size_usdc=_max_pos)
+                            if live_result.success:
+                                live_count += 1
+                                print(f"  🔥 LIVE TRADE: {live_result.side} ${_max_pos:.2f} on {live_result.title[:40]}")
+                            else:
+                                print(f"  ⚠ Live trade failed: {live_result.rejection_reason}")
+                        except Exception as live_err:
+                            print(f"  ⚠ Live trade error: {live_err}")
             if paper_count:
                 print(f"  💰 {paper_count} paper trade(s) logged to trading_log.json")
+            if live_count:
+                print(f"  🔥 {live_count} LIVE trade(s) executed!")
         except Exception as e:
             print(f"  ⊘ Paper trading skipped: {e}")
 
