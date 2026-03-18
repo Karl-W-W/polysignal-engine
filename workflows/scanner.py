@@ -214,8 +214,9 @@ def run_scanner():
                     log.warning(f"  Watchdog failed: {wd_err}")
 
             # ── Whale tracker (Session 28) — insider/whale detection ──────
-            # Runs every 12th cycle (offset by 6 to alternate with watchdog)
-            if cycle_count % 12 == 6:
+            # Runs every 12th cycle, offset by 9 to avoid collision with
+            # staleness cooldown (cycle 6) and watchdog (cycle 12)
+            if cycle_count % 12 == 9:
                 try:
                     from lab.whale_tracker import scan_all as whale_scan
                     whale_signals = whale_scan()
