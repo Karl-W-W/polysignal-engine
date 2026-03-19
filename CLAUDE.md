@@ -62,7 +62,7 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 430/430 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
+Expected: 432/432 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
 
 ## Working with Loop
 - Assign tasks via `lab/LOOP_TASKS.md` — syncs through directory mount (NOT TASKS.md — Docker inode caching)

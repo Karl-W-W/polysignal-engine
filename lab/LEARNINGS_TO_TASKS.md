@@ -67,6 +67,12 @@
 
 ## Implemented (Done)
 
+### Market Expansion + Whale Tracker + Learning Loop (Session 28)
+- **Source**: KWW vision (Hub71 pitch), Polymarket has 1,500 markets not 13
+- **Implementation**: `fetch_all_liquid_markets()` in bitcoin_signal.py (SCAN_ALL_MARKETS env var), `lab/whale_tracker.py` (volume spikes, spread collapses, extreme conviction), auto-evaluate in watchdog, staleness cooldown (6-cycle)
+- **Result**: 137 liquid markets monitored (10x), whale detection wired at cycle 9, evolution hypotheses auto-verdict hourly, predictions flowing through cooldown. Meta-gate at 59%.
+- **Key lesson**: Nemotron is batch-only — never use for interactive chat. OpenClaw v2026.2.12 is single-threaded — heartbeats block conversations.
+
 ### Self-Healing Pipeline (Session 26)
 - **Source**: Loop's 2.5-day silence while predictor was broken
 - **Implementation**: `lab/watchdog.py` (prediction drought, accuracy regression, scanner health, paper trade quality), `lab/feedback_loop.py` (per-market accuracy, auto-exclude, auto-retrain, EV), `lab/evolution_tracker.py` (hypothesis → measurement → verdict)

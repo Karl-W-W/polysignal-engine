@@ -346,6 +346,63 @@ python3 -c "print(open('/mnt/polysignal/lab/.deploy-result').read())"
 11. **Ollama upgraded** — OLLAMA_HOST=0.0.0.0 re-applied.
 12. **Tests: 431/431 passing on DGX.**
 
+### SESSION 28 CHANGES (Claude Code, 2026-03-18/19)
+
+**10x MARKET EXPANSION. Whale tracker. Learning loop closed. Live trading prep.**
+
+1. **Market expansion 13 → 137** — SCAN_ALL_MARKETS=true, MIN_LIQUIDITY=$500K. Scans all Polymarket categories (politics, sports, crypto, tech, geo). `fetch_all_liquid_markets()` paginates Gamma API.
+2. **Staleness cooldown** — Every 6th cycle allows stale prediction through (was blocking 100%). Predictions flowing again.
+3. **Whale tracker built + wired** — `lab/whale_tracker.py` detects volume spikes (5x+), spread collapses, extreme conviction. Runs at cycle 9/21/33. Logs to `.whale-signals.jsonl`.
+4. **Learning loop CLOSED** — `evaluate_pending()` runs automatically in watchdog cycle. Hypotheses auto-verdict without human.
+5. **Evolution hypotheses logged** — `session28-market-expansion` (48h) and `session28-staleness-cooldown` (24h).
+6. **Heartbeat reduced 30m → 60m** — less blocking of Telegram conversations.
+7. **Risk param env var overrides** — TRADING_ENABLED, MAX_POSITION_USDC, DAILY_LOSS_CAP_USDC configurable without touching Vault.
+8. **LIVE_TRADING flag** — enables CLOB execution alongside paper trades. Disabled overnight (needs Telegram approval gate).
+9. **NemoClaw investigation** — OpenShell CLI is cluster-internal only (v0.0.9 blocker). Sandbox `polysignal` defined but can't activate.
+10. **Whale thresholds tightened** — volume spike 3x→5x, spread 0.5%→0.2%, extreme conviction requires 2x volume surge.
+11. **Tests: 432/432 passing.**
+
+### SESSION 28: Priority Tasks
+
+- [ ] **Task 43: Validate expanded market predictions (ongoing)**
+
+  **Why:** 137 markets but only 4 have biases. Are new market predictions sensible?
+
+  **What to do:**
+  1. Check `prediction_outcomes.json` for predictions on non-crypto markets
+  2. Are there predictions on politics/sports markets? What confidence?
+  3. Report first diverse prediction to KWW on Telegram
+  4. After 24h: per-category accuracy breakdown
+
+- [ ] **Task 44: Check whale tracker output (after cycle 9)**
+
+  **Why:** First tightened whale scan will run at cycle 9. Need to validate signal quality.
+
+  **What to do:**
+  1. Read `lab/.whale-signals.jsonl` — how many signals? How many high severity?
+  2. Are the volume spikes on real markets or noise?
+  3. Report top 3 most interesting whale signals on Telegram
+
+- [ ] **Task 45: Check evolution hypothesis verdicts (after 24h)**
+
+  **Why:** Auto-evaluate is wired into watchdog. First verdicts expected within 24-48h.
+
+  **What to do:**
+  1. Read `lab/.evolution-log.jsonl` for verdicts
+  2. Report: did `session28-staleness-cooldown` confirm or refute?
+  3. Report: did `session28-market-expansion` confirm or refute?
+
+- [ ] **Task 46: Build Telegram approval gate for live trading (Session 29 prep)**
+
+  **Why:** LIVE_TRADING=true was disabled because HUMAN_APPROVAL_FIRST_N doesn't actually block in the paper trading path. Need a proper YES/NO gate.
+
+  **What to do:**
+  1. In `execute_trade()`, before placing CLOB order, send Telegram message with trade proposal
+  2. Wait for KWW's reply (YES/NO) with 5-minute timeout
+  3. Timeout = REJECT (safe default)
+  4. Only proceed with CLOB order if YES received
+  5. This is the last gate before real money
+
 ### SESSION 27: Priority Tasks
 
 - [ ] **Task 40: Adopt Autonomy Phase 1 — structured heartbeats (immediate)**

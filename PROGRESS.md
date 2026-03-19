@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-18 | Session 27 closed
+# Last updated: 2026-03-19 | Session 28 closed
 # Session history: See HISTORY.md
 
 ---
@@ -28,14 +28,14 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | DGX Spark | UP | Munich, Blackwell GPU, `nemotron-3-super:120b` + 4 Ollama models |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
 | OpenClaw Sandbox | UP | Docker :9001, 12 bind mounts, Python 3.12.3, 3 skills, 20 safeBins |
-| OpenClaw Gateway | UP | systemd, Claude Opus 4.6, heartbeat 30m |
+| OpenClaw Gateway | UP | systemd, Claude Opus 4.6, heartbeat **60m** (Session 28: reduced from 30m) |
 | Telegram Bot | UP | `@OpenClawOnDGX_bot`, allowlist: [1822532651] |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | **431/431 PASS** | DGX (Session 27 verified) |
-| Scanner | RUNNING | **6** excluded. Base rate predictor + confidence gate (>=0.60). Meta-gate (7-day rolling, halts <40%). Staleness detection. Bearish ALLOWED for base rate. |
+| Tests | **432/432 PASS** | Mac + DGX (Session 28) |
+| Scanner | RUNNING | **137 markets** (Session 28: SCAN_ALL_MARKETS=true, MIN_LIQUIDITY=$500K). 6 excluded. Base rate + staleness cooldown (6-cycle). Meta-gate 59%. Whale tracker at cycle 9. |
 | Nemotron-3-Super | **LIVE** | 86GB Q4_K_M on Ollama. Heartbeats at $0/token. Direct chat = Opus 4.6. |
 | NemoClaw | **INSTALLED** | OpenShell v0.0.9, NemoClaw v0.1.0. Sandbox `polysignal` Ready. Parallel to OpenClaw. |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
@@ -52,7 +52,8 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |
 | Feature Eng. | READY | `lab/feature_engineering.py` — 15 features (10 price + 5 CLOB), temporal safety (`before` param) |
 | XGBoost Baseline | **WIRED + FIRING** | Two-mode gate (Session 26): base rate uses confidence gate, old predictor uses XGBoost. Base rate primary. |
-| Watchdog | **LIVE** | `lab/watchdog.py` — prediction drought, accuracy regression, scanner health, paper trade quality. 14 tests. |
+| Watchdog | **LIVE** | `lab/watchdog.py` — prediction drought, accuracy regression, scanner health, paper trade quality. **Auto-evaluates evolution hypotheses** (Session 28). 14 tests. |
+| Whale Tracker | **LIVE** | `lab/whale_tracker.py` — volume spikes, spread collapses, extreme conviction. Runs cycle 9/21/33. Logs to `.whale-signals.jsonl`. (Session 28) |
 | Feedback Loop | **BUILT** | `lab/feedback_loop.py` — per-market accuracy, auto-exclude, auto-retrain, EV calc. 13 tests. |
 | Evolution Tracker | **BUILT** | `lab/evolution_tracker.py` — hypothesis → measurement → verdict. REFLECT stage. 11 tests. |
 | Event System | **LIVE** | Scanner writes `lab/.events.jsonl` — prediction_made, error_detected. Capped at 500 lines. |

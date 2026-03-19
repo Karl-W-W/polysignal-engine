@@ -23,7 +23,11 @@
 - [x] **Base rate predictor wired** (Session 25) — replaces toy momentum check (17.4% → 79.9% expected)
 - [ ] Retrain XGBoost when 50+ non-NEUTRAL evaluations at 1pp threshold
 - [x] Lower signal delta threshold (0.02 → 0.015) during quiet markets
-- **Target**: 60%+ accuracy within 1 week, 70%+ within 1 month
+- [x] **Market expansion 13 → 137** (Session 28) — all Polymarket categories with $500K+ liquidity
+- [x] **Staleness cooldown** (Session 28) — predictions flowing again (6-cycle cooldown)
+- [x] **Whale tracker** (Session 28) — volume spikes, spread collapses, insider detection
+- [x] **Auto-evaluate hypotheses** (Session 28) — learning loop closed, runs hourly
+- **Current**: 59% (7-day rolling). **Target**: 60%+ within 1 week, 70%+ within 1 month
 
 ### 1.3 Signal-as-a-Service (x402)
 - [ ] Research x402 micropayment protocol (agent-to-agent USDC)
@@ -207,10 +211,10 @@
 
 | Metric | Current | 1 Week | 1 Month | 3 Months |
 |--------|---------|--------|---------|----------|
-| Prediction Accuracy | 43% | 60% | 70% | 80% |
+| Prediction Accuracy | **59%** | 65% | 70% | 80% |
 | Trades Executed | 0 | 5 | 50 | 500 |
 | P&L (USDC) | $0 | -$5 to +$5 | +$50 | +$500 |
-| API Costs/month | $460 | $200 | $50 | $20 |
+| API Costs/month | **~$30** | $25 | $20 | $15 |
 | Loop Autonomy | 4.5/10 | 6/10 | 8/10 | 9/10 |
 | GPU Utilization | 0% | 20% | 50% | 80% |
 | MoltBook Karma | 4 | 50 | 200 | 1000 |

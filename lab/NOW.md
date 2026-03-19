@@ -1,30 +1,33 @@
 # NOW.md — Loop's Operational State
 # If you wake up confused, read this first.
-# Updated: Session 27 (2026-03-18)
+# Updated: Session 28 (2026-03-19)
 
 ## Who You Are
 You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 (GB10 Grace Blackwell, 128GB unified memory) via OpenClaw. Your human is KWW.
-- **Heartbeats**: Nemotron-3-Super-120B (local, $0/token) — Session 27 upgrade
+- **Heartbeats**: Nemotron-3-Super-120B (local, $0/token) — every **60 min** (was 30m, Session 28)
 - **Direct conversations with KWW**: Opus 4.6 (cloud, max quality)
-- **NemoClaw sandbox**: Installed in parallel (OpenShell v0.0.9). Not replacing your current setup.
+- **NemoClaw sandbox**: Installed in parallel (OpenShell v0.0.9). CLI blocker — can't activate yet.
 
 ## What's Running Right Now
 - **Scanner**: `systemctl --user status polysignal-scanner.service`
-  - 5-min cycles, 14 markets, **6 excluded** (824952, 556062, 1373744, 965261, 1541748, 692258)
+  - 5-min cycles, **137 markets** (Session 28: SCAN_ALL_MARKETS=true, MIN_LIQUIDITY=$500K)
+  - **6 excluded** (824952, 556062, 1373744, 965261, 1541748, 692258)
   - Status file: `lab/.scanner-status.json`
-  - **Events**: `lab/.events.jsonl` — append-only event log. Check for new events instead of polling.
-- **TRADING_ENABLED**: false (paper mode only)
+  - **Events**: `lab/.events.jsonl` — prediction_made, error_detected, **whale_detected** (Session 28)
+- **TRADING_ENABLED**: false (short-circuit path). **LIVE_TRADING**: false (disabled overnight — needs approval gate)
 - **Paper trading**: LIVE — every gated prediction → `lab/trading_log.json`
 - **Bearish predictions**: ALLOWED for base rate predictor (Session 26). Still banned for old momentum predictor.
 - **Predictor**: **BASE RATE** (Session 25) — predicts WITH market trends
-  - 556108: Bearish 97% confidence (verified on DGX Session 27)
+  - 556108: Bearish 97% confidence
   - Two-mode gate: base rate uses confidence >= 0.60 (no XGBoost, no bearish ban)
   - Old predictor fallback: keeps XGBoost gate + bearish ban
-- **Meta-gate** (Session 27): 7-day rolling accuracy check. Halts predictions if <40% with 15+ evaluations.
-  - Currently HALTED at 35.4% — old bad predictions aging out. Expected to allow ~March 19-21.
-- **Staleness detection** (Session 27): Skips cycle if last 10 predictions are identical.
+- **Meta-gate**: 7-day rolling accuracy check. **59% (138W/97L)** — passing, predictions flowing.
+- **Staleness cooldown** (Session 28): Every 6th cycle allows stale prediction through (was blocking 100%).
 - **Counter-signal threshold**: 10pp (was 3pp). Only 10pp+ moves can override base rate.
+- **Whale tracker** (Session 28): `lab/whale_tracker.py` — runs at scanner cycle 9/21/33
+  - Detects: volume spikes (5x+), spread collapses (<0.2%), extreme conviction with volume surge
+  - Logs: `lab/.whale-signals.jsonl` (append-only, capped 1000 lines)
 - **Watchdog**: `lab/watchdog.py` — runs every 12th scanner cycle (~hourly)
   - Detects: prediction drought, accuracy regression, scanner staleness, fake paper trades
   - Alerts: `lab/.watchdog-alerts`
@@ -67,12 +70,13 @@ You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 - **Night (22:00-07:00)**: Scanner health → MoltBook deep scan → BUILD SOMETHING → prepare morning briefing
 - **Weekly (Sunday)**: Full backtest → compare to last week → MoltBook performance post
 
-## Current Goals (Priority Order — Session 27)
-1. **Adopt AUTONOMY_SPEC.md Phase 1**: Structured heartbeat output. Work between heartbeats. Read `lab/AUTONOMY_SPEC.md`.
-2. **Monitor accuracy recovery**: 7-day window clearing old predictions. Report when predictions resume.
-3. **Start work_log.md**: Log every action per the autonomy spec format.
-4. **Test Nemotron heartbeat quality**: Your heartbeats now run on Nemotron. Report any quality issues.
-5. **Night protocol**: Build something overnight. MoltBook scan. Morning briefing.
+## Current Goals (Priority Order — Session 28)
+1. **Monitor expanded market predictions**: 137 markets building base rate history. Are non-crypto predictions sensible? Report first diverse predictions.
+2. **Validate whale tracker**: Check `lab/.whale-signals.jsonl` after cycle 9. Are the signals meaningful or noise?
+3. **Category-aware prediction**: The base rate predictor treats all markets the same. Politics/sports/crypto behave differently. Propose improvements.
+4. **Evolution hypothesis results**: Check `evaluate_pending()` output in watchdog logs. Report verdicts for `session28-market-expansion` and `session28-staleness-cooldown`.
+5. **Adopt AUTONOMY_SPEC.md Phase 1**: Structured heartbeat output. Work between heartbeats.
+6. **Night protocol**: Build something overnight. MoltBook scan. Morning briefing.
 
 ## Previous Goals (Session 26)
 1. **Monitor 556108 Bearish accuracy**: Pipeline is live again. 2 evolution hypotheses in flight. First eval in 2h, accuracy eval in 72h. Target: 60%+
