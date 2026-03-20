@@ -53,7 +53,9 @@
 - [x] **OpenClaw heartbeats switched to Nemotron** ($0/token) — Session 27
 - [x] Keep Claude Opus for direct KWW conversations + architect sessions — Session 27
 - [ ] Use deepseek-r1:70b for complex reasoning tasks (code review, strategy)
-- **Target**: ~~$160→$10/month~~ **ACHIEVED: $460→$30/month** (Session 27)
+- [x] **ALL Loop interactions → Nemotron** (Session 29) — primary model changed, Opus/Sonnet as fallback only
+- [x] **NemoClaw deployed** (Session 29) — kernel-level isolation, OpenClaw v2026.3.11 inside sandbox
+- **Target**: ~~$160→$10/month~~ **ACHIEVED: $460→$0/month for Loop** (Session 29 — all local inference)
 
 ### 2.2 Smart Heartbeat Protocol
 - [ ] Replace 30-min status-check heartbeats with event-driven actions

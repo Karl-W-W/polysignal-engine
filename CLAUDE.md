@@ -39,7 +39,7 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **applyPatch**: ENABLED — native file editing from sandbox
 - **Ollama**: Reachable at `http://172.17.0.1:11434` (5 models: nemotron-3-super:120b, llama3.3:70b, deepseek-r1:70b, qwen2.5:14b, llama3.2:3b, zero cost)
 - **Nemotron-3-Super**: Primary heartbeat model (85.6% on OpenClaw benchmarks, 14 tok/s on Spark). Direct chat = Opus 4.6.
-- **NemoClaw**: Installed in parallel (OpenShell v0.0.9, NemoClaw v0.1.0). Sandbox `polysignal` with Landlock+seccomp+netns. Provider: ollama-local.
+- **NemoClaw**: **FULLY DEPLOYED** (Session 29). OpenShell v0.0.12, NemoClaw v0.1.0. Sandbox `polysignal` with Landlock+seccomp+netns. OpenClaw v2026.3.11 inside. Provider: ollama-local. Old OpenClaw gateway STOPPED (port 18789 taken by NemoClaw).
 - **Meta-gate**: 7-day rolling accuracy check in prediction_node. Halts predictions if <40%.
 - **Sandbox Access**: `read` / `write` tools whitelisted for `/mnt/polysignal` and `/opt/loop` (SDK patched).
 - **Staleness detection**: Skips cycle if last 10 predictions are identical.
@@ -63,6 +63,14 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
 Expected: 432/432 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
+
+## DGX SSH Access (CRITICAL — read before every session)
+- **Remote**: `ssh dgx-remote` (Cloudflare Tunnel). Fails with "bad handshake" if DGX cloudflared is down.
+- **LAN**: `ssh spark` or `ssh dgx-local` (192.168.2.244). Only works on home WiFi.
+- **If both fail**: DGX is likely rebooted. `cloudflared.service` auto-starts but `OLLAMA_HOST=0.0.0.0` override may be lost. Requires physical DGX access to fix.
+- **Persistent fix needed**: Add `OLLAMA_HOST` override to a location that survives apt/systemd upgrades.
+- **Claude Code on DGX**: v2.1.80 at `~/.npm-global/bin/claude`. Run from `/opt/loop/`.
+- **Mac clipboard bridge**: `tospark` (Mac→DGX), `fromspark` (DGX→Mac). Aliases in `~/.zshrc`.
 
 ## Working with Loop
 - Assign tasks via `lab/LOOP_TASKS.md` — syncs through directory mount (NOT TASKS.md — Docker inode caching)

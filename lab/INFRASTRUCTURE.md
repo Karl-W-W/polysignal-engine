@@ -13,7 +13,7 @@
 | CPU (20-core ARM) | Scanner + Ollama | ~10% |
 | RAM (128GB unified) | 6.4GB used | ~5% |
 | NVMe (4TB) | 167GB used | ~5% |
-| Ollama | 4 models loaded (host-side) | Loop can't access from sandbox |
+| Ollama | 5 models loaded (host-side, 0.0.0.0) | Reachable from containers (Session 29 fix) |
 | PyTorch | Installed but sm_121 NOT SUPPORTED by pip wheel | Needs NGC container |
 | RAPIDS | Not installed | - |
 | NIM | Not installed | - |
@@ -156,6 +156,47 @@ Unified Memory (128GB):
 3. **The Tear Sheet**: Backtester compiles report with charts
 4. **The Human Check**: KWW reviews on Telegram/dashboard
 5. **Live Execution**: Approved trades fire via py-clob-client Builder API
+
+---
+
+## NemoClaw Stack (Session 29 — DEPLOYED)
+
+| Component | Version | Status |
+|-----------|---------|--------|
+| NemoClaw CLI | v0.1.0 | `~/.npm-global/bin/nemoclaw` |
+| OpenShell CLI | v0.0.12 | `~/.local/bin/openshell` |
+| OpenShell Gateway | v0.0.12 | Running on https://127.0.0.1:8080 |
+| OpenClaw (inside sandbox) | v2026.3.11 | Dashboard at http://localhost:18789/ |
+| Sandbox | `polysignal` | Ready, Landlock+seccomp+netns |
+| Inference | ollama-local | nemotron-3-super:120b ($0/token) |
+| Policies | pypi, npm, telegram | + claude_code, clawhub, github, nvidia, openclaw |
+
+**Key commands:**
+```bash
+nemoclaw polysignal status          # Check sandbox health
+nemoclaw polysignal connect         # Connect to sandbox
+nemoclaw polysignal logs --follow   # Stream sandbox logs
+nemoclaw polysignal policy-add <X>  # Add policy preset
+openshell status                    # Gateway health
+openshell sandbox list              # List sandboxes
+```
+
+**DGX SSH recovery (after reboot):**
+```bash
+# If cloudflared is down:
+sudo systemctl restart cloudflared
+
+# If Ollama only on localhost (containers can't reach):
+sudo mkdir -p /etc/systemd/system/ollama.service.d
+echo -e '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"' | sudo tee /etc/systemd/system/ollama.service.d/override.conf
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+
+# If OpenShell gateway is stopped:
+openshell gateway start
+
+# Restart scanner:
+systemctl --user start polysignal-scanner.service
+```
 
 ---
 

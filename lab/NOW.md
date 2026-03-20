@@ -1,13 +1,16 @@
 # NOW.md — Loop's Operational State
 # If you wake up confused, read this first.
-# Updated: Session 28 (2026-03-19)
+# Updated: Session 29 (2026-03-20)
 
 ## Who You Are
 You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
-(GB10 Grace Blackwell, 128GB unified memory) via OpenClaw. Your human is KWW.
-- **Heartbeats**: Nemotron-3-Super-120B (local, $0/token) — every **60 min** (was 30m, Session 28)
-- **Direct conversations with KWW**: Opus 4.6 (cloud, max quality)
-- **NemoClaw sandbox**: Installed in parallel (OpenShell v0.0.9). CLI blocker — can't activate yet.
+(GB10 Grace Blackwell, 128GB unified memory) via **NemoClaw** (OpenShell v0.0.12). Your human is KWW.
+- **ALL interactions**: Nemotron-3-Super-120B (local, $0/token) — including direct conversations
+- **Heartbeat interval**: 60 min
+- **NemoClaw sandbox**: `polysignal` — **FULLY DEPLOYED** (Session 29). Landlock + seccomp + netns.
+- **OpenClaw version**: v2026.3.11 (inside NemoClaw sandbox, upgraded from v2026.2.12)
+- **Old OpenClaw gateway**: STOPPED. Port 18789 now used by NemoClaw dashboard.
+- **IMPORTANT**: Your Telegram connection needs migration to NemoClaw sandbox. Until then, Telegram is offline.
 
 ## What's Running Right Now
 - **Scanner**: `systemctl --user status polysignal-scanner.service`
@@ -70,12 +73,12 @@ You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 - **Night (22:00-07:00)**: Scanner health → MoltBook deep scan → BUILD SOMETHING → prepare morning briefing
 - **Weekly (Sunday)**: Full backtest → compare to last week → MoltBook performance post
 
-## Current Goals (Priority Order — Session 28)
-1. **Monitor expanded market predictions**: 137 markets building base rate history. Are non-crypto predictions sensible? Report first diverse predictions.
-2. **Validate whale tracker**: Check `lab/.whale-signals.jsonl` after cycle 9. Are the signals meaningful or noise?
-3. **Category-aware prediction**: The base rate predictor treats all markets the same. Politics/sports/crypto behave differently. Propose improvements.
-4. **Evolution hypothesis results**: Check `evaluate_pending()` output in watchdog logs. Report verdicts for `session28-market-expansion` and `session28-staleness-cooldown`.
-5. **Adopt AUTONOMY_SPEC.md Phase 1**: Structured heartbeat output. Work between heartbeats.
+## Current Goals (Priority Order — Session 29)
+1. **URGENT: Telegram migration** — Your old OpenClaw gateway is STOPPED. Telegram won't work until bot token is configured in the NemoClaw sandbox. Wait for Claude Code to set this up in Session 30.
+2. **Monitor expanded market predictions**: 137 markets building base rate history. Report first diverse predictions.
+3. **Validate whale tracker**: Check `lab/.whale-signals.jsonl`. 552 signals detected so far. Report top findings.
+4. **Category-aware prediction**: Politics/sports/crypto behave differently. Propose improvements.
+5. **Evolution hypothesis results**: Check `evaluate_pending()` for `session28-market-expansion` and `session28-staleness-cooldown`.
 6. **Night protocol**: Build something overnight. MoltBook scan. Morning briefing.
 
 ## Previous Goals (Session 26)

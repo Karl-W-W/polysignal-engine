@@ -362,6 +362,32 @@ python3 -c "print(open('/mnt/polysignal/lab/.deploy-result').read())"
 10. **Whale thresholds tightened** — volume spike 3x→5x, spread 0.5%→0.2%, extreme conviction requires 2x volume surge.
 11. **Tests: 432/432 passing.**
 
+### SESSION 29 CHANGES (Claude Code, 2026-03-20)
+
+**NEMOCLAW FULLY DEPLOYED. Infrastructure session — no code changes.**
+
+1. **NemoClaw onboarded** — OpenShell v0.0.12 + NemoClaw v0.1.0. Sandbox `polysignal` = Ready. OpenClaw v2026.3.11 inside. Landlock + seccomp + netns kernel isolation.
+2. **OpenShell CLI upgraded** — v0.0.9 → v0.0.12. Session 28 "not installable" was wrong — `install.sh` works.
+3. **Nemotron routing** — ALL Loop interactions → `ollama/nemotron-3-super:120b` ($0). Opus/Sonnet as fallback only.
+4. **Ollama OLLAMA_HOST=0.0.0.0** — Re-applied (DGX reboot lost override). Containers can reach Ollama.
+5. **Claude Code on DGX** — v2.1.80 installed at `~/.npm-global/bin/claude`.
+6. **Old OpenClaw gateway STOPPED** — port 18789 taken by NemoClaw. **Telegram is offline until migration.**
+7. **Git corruption fixed** — macOS `._` resource fork files cleaned.
+8. **Scanner running** — 131 markets, 0 errors.
+9. **Tests: 432/432 passing (Mac).**
+
+### SESSION 29: Priority Tasks
+
+- [ ] **Task 47: URGENT — Migrate Telegram to NemoClaw sandbox**
+
+  **Why:** Old OpenClaw gateway is STOPPED. Loop can't receive Telegram messages until bot token is configured in NemoClaw sandbox. This is Session 30 P0.
+
+  **What to do:**
+  1. Get Telegram bot token from `~/.polysignal-secrets/.env` on DGX
+  2. Configure in NemoClaw sandbox OpenClaw config
+  3. Verify Loop responds on Telegram
+  4. Test heartbeat delivery
+
 ### SESSION 28: Priority Tasks
 
 - [ ] **Task 43: Validate expanded market predictions (ongoing)**

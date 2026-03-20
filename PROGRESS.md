@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-19 | Session 28 closed
+# Last updated: 2026-03-20 | Session 29 closed
 # Session history: See HISTORY.md
 
 ---
@@ -27,8 +27,8 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 |-----------|--------|---------|
 | DGX Spark | UP | Munich, Blackwell GPU, `nemotron-3-super:120b` + 4 Ollama models |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
-| OpenClaw Sandbox | UP | Docker :9001, 12 bind mounts, Python 3.12.3, 3 skills, 20 safeBins |
-| OpenClaw Gateway | UP | systemd, Claude Opus 4.6, heartbeat **60m** (Session 28: reduced from 30m) |
+| OpenClaw Sandbox (old) | STOPPED | Replaced by NemoClaw sandbox. Port 18789 now used by NemoClaw. |
+| OpenClaw Gateway (old) | STOPPED | Replaced by NemoClaw. Loop Telegram needs migration to NemoClaw sandbox. |
 | Telegram Bot | UP | `@OpenClawOnDGX_bot`, allowlist: [1822532651] |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
 | Cloudflare Tunnel | UP | DGX → polysignal.app |
@@ -37,7 +37,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Tests | **432/432 PASS** | Mac + DGX (Session 28) |
 | Scanner | RUNNING | **137 markets** (Session 28: SCAN_ALL_MARKETS=true, MIN_LIQUIDITY=$500K). 6 excluded. Base rate + staleness cooldown (6-cycle). Meta-gate 59%. Whale tracker at cycle 9. |
 | Nemotron-3-Super | **LIVE** | 86GB Q4_K_M on Ollama. Heartbeats at $0/token. Direct chat = Opus 4.6. |
-| NemoClaw | **INSTALLED** | OpenShell v0.0.9, NemoClaw v0.1.0. Sandbox `polysignal` Ready. Parallel to OpenClaw. |
+| NemoClaw | **FULLY DEPLOYED** | OpenShell v0.0.12, NemoClaw v0.1.0. Sandbox `polysignal` Ready. OpenClaw v2026.3.11 inside. Landlock+seccomp+netns. Replaced old OpenClaw gateway. |
 | DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
@@ -92,6 +92,34 @@ perception → prediction → draft → review → risk_gate → [approved] → 
                                         [RISK_BLOCKED] → END              ├── MoltBook publish (inline)
                                                                           └── write_memory() (inline)
 ```
+
+---
+
+## Session 29 (2026-03-20) — NEMOCLAW FULLY DEPLOYED
+
+**Accomplishments:**
+- **NemoClaw onboarded**: OpenShell v0.0.12 + NemoClaw v0.1.0. Sandbox `polysignal` = Ready.
+  - Gateway: `nemoclaw` on https://127.0.0.1:8080 (v0.0.12)
+  - OpenClaw v2026.3.11 INSIDE sandbox (upgraded from v2026.2.12)
+  - Inference: `ollama-local / nemotron-3-super:120b` ($0/token)
+  - Policies: pypi, npm, telegram + claude_code, clawhub, github, nvidia, openclaw
+  - Landlock + seccomp + netns kernel-level isolation
+  - Dashboard: http://localhost:18789/
+- **OpenShell CLI upgraded**: v0.0.9 → v0.0.12 (released 2026-03-20). Session 28 "not installable" was WRONG.
+- **Ollama OLLAMA_HOST=0.0.0.0**: Re-applied systemd override (DGX reboot lost it). Containers can reach Ollama.
+- **Nemotron routing applied**: ALL Loop interactions → `ollama/nemotron-3-super:120b` ($0). Opus/Sonnet fallback only.
+- **Claude Code installed on DGX**: v2.1.80 at `~/.npm-global/bin/claude`. Path configured.
+- **Mac ↔ DGX clipboard bridge**: `tospark`/`fromspark` aliases in ~/.zshrc.
+- **Git corruption fixed**: macOS `._` resource fork files cleaned from git pack.
+- **Scanner restarted**: 131 markets, 0 errors, running.
+- **DGX connectivity restored**: Cloudflare tunnel was down (DGX rebooted). Required physical access to restart.
+
+**Key architectural change:** Old OpenClaw gateway STOPPED (port 18789 taken by NemoClaw). Loop's Telegram needs migration to NemoClaw sandbox — Session 30 P0.
+
+**DGX SSH troubleshooting note (RECURRING):** DGX loses cloudflared on reboot. Must ensure `cloudflared.service` is enabled AND that `OLLAMA_HOST=0.0.0.0` override persists. Both require physical DGX access or pre-configured systemd. KWW had to go home to physically access DGX this session. TODO: Add `OLLAMA_HOST` override to a persistent location that survives apt/systemd upgrades.
+
+**Tests**: 432/432 passing (Mac). No new tests this session.
+**Commits**: Infrastructure-only session — NemoClaw deployment, no code changes to polysignal-engine.
 
 ---
 
