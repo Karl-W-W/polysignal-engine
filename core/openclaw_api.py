@@ -147,6 +147,7 @@ async def execute_command(
          logger.warning("OPENCLAW_API_KEY not set - authentication disabled (INSECURE)")
 
     # 2. HMAC Signature Verification
+    # 2. HMAC Signature Verification
     if not verify_signature(command, signature):
         logger.warning(f"Rejected: Invalid signature for command: {command}")
         
@@ -164,17 +165,35 @@ async def execute_command(
 
     logger.info(f"Authorized execution: {command}")
 
-    # SECURITY WARNING: This executes arbitrary shell commands.
-    # The container must be sandboxed and read-only.
+    # COMMAND ALLOWLIST (Security Hardening P0)
+    ALLOWED_PATTERNS = [
+        "python3 lab/",
+        "python3 core/",
+        "pytest ",
+        "ls -l",
+        "cat lab/",
+        "echo ",
+        "find lab/",
+        "tail -",
+        "grep "
+    ]
     
+    is_allowed = any(command.startswith(pattern) for pattern in ALLOWED_PATTERNS)
+    if not is_allowed:
+        logger.warning(f"Rejected: Command not in allowlist: {command}")
+        log_execution_attempt(
+            command=command,
+            signature=signature,
+            signature_valid=True,
+            auth_valid=True,
+            result="rejected",
+            error="Command not in allowlist",
+            source_ip=source_ip,
+            user_agent=user_agent
+        )
+        raise HTTPException(status_code=403, detail="Command not in allowlist")
+
     try:
-        # Wrap command in Firejail sandbox
-        # --quiet: Reduce noise
-        # --noprofile: Don't use default profiles (start clean)
-        # --private=.: Only see current directory (the workspace)
-        # --net=none: NO NETWORK ACCESS (Priority 11 foundation)
-        # /bin/sh -c: Execute the actual command string
-        
         # Safe quoting for the inner command
         import json
         safe_cmd_str = json.dumps(command)
