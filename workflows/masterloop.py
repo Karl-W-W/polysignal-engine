@@ -342,35 +342,47 @@ def prediction_node(state: LoopState) -> LoopState:
         # The toy momentum predictor in core/predict.py fights market trends.
         # Base rate predictor: predict the historically dominant direction.
         # Falls back to old predict_market_moves + signal enhancement if unavailable.
+        # ── Session 30: Hybrid prediction ─────────────────────────────────────
+        # Base rate for markets WITH historical biases; momentum fallback for the
+        # rest.  Fixes the prediction drought caused by market expansion (Session
+        # 28 → 143 markets, none with biases → 0 predictions for 137+ hours).
         use_base_rate = False
+        base_rate_preds = []
+        fallback_obs = list(pred_obs)  # default: all go to fallback
         try:
             from lab.base_rate_predictor import BaseRatePredictor
-            predictor = BaseRatePredictor.from_outcomes()
+            predictor = BaseRatePredictor.from_all_sources()
             if predictor.biases:
-                predictions = []
+                base_rate_preds = []
+                fallback_obs = []
                 for obs in pred_obs:
                     mid = obs.get("market_id")
-                    signal_delta = obs.get("change_24h", 0.0)
-                    result = predictor.predict(mid, signal_delta=signal_delta)
-                    predictions.append({
-                        "market_id": mid,
-                        "hypothesis": result.direction,
-                        "confidence": result.confidence,
-                        "reasoning": result.reasoning,
-                        "time_horizon": obs.get("time_horizon", "24h"),
-                        # Session 27: Pass title + price for paper trading
-                        "title": obs.get("title", obs.get("question", "")),
-                        "current_price": obs.get("current_price", obs.get("price", 0.0)),
-                    })
-                use_base_rate = True
-                print(f"  📊 Base rate predictor: {len(predictions)} predictions from {len(predictor.biases)} market biases")
+                    if mid in predictor.biases and predictor.biases[mid].confident:
+                        signal_delta = obs.get("change_24h", 0.0)
+                        result = predictor.predict(mid, signal_delta=signal_delta)
+                        base_rate_preds.append({
+                            "market_id": mid,
+                            "hypothesis": result.direction,
+                            "confidence": result.confidence,
+                            "reasoning": result.reasoning,
+                            "time_horizon": obs.get("time_horizon", "24h"),
+                            "title": obs.get("title", obs.get("question", "")),
+                            "current_price": obs.get("current_price", obs.get("price", 0.0)),
+                            "_predictor": "base_rate",
+                        })
+                    else:
+                        fallback_obs.append(obs)
+                use_base_rate = len(base_rate_preds) > 0
+                print(f"  📊 Base rate: {len(base_rate_preds)} predictions | {len(fallback_obs)} markets to momentum fallback")
         except Exception as e:
             print(f"  ⚠ Base rate predictor failed: {e}")
 
+        # ── Momentum fallback for markets without base rate bias ──────────────
+        momentum_preds = []
         enhanced = 0
-        if not use_base_rate:
-            preds = predict_market_moves(pred_obs)
-            predictions = [p.to_dict() for p in preds]
+        if fallback_obs:
+            preds = predict_market_moves(fallback_obs)
+            momentum_preds = [p.to_dict() for p in preds]
 
             # Enhance Neutral predictions with perception signal data.
             obs_signals = {}
@@ -380,7 +392,7 @@ def prediction_node(state: LoopState) -> LoopState:
                 if mid and direction:
                     obs_signals[mid] = obs
 
-            for pred in predictions:
+            for pred in momentum_preds:
                 if pred["hypothesis"] == "Neutral" and pred["market_id"] in obs_signals:
                     sig = obs_signals[pred["market_id"]]
                     direction = sig["direction"].lower()
@@ -390,6 +402,12 @@ def prediction_node(state: LoopState) -> LoopState:
                     pred["reasoning"] = f"Signal-enhanced: {sig['direction']} (delta: {sig.get('change_24h', 0):.3f})"
                     pred["time_horizon"] = sig.get("time_horizon", "24h")
                     enhanced += 1
+            for pred in momentum_preds:
+                pred["_predictor"] = "momentum"
+            if momentum_preds:
+                print(f"  📊 Momentum fallback: {len(momentum_preds)} predictions ({enhanced} signal-enhanced)")
+
+        predictions = base_rate_preds + momentum_preds
 
         # ── Staleness detection (Session 27) ─────────────────────────────────
         # If the last N recorded predictions are identical (same market, same
@@ -425,39 +443,38 @@ def prediction_node(state: LoopState) -> LoopState:
             print(f"  ⊘ Staleness check skipped: {e}")
 
         # ── Confidence gate ──────────────────────────────────────────────────
-        # Session 26: Two gate modes depending on predictor type.
-        #
-        # Base rate gate (use_base_rate=True):
-        #   Uses base rate confidence directly. No bearish ban — the base rate
-        #   predictor predicts WITH market trends (556108 = 94% Bearish).
-        #   The Session 24 bearish ban was correct for the old momentum predictor
-        #   (which fought trends, 5.6% accuracy) but wrong for base rate (which
-        #   aligns with them). XGBoost gate scores are meaningless for base rate
-        #   predictions since the model was trained on old predictor data.
-        #
-        # XGBoost gate (use_base_rate=False, fallback):
-        #   Original gate with bearish ban — still valid for old predictor.
+        # Session 30: Hybrid gate — each prediction goes through the gate
+        # matching its predictor type.  Base rate predictions use confidence
+        # threshold (no bearish ban).  Momentum predictions use XGBoost gate
+        # with bearish ban.
         suppressed = 0
         gate_ran = False
 
-        if use_base_rate:
-            # ── Base rate confidence gate (Session 26) ────────────────────────
-            BASE_RATE_GATE_THRESHOLD = 0.60
-            gated = []
-            for pred in predictions:
-                hyp = pred.get("hypothesis")
-                conf = pred.get("confidence", 0.0)
-                if hyp == "Neutral":
-                    suppressed += 1
-                    continue
-                if conf < BASE_RATE_GATE_THRESHOLD:
-                    suppressed += 1
-                    continue
-                gated.append(pred)
-            predictions = gated
-            gate_ran = True
-            print(f"  🔍 Base rate gate (>={BASE_RATE_GATE_THRESHOLD}): {len(predictions)} passed, {suppressed} suppressed")
-        else:
+        # Separate by predictor type
+        br_preds = [p for p in predictions if p.get("_predictor") == "base_rate"]
+        mom_preds = [p for p in predictions if p.get("_predictor") != "base_rate"]
+
+        # ── Base rate confidence gate ─────────────────────────────────────
+        BASE_RATE_GATE_THRESHOLD = 0.55  # Session 30: lowered from 0.60 to allow observation-based biases
+        br_gated = []
+        br_suppressed = 0
+        for pred in br_preds:
+            hyp = pred.get("hypothesis")
+            conf = pred.get("confidence", 0.0)
+            if hyp == "Neutral":
+                br_suppressed += 1
+                continue
+            if conf < BASE_RATE_GATE_THRESHOLD:
+                br_suppressed += 1
+                continue
+            br_gated.append(pred)
+        if br_preds:
+            print(f"  🔍 Base rate gate (>={BASE_RATE_GATE_THRESHOLD}): {len(br_gated)} passed, {br_suppressed} suppressed")
+
+        # ── Momentum / XGBoost gate ───────────────────────────────────────
+        mom_gated = []
+        mom_suppressed = 0
+        if mom_preds:
             # ── XGBoost confidence gate (Session 15) ──────────────────────────
             try:
                 from lab.xgboost_baseline import load_model as xgb_load, select_features
@@ -465,14 +482,13 @@ def prediction_node(state: LoopState) -> LoopState:
                 xgb_model, xgb_features = xgb_load()
                 db_path = os.getenv("DB_PATH", "/opt/loop/data/test.db")
 
-                gated = []
-                for pred in predictions:
+                for pred in mom_preds:
                     market_id = pred.get("market_id")
                     if not market_id:
-                        gated.append(pred)
+                        mom_gated.append(pred)
                         continue
                     if pred.get("hypothesis") == "Neutral":
-                        suppressed += 1
+                        mom_suppressed += 1
                         continue
                     try:
                         fv = extract_features(market_id, db_path=db_path)
@@ -483,26 +499,34 @@ def prediction_node(state: LoopState) -> LoopState:
 
                         # Session 24: Ban bearish for old predictor (fights trends).
                         if pred.get("hypothesis") == "Bearish":
-                            suppressed += 1
+                            mom_suppressed += 1
                             continue
                         gate_threshold = 0.5
                         if p_correct < gate_threshold:
-                            suppressed += 1
+                            mom_suppressed += 1
                             continue
-                        gated.append(pred)
+                        mom_gated.append(pred)
                     except Exception as e:
                         print(f"  ⊘ XGBoost gate: {market_id} feature extraction failed: {e}")
-                        gated.append(pred)
-                predictions = gated
+                        mom_gated.append(pred)
                 gate_ran = True
             except Exception as e:
                 print(f"  ⊘ XGBoost gate skipped: {e}")
+                # If XGBoost gate fails, pass momentum predictions through unfiltered
+                mom_gated = [p for p in mom_preds if p.get("hypothesis") != "Neutral"]
+                mom_suppressed = len(mom_preds) - len(mom_gated)
 
-            if gate_ran:
-                print(f"  🔍 XGBoost gate: {len(predictions)} passed, {suppressed} suppressed")
+            print(f"  🔍 Momentum gate: {len(mom_gated)} passed, {mom_suppressed} suppressed")
+
+        # Merge both gated lists
+        suppressed = br_suppressed + mom_suppressed
+        predictions = br_gated + mom_gated
+        gate_ran = True
 
         state["predictions"] = predictions
-        predictor_label = "base-rate" if use_base_rate else f"{enhanced} signal-enhanced"
+        br_label = f"{len(br_gated)} base-rate" if br_gated else ""
+        mom_label = f"{len(mom_gated)} momentum" if mom_gated else ""
+        predictor_label = " + ".join(filter(None, [br_label, mom_label])) or "none"
         print(f"  ✓ {len(predictions)} hypotheses ({predictor_label})")
 
         # ── Record predictions for future outcome evaluation (non-blocking) ──

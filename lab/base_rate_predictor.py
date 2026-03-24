@@ -21,6 +21,7 @@ with momentum/ML as secondary signal for counter-trend detection.
 
 import json
 import os
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
@@ -30,11 +31,17 @@ OUTCOMES_FILE = Path(os.getenv(
     "OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"
 ))
 
+OBS_DB_PATH = os.getenv("DB_PATH", "/opt/loop/data/test.db")
+
 # Minimum samples before we trust the base rate
 MIN_SAMPLES = 10
 
 # Minimum bias strength before we make a directional call
 MIN_BIAS = 0.60
+
+# Observation-based biases need more samples (noisier signal)
+OBS_MIN_SAMPLES = 50
+OBS_MIN_BIAS = 0.55
 
 # Counter-signal threshold: only override base rate if delta exceeds this
 # relative to the market's typical volatility
@@ -128,6 +135,78 @@ class BaseRatePredictor:
             )
 
         return cls(biases)
+
+    @classmethod
+    def from_observations(cls, db_path: str = OBS_DB_PATH) -> "BaseRatePredictor":
+        """Build base rates from observation price movements in the scanner DB.
+
+        Session 30: After market expansion (13 → 142), most markets have no
+        prediction outcomes yet. This method bootstraps biases from consecutive
+        price changes in the observation table (up vs down movements).
+        """
+        if not os.path.exists(db_path):
+            return cls({})
+
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute(
+                "SELECT market_id, price FROM observations ORDER BY market_id, timestamp"
+            )
+            market_stats: Dict[str, Dict[str, int]] = {}
+            prev_price: Dict[str, float] = {}
+
+            for mid, price in cursor:
+                if mid in prev_price:
+                    delta = price - prev_price[mid]
+                    if mid not in market_stats:
+                        market_stats[mid] = {"up": 0, "down": 0}
+                    if delta > 0.0001:
+                        market_stats[mid]["up"] += 1
+                    elif delta < -0.0001:
+                        market_stats[mid]["down"] += 1
+                prev_price[mid] = price
+        finally:
+            conn.close()
+
+        biases = {}
+        for mid, stats in market_stats.items():
+            total = stats["up"] + stats["down"]
+            if total < OBS_MIN_SAMPLES:
+                continue
+            up_rate = stats["up"] / total
+            bias_strength = max(up_rate, 1 - up_rate)
+            dominant = "Bullish" if up_rate >= 0.5 else "Bearish"
+            confident = bias_strength >= OBS_MIN_BIAS
+
+            if confident:
+                biases[mid] = MarketBias(
+                    market_id=mid,
+                    up_count=stats["up"],
+                    down_count=stats["down"],
+                    total=total,
+                    up_rate=round(up_rate, 3),
+                    dominant_direction=dominant,
+                    bias_strength=round(bias_strength, 3),
+                    confident=True,
+                )
+
+        return cls(biases)
+
+    @classmethod
+    def from_all_sources(cls, outcomes_path: Path = OUTCOMES_FILE,
+                         db_path: str = OBS_DB_PATH) -> "BaseRatePredictor":
+        """Merge outcome-based and observation-based biases.
+
+        Outcome biases (from evaluated predictions) take priority when available.
+        Observation biases fill in for new markets without prediction history.
+        """
+        outcome_predictor = cls.from_outcomes(outcomes_path)
+        obs_predictor = cls.from_observations(db_path)
+
+        merged = dict(obs_predictor.biases)  # observation biases as base
+        merged.update(outcome_predictor.biases)  # outcome biases override
+
+        return cls(merged)
 
     def predict(self, market_id: str, signal_delta: float = 0.0) -> PredictionResult:
         """Predict direction for a market.
