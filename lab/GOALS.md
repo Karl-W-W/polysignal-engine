@@ -21,6 +21,8 @@
 - [x] Per-market accuracy audit — identify and kill toxic markets (**6 excluded**: 824952, 556062, 1373744, 965261, 1541748, 692258)
 - [x] Direction-aware analysis — **bearish BANNED** (5.6% live). Bullish-only mode (100% live).
 - [x] **Base rate predictor wired** (Session 25) — replaces toy momentum check (17.4% → 79.9% expected)
+- [x] **Hybrid prediction system** (Session 30) — base rate + momentum fallback, observation-based biases from test.db
+- [x] **Prediction drought fixed** (Session 30) — 137+ hours with 0 predictions. Observation biases unblocked new markets.
 - [ ] Retrain XGBoost when 50+ non-NEUTRAL evaluations at 1pp threshold
 - [x] Lower signal delta threshold (0.02 → 0.015) during quiet markets
 - [x] **Market expansion 13 → 137** (Session 28) — all Polymarket categories with $500K+ liquidity
@@ -213,12 +215,12 @@
 
 | Metric | Current | 1 Week | 1 Month | 3 Months |
 |--------|---------|--------|---------|----------|
-| Prediction Accuracy | **59%** | 65% | 70% | 80% |
+| Prediction Accuracy | **59%** (hybrid system live) | 65% | 70% | 80% |
 | Trades Executed | 0 | 5 | 50 | 500 |
 | P&L (USDC) | $0 | -$5 to +$5 | +$50 | +$500 |
-| API Costs/month | **~$30** | $25 | $20 | $15 |
-| Loop Autonomy | 4.5/10 | 6/10 | 8/10 | 9/10 |
-| GPU Utilization | 0% | 20% | 50% | 80% |
+| API Costs/month | **~$0** (Nemotron unloaded, gateway stopped) | $25 | $20 | $15 |
+| Loop Autonomy | 3/10 (gateway stopped, Telegram offline) | 6/10 | 8/10 | 9/10 |
+| GPU Utilization | ~1% (Nemotron unloaded Session 30) | 20% | 50% | 80% |
 | MoltBook Karma | 4 | 50 | 200 | 1000 |
 | ClawHub Skills | 0 | 2 | 5 | 10 |
 | Revenue Streams | 0 | 1 | 3 | 5 |

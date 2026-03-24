@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-20 | Session 29 closed
+# Last updated: 2026-03-25 | Session 30 closed
 # Session history: See HISTORY.md
 
 ---
@@ -25,20 +25,20 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| DGX Spark | UP | Munich, Blackwell GPU, `nemotron-3-super:120b` + 4 Ollama models |
+| DGX Spark | UP | Munich, Blackwell GPU, Nemotron UNLOADED (Session 30), 4 Ollama models |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
 | OpenClaw Sandbox (old) | STOPPED | Replaced by NemoClaw sandbox. Port 18789 now used by NemoClaw. |
 | OpenClaw Gateway (old) | STOPPED | Replaced by NemoClaw. Loop Telegram needs migration to NemoClaw sandbox. |
-| Telegram Bot | UP | `@OpenClawOnDGX_bot`, allowlist: [1822532651] |
+| Telegram Bot | OFFLINE | Gateway stopped (Session 29). Needs NemoClaw migration. |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
-| Cloudflare Tunnel | UP | DGX → polysignal.app |
+| Cloudflare Tunnel | BROKEN | `failed to find Access application at ssh.polysignal.app` — needs Cloudflare config investigation |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
 | Tests | **432/432 PASS** | Mac + DGX (Session 28) |
-| Scanner | RUNNING | **137 markets** (Session 28: SCAN_ALL_MARKETS=true, MIN_LIQUIDITY=$500K). 6 excluded. Base rate + staleness cooldown (6-cycle). Meta-gate 59%. Whale tracker at cycle 9. |
-| Nemotron-3-Super | **LIVE** | 86GB Q4_K_M on Ollama. Heartbeats at $0/token. Direct chat = Opus 4.6. |
+| Scanner | RUNNING | **137 markets** (Session 28). **Hybrid prediction** (Session 30): base rate + momentum fallback. Observation-based biases. BASE_RATE_GATE_THRESHOLD=0.55. Meta-gate 59%. |
+| Nemotron-3-Super | **UNLOADED** | Was consuming 86GB VRAM + 73°C with zero output. Unloaded Session 30. Reload when Loop needs it. |
 | NemoClaw | **FULLY DEPLOYED** | OpenShell v0.0.12, NemoClaw v0.1.0. Sandbox `polysignal` Ready. OpenClaw v2026.3.11 inside. Landlock+seccomp+netns. Replaced old OpenClaw gateway. |
-| DGX Thermal | OK 28°C | Stable — short-circuit eliminated LLM heat spikes |
+| DGX Thermal | OK ~50°C | Was 73°C (old gateway + Nemotron). Fixed Session 30: stopped gateway, unloaded model. |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
@@ -92,6 +92,33 @@ perception → prediction → draft → review → risk_gate → [approved] → 
                                         [RISK_BLOCKED] → END              ├── MoltBook publish (inline)
                                                                           └── write_memory() (inline)
 ```
+
+---
+
+## Session 30 (2026-03-25) — PREDICTION DROUGHT FIXED + OVERHEATING FIXED
+
+**Accomplishments:**
+- **Prediction drought fixed (137+ hours, 0 predictions)**: Root cause — market expansion to 137 markets left only 4 with outcome-based biases. All new markets → Neutral → suppressed. Built **hybrid prediction system**: base rate path (markets WITH biases) + momentum fallback (markets WITHOUT biases). Separate gates per predictor type.
+- **Observation-based biases added**: `from_observations()` in `base_rate_predictor.py` builds market direction biases from consecutive price movements in SQLite (test.db with 145K rows, 181 markets). `from_all_sources()` merges outcome + observation biases. Result: 5 biases found (was 4 outcome-only).
+- **DGX overheating fixed (73°C → 50°C)**: Old OpenClaw gateway was making continuous Nemotron-3-Super 120B requests that ALL timed out at 600s each, producing zero output while consuming 86GB VRAM and 94% GPU. Stopped gateway + unloaded Nemotron. GPU power: 43W→14W. RAM: 101GB→11GB (91GB freed).
+- **Loop productivity audit**: 3 commits in 30 days (docs only, no code). All LLM requests timing out. Zero meaningful output from the gateway. KWW chose to keep stopped.
+- **SSH config fixed**: WiFi .244 → Ethernet .144 (29ms → 5ms latency). DGX Ethernet is metric 100, WiFi is metric 600.
+- **DB_PATH systemd drop-in**: Scanner was using wrong DB (polysignal.db with 38 markets). Fixed to test.db (145K rows, 181 markets) via `dbpath.conf` drop-in.
+- **DGX cron sync lesson**: `scp` silently fails because `*/10 * * * * git fetch && git reset --hard origin/main` overwrites all non-git changes. MUST push to GitHub first, then trigger sync on DGX.
+- **Loop self-audit captured**: Full Telegram Q&A with Loop saved to memory for next session context. Loop recommends NemoClaw absorb OpenClaw, provided migration checklist.
+- **Cloudflare Tunnel broken**: `failed to find Access application at ssh.polysignal.app`. Not fixed — needs Cloudflare config investigation. LAN access (.144) works.
+
+**Key architectural change:** Hybrid prediction system replaces single-path base rate predictor. BASE_RATE_GATE_THRESHOLD lowered 0.60→0.55 for observation-based biases. First prediction in 137+ hours confirmed: "Base rate gate (>=0.55): 1 passed, 0 suppressed".
+
+**Files modified:**
+- `workflows/masterloop.py` — hybrid prediction split + dual gates
+- `lab/base_rate_predictor.py` — `from_observations()` + `from_all_sources()`
+- `docker-compose.yml` — cleanup (removed stale comment)
+- DGX: `~/.config/systemd/user/polysignal-scanner.service.d/dbpath.conf` — DB_PATH fix
+- Mac: `~/.ssh/config` — Ethernet .144
+
+**Tests**: 432/432 passing (Mac). No new tests this session (code changes were to existing prediction pipeline).
+**Commits**: Hybrid prediction fix + observation-based biases.
 
 ---
 

@@ -362,6 +362,30 @@ python3 -c "print(open('/mnt/polysignal/lab/.deploy-result').read())"
 10. **Whale thresholds tightened** — volume spike 3x→5x, spread 0.5%→0.2%, extreme conviction requires 2x volume surge.
 11. **Tests: 432/432 passing.**
 
+### SESSION 30 CHANGES (Claude Code, 2026-03-25)
+
+**PREDICTION DROUGHT FIXED. DGX OVERHEATING FIXED. Hybrid prediction system deployed.**
+
+1. **Hybrid prediction system** — Base rate path (markets WITH biases) + momentum fallback (markets WITHOUT biases). Separate gates per predictor type. BASE_RATE_GATE_THRESHOLD lowered 0.60→0.55.
+
+2. **Observation-based biases** — `from_observations()` builds biases from consecutive price movements in test.db (145K rows). `from_all_sources()` merges outcome + observation biases. 5 biases found (was 4).
+
+3. **DGX overheating FIXED** — Old gateway was making Nemotron-3-Super requests that ALL timed out at 600s. 94% GPU, 73°C. Stopped gateway + unloaded Nemotron. Now: 50°C, 1% GPU, 91GB RAM freed.
+
+4. **Nemotron-3-Super UNLOADED** — Was consuming 86GB VRAM with zero output. Reload with `ollama run nemotron-3-super:120b` when you need it. Unload after to keep DGX cool.
+
+5. **SSH config fixed** — WiFi .244 → Ethernet .144. More reliable.
+
+6. **DB_PATH fixed** — Scanner was using wrong DB (polysignal.db with 38 markets). Now uses test.db (145K rows, 181 markets) via systemd drop-in.
+
+7. **Cloudflare Tunnel BROKEN** — `failed to find Access application at ssh.polysignal.app`. LAN access works.
+
+8. **Loop productivity audit** — 3 commits in 30 days (docs only). Gateway requests ALL timing out. KWW chose to keep stopped. **Loop needs to demonstrate code output, not just reports.**
+
+**First prediction in 137+ hours confirmed after deploy.**
+
+---
+
 ### SESSION 29 CHANGES (Claude Code, 2026-03-20)
 
 **NEMOCLAW FULLY DEPLOYED. Infrastructure session — no code changes.**

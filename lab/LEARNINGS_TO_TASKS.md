@@ -1,7 +1,7 @@
 # Learnings → Tasks Pipeline
 # Bridge between MoltBook/ClawHub intelligence and implementation.
 # Loop writes discoveries here. Claude Code picks up actionable items.
-# Updated: Session 23 (2026-03-11)
+# Updated: Session 30 (2026-03-25)
 
 ---
 
@@ -66,6 +66,17 @@
 ---
 
 ## Implemented (Done)
+
+### Hybrid Prediction System + Overheating Fix (Session 30)
+- **Source**: 137+ hour prediction drought — market expansion left most markets without biases
+- **Implementation**: Hybrid prediction in `masterloop.py` — base rate path (markets WITH biases, gate >=0.55) + momentum fallback (markets WITHOUT biases, XGBoost gate). `from_observations()` in `base_rate_predictor.py` builds biases from consecutive price movements in test.db. `from_all_sources()` merges outcome + observation biases.
+- **Result**: 5 biases (was 4), first prediction in 137+ hours, 1 prediction/cycle confirmed.
+- **Bonus fix**: DGX overheating (73°C→50°C) — old gateway consuming 94% GPU for zero output. Stopped + unloaded Nemotron (91GB freed).
+- **Key lessons**:
+  1. DGX cron `git reset --hard` means SCP silently fails — always push to GitHub first
+  2. Python __pycache__ survives `git reset --hard` — must delete after every deploy
+  3. `scp -O` flag needed for reliable transfers (newer SSH uses SFTP by default)
+  4. Loop's gateway was 100% waste — all requests timing out, 3 commits in 30 days
 
 ### Market Expansion + Whale Tracker + Learning Loop (Session 28)
 - **Source**: KWW vision (Hub71 pitch), Polymarket has 1,500 markets not 13
