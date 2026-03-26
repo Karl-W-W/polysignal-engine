@@ -447,18 +447,28 @@ def prediction_node(state: LoopState) -> LoopState:
                     # Session 31: trigger if ≤2 unique signatures (catches
                     # alternating markets like 559660/561229 repeating forever)
                     if len(signatures) <= 2:
-                        stale_desc = ", ".join(f"{s[0]} {s[1]}@{s[2]}" for s in signatures)
-                        # Cooldown: allow 1 prediction through every N cycles
-                        cycle_num = state.get("cycle_number", 0)
-                        if cycle_num % STALE_COOLDOWN != 0:
-                            print(f"  ⚠ STALE: Last {STALE_LOOKBACK} predictions only {len(signatures)} unique: {stale_desc}")
-                            print(f"     Skipping (cooldown: next allowed at cycle {cycle_num + STALE_COOLDOWN - cycle_num % STALE_COOLDOWN}).")
-                            state["predictions"] = []
-                            state["stale_detected"] = True
-                            state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
-                            return state
+                        # Before blocking: check if CURRENT predictions are diverse.
+                        # If we're about to record diverse predictions (>2 unique),
+                        # history staleness is being resolved — let them through.
+                        current_sigs = set()
+                        for p in predictions:
+                            csig = (p.get("market_id"), p.get("hypothesis"), round(p.get("confidence", 0), 2))
+                            current_sigs.add(csig)
+                        if len(current_sigs) > 2:
+                            print(f"  ⚠ History stale ({len(signatures)} unique) but current batch diverse ({len(current_sigs)} unique) — allowing through.")
                         else:
-                            print(f"  ⚠ STALE ({len(signatures)} unique) but cooldown expired (cycle {cycle_num}): allowing prediction through.")
+                            stale_desc = ", ".join(f"{s[0]} {s[1]}@{s[2]}" for s in signatures)
+                            # Cooldown: allow 1 prediction through every N cycles
+                            cycle_num = state.get("cycle_number", 0)
+                            if cycle_num % STALE_COOLDOWN != 0:
+                                print(f"  ⚠ STALE: Last {STALE_LOOKBACK} predictions only {len(signatures)} unique: {stale_desc}")
+                                print(f"     Skipping (cooldown: next allowed at cycle {cycle_num + STALE_COOLDOWN - cycle_num % STALE_COOLDOWN}).")
+                                state["predictions"] = []
+                                state["stale_detected"] = True
+                                state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
+                                return state
+                            else:
+                                print(f"  ⚠ STALE ({len(signatures)} unique) but cooldown expired (cycle {cycle_num}): allowing prediction through.")
         except Exception as e:
             print(f"  ⊘ Staleness check skipped: {e}")
 
