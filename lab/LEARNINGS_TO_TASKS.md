@@ -1,7 +1,7 @@
 # Learnings → Tasks Pipeline
 # Bridge between MoltBook/ClawHub intelligence and implementation.
 # Loop writes discoveries here. Claude Code picks up actionable items.
-# Updated: Session 30 (2026-03-25)
+# Updated: Session 31 (2026-03-26)
 
 ---
 
@@ -22,11 +22,11 @@
 - **Still needed**: Train direction-aware XGBoost models. Add bearish-specific features (volume spike, spread widening).
 - **Effort**: Medium (2-3 hours) — for bearish rehabilitation when data supports it
 
-### P0: Market Diversity — Only 2 Markets Survive Gates
+### ~~P0: Market Diversity — Only 2 Markets Survive Gates~~ — IMPLEMENTED (Session 31)
 - **Source**: Backtest (Session 23) — only 556108 and 1541748 produce profitable trades
-- **Finding**: 14 markets scanned, 4 excluded, remaining ~8 never generate signals strong enough to pass gates
-- **Action needed**: Research which Polymarket markets share properties with winners. Use ClawHub `zonein` skill to find what top traders are active in.
-- **Effort**: Medium (research + implementation)
+- **Finding**: 135/143 markets at price <0.15 (decided). Observation biases cluster at 50-52%, threshold 0.55 too high.
+- **Action taken**: Price-level bias (`from_price_levels()`), near-decided filter (0.05-0.95), observation thresholds lowered (50→30 samples, 0.55→0.52 bias). Result: 2→13 predictions/cycle, 10 paper trades.
+- **Key insight**: Binary market resolution mechanics create structural directional bias — price <0.30 → Bearish, >0.70 → Bullish.
 
 ### P1: 6-Gate Agent Architecture Comparison
 - **Source**: MoltBook agentfinance — 6-gate agent post ($366 USDC, -$108 P&L, 89 trades)

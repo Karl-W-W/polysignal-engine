@@ -215,12 +215,12 @@
 
 | Metric | Current | 1 Week | 1 Month | 3 Months |
 |--------|---------|--------|---------|----------|
-| Prediction Accuracy | **59%** (hybrid system live) | 65% | 70% | 80% |
+| Prediction Accuracy | **59%** (hybrid system, 13 predictions/cycle) | 65% | 70% | 80% |
 | Trades Executed | 0 | 5 | 50 | 500 |
 | P&L (USDC) | $0 | -$5 to +$5 | +$50 | +$500 |
-| API Costs/month | **~$0** (Nemotron unloaded, gateway stopped) | $25 | $20 | $15 |
-| Loop Autonomy | 3/10 (gateway stopped, Telegram offline) | 6/10 | 8/10 | 9/10 |
-| GPU Utilization | ~1% (Nemotron unloaded Session 30) | 20% | 50% | 80% |
+| API Costs/month | **~$0** (llama3.3:70b local, loads on demand) | $25 | $20 | $15 |
+| Loop Autonomy | 5/10 (gateway running, Telegram online, llama3.3:70b) | 6/10 | 8/10 | 9/10 |
+| GPU Utilization | ~0% idle, spikes when llama3.3:70b loads for heartbeat | 20% | 50% | 80% |
 | MoltBook Karma | 4 | 50 | 200 | 1000 |
 | ClawHub Skills | 0 | 2 | 5 | 10 |
 | Revenue Streams | 0 | 1 | 3 | 5 |

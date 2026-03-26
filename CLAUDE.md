@@ -17,7 +17,7 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 
 ## Three-Agent System
 - **Claude Code** (you) — architect, infrastructure, test runner, DGX access
-- **Loop** (OpenClaw, Telegram `@OpenClawOnDGX_bot`) — autonomous developer, writes code in lab/workflows
+- **Loop** (OpenClaw on llama3.3:70b, Telegram `@OpenClawOnDGX_bot`) — autonomous developer, writes code in lab/workflows
 - **Karl** — router, Vault authorizer, human-only tasks (MoltBook registration, DNS, credentials)
 
 ## Loop's Capabilities (Session 24)
@@ -38,11 +38,13 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **Retrain trigger**: `echo "retrain" > lab/.retrain-trigger` → systemd watcher
 - **applyPatch**: ENABLED — native file editing from sandbox
 - **Ollama**: Reachable at `http://172.17.0.1:11434` (5 models: nemotron-3-super:120b, llama3.3:70b, deepseek-r1:70b, qwen2.5:14b, llama3.2:3b, zero cost)
-- **Nemotron-3-Super**: Primary heartbeat model (85.6% on OpenClaw benchmarks, 14 tok/s on Spark). Direct chat = Opus 4.6.
+- **llama3.3:70b**: Primary heartbeat model (Session 31, replaced Nemotron-3-Super to prevent overheating). Direct chat = Opus 4.6.
 - **NemoClaw**: **FULLY DEPLOYED** (Session 29). OpenShell v0.0.12, NemoClaw v0.1.0. Sandbox `polysignal` with Landlock+seccomp+netns. OpenClaw v2026.3.11 inside. Provider: ollama-local. Old OpenClaw gateway STOPPED (port 18789 taken by NemoClaw).
-- **Meta-gate**: 7-day rolling accuracy check in prediction_node. Halts predictions if <40%.
+- **Meta-gate**: 7-day rolling accuracy check in prediction_node. Halts predictions if <40%. Currently 59%.
+- **Near-decided filter**: Markets at price <0.05 or >0.95 are skipped (Session 31). Most markets are essentially decided.
+- **Price-level bias**: Markets at price <0.30 → Bearish, >0.70 → Bullish (Session 31). Uses resolution mechanics as signal.
 - **Sandbox Access**: `read` / `write` tools whitelisted for `/mnt/polysignal` and `/opt/loop` (SDK patched).
-- **Staleness detection**: Skips cycle if last 10 predictions are identical.
+- **Staleness detection**: Skips cycle if last 10 predictions have ≤2 unique signatures AND current batch isn't diverse (>2 unique).
 - **Paper trading**: Wired into prediction_node, logs to `lab/trading_log.json`, bypasses kill switch
 - **Memory writing**: Every scanner cycle (not just commit_node)
 
@@ -62,11 +64,11 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 432/432 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
+Expected: 438/438 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
 
 ## DGX SSH Access (CRITICAL — read before every session)
-- **Remote**: `ssh dgx-remote` (Cloudflare Tunnel). Fails with "bad handshake" if DGX cloudflared is down.
-- **LAN**: `ssh spark` or `ssh dgx-local` (192.168.2.244). Only works on home WiFi.
+- **Remote**: `ssh dgx-remote` (Cloudflare Tunnel). Working (Session 31). Fails with "bad handshake" if DGX cloudflared is down.
+- **LAN**: `ssh spark` or `ssh dgx-local` (192.168.2.144). Only works on home network.
 - **If both fail**: DGX is likely rebooted. `cloudflared.service` auto-starts but `OLLAMA_HOST=0.0.0.0` override may be lost. Requires physical DGX access to fix.
 - **Persistent fix needed**: Add `OLLAMA_HOST` override to a location that survives apt/systemd upgrades.
 - **Claude Code on DGX**: v2.1.80 at `~/.npm-global/bin/claude`. Run from `/opt/loop/`.

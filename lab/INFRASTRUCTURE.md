@@ -9,11 +9,11 @@
 
 | Component | Status | Utilization |
 |-----------|--------|-------------|
-| GPU (Blackwell) | XGBoost `device=cuda` working | ~1% (Nemotron unloaded Session 30) |
-| CPU (20-core ARM) | Scanner + Ollama (no large model loaded) | ~5% |
-| RAM (128GB unified) | ~11GB used (was 101GB with Nemotron) | ~9% |
+| GPU (Blackwell) | XGBoost `device=cuda` working | ~0% idle, spikes for llama3.3:70b heartbeats |
+| CPU (20-core ARM) | Scanner + Ollama + OpenClaw gateway | ~5% |
+| RAM (128GB unified) | ~4GB idle, ~46GB when llama3.3:70b loaded | ~4-36% |
 | NVMe (4TB) | 167GB used | ~5% |
-| Ollama | 4 small models loaded, Nemotron UNLOADED (Session 30) | Host 0.0.0.0, reachable from containers |
+| Ollama | llama3.3:70b (Loop primary), 3 small models. Nemotron UNLOADED. | Host 0.0.0.0, reachable from containers |
 | PyTorch | Installed but sm_121 NOT SUPPORTED by pip wheel | Needs NGC container |
 | RAPIDS | Not installed | - |
 | NIM | Not installed | - |
@@ -130,9 +130,9 @@
 ### Full Hardware Utilization Map
 ```
 ARM CPU (20 cores):
-  ├── Scanner (5-min cycles)
-  ├── Ollama host process (small models only, Nemotron unloaded)
-  ├── OpenClaw gateway — STOPPED (Session 30)
+  ├── Scanner (5-min cycles, Restart=always)
+  ├── Ollama host process (llama3.3:70b on demand)
+  ├── OpenClaw gateway — RUNNING (Session 31, llama3.3:70b)
   ├── Squid proxy
   ├── Cron (git sync)
   └── WebSocket feeds (future)
@@ -145,9 +145,9 @@ Blackwell GPU:
 
 Unified Memory (128GB):
   ├── Market observations (SQLite → TimescaleDB future)
-  ├── Model weights (XGBoost ~50KB, Ollama small models ~15GB)
+  ├── Model weights (XGBoost ~50KB, llama3.3:70b ~42GB on demand)
   ├── Apache Arrow dataframes (when RAPIDS active)
-  └── ~117 GB available (Nemotron unloaded Session 30, was ~37GB available)
+  └── ~82 GB available when llama3.3:70b loaded, ~124 GB when idle
 ```
 
 ### The Level 100 HITL Workflow
@@ -165,10 +165,10 @@ Unified Memory (128GB):
 |-----------|---------|--------|
 | NemoClaw CLI | v0.1.0 | `~/.npm-global/bin/nemoclaw` |
 | OpenShell CLI | v0.0.12 | `~/.local/bin/openshell` |
-| OpenShell Gateway | v0.0.12 | STOPPED (Session 30: overheating fix — was consuming 94% GPU for zero output) |
+| OpenShell Gateway | v0.0.12 | **RUNNING** (Session 31: restarted with llama3.3:70b) |
 | OpenClaw (inside sandbox) | v2026.3.11 | Dashboard at http://localhost:18789/ |
 | Sandbox | `polysignal` | Ready, Landlock+seccomp+netns |
-| Inference | ollama-local | nemotron-3-super:120b UNLOADED (reload when needed) |
+| Inference | ollama-local | llama3.3:70b (primary), nemotron-3-super UNLOADED |
 | Policies | pypi, npm, telegram | + claude_code, clawhub, github, nvidia, openclaw |
 
 **Key commands:**

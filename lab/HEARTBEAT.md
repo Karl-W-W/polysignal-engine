@@ -6,7 +6,7 @@
 
 ## COST DISCIPLINE
 
-With Nemotron-3-Super local ($0/token), heartbeats are FREE.
+With llama3.3:70b local ($0/token), heartbeats are FREE.
 BUT: don't waste time on empty reports. Produce output or stay silent.
 
 **Rules:**

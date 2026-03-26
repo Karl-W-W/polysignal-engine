@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-25 | Session 30 closed
+# Last updated: 2026-03-26 | Session 31 closed
 # Session history: See HISTORY.md
 
 ---
@@ -25,20 +25,20 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| DGX Spark | UP | Munich, Blackwell GPU, Nemotron UNLOADED (Session 30), 4 Ollama models |
+| DGX Spark | UP | Munich, Blackwell GPU, 41°C, 4GB RAM used. llama3.3:70b as Loop model. |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
 | OpenClaw Sandbox (old) | STOPPED | Replaced by NemoClaw sandbox. Port 18789 now used by NemoClaw. |
-| OpenClaw Gateway (old) | STOPPED | Replaced by NemoClaw. Loop Telegram needs migration to NemoClaw sandbox. |
-| Telegram Bot | OFFLINE | Gateway stopped (Session 29). Needs NemoClaw migration. |
+| OpenClaw Gateway | **RUNNING** | Session 31: restarted with llama3.3:70b (was Nemotron, which was unloaded). |
+| Telegram Bot | **ONLINE** | Session 31: gateway restarted, @OpenClawOnDGX_bot connected. |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
-| Cloudflare Tunnel | BROKEN | `failed to find Access application at ssh.polysignal.app` — needs Cloudflare config investigation |
+| Cloudflare Tunnel | PARTIAL | SSH working (Session 31). HTTP origin needs dashboard fix (points to old .244 IP). |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | **432/432 PASS** | Mac + DGX (Session 28) |
-| Scanner | RUNNING | **137 markets** (Session 28). **Hybrid prediction** (Session 30): base rate + momentum fallback. Observation-based biases. BASE_RATE_GATE_THRESHOLD=0.55. Meta-gate 59%. |
-| Nemotron-3-Super | **UNLOADED** | Was consuming 86GB VRAM + 73°C with zero output. Unloaded Session 30. Reload when Loop needs it. |
-| NemoClaw | **FULLY DEPLOYED** | OpenShell v0.0.12, NemoClaw v0.1.0. Sandbox `polysignal` Ready. OpenClaw v2026.3.11 inside. Landlock+seccomp+netns. Replaced old OpenClaw gateway. |
-| DGX Thermal | OK ~50°C | Was 73°C (old gateway + Nemotron). Fixed Session 30: stopped gateway, unloaded model. |
+| Tests | **438/438 PASS** | Mac (Session 31). +6 price-level bias tests. |
+| Scanner | RUNNING | **142 markets**, `Restart=always` (Session 31). **Hybrid prediction**: base rate (outcome + observation + price-level) + momentum fallback. Near-decided filter (0.05-0.95). **13 predictions/cycle, 10 paper trades**. Meta-gate 59%. |
+| Nemotron-3-Super | **UNLOADED** | Replaced by llama3.3:70b for Loop. Reload only if needed. |
+| NemoClaw | **FULLY DEPLOYED** | OpenShell v0.0.12, NemoClaw v0.1.0. Sandbox `polysignal` Ready. OpenClaw v2026.3.11 inside. Landlock+seccomp+netns. |
+| DGX Thermal | OK ~41°C | llama3.3:70b loads on demand. Idle: 4W, 0% GPU. |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
@@ -747,28 +747,54 @@ The excluded market wasn't just the worst predictor (0W/40L) — it was the majo
 
 ---
 
-## NEXT STEPS (Session 28+)
+## Session 31: Prediction Diversity + Loop Resurrection (2026-03-26)
 
-### P0: Autonomy Phase 2 (Loop becoming proactive)
-1. **Seed Loop's task queue** with 5 operator-defined tasks (analysis-only, no code changes)
-2. **Introduce work_log.md** — Loop logs every action per AUTONOMY_SPEC.md format
-3. **Night protocol enforcement** — MoltBook scan + morning briefing as structured workflow
-4. **Discovery Mode** — Loop finds own work when queue is empty
+**Fixed all 6 issues from clock-in. Scanner resilient, predictions expanded 2→13/cycle, Loop resurrected.**
 
-### P1: Accuracy Recovery (the pipeline needs to heal)
-5. **Monitor 7-day window** — old bad predictions aging out ~March 19-21. Predictions resume when window clears.
-6. **If accuracy doesn't recover by March 20**: retrain XGBoost or purge pre-Session-25 predictions
-7. **Market expansion** — re-evaluate excluded markets (1541748 Bullish 95%) with base rate lens
-8. **Fund wallet with $5+ USDC** — human-only, last gate to first live trade
+### Session 31 Accomplishments
+| What | Impact |
+|------|--------|
+| Scanner `Restart=always` | Was dead 29h after clean exit. Now survives any exit code. |
+| Price-level bias | `from_price_levels()` in base_rate_predictor.py — markets at price <0.30 → Bearish, >0.70 → Bullish. Exploits binary resolution mechanics. |
+| Near-decided market filter | PREDICTION_MIN_PRICE=0.05, PREDICTION_MAX_PRICE=0.95 in masterloop.py — 124/142 markets were essentially decided. |
+| Observation threshold lowering | OBS_MIN_SAMPLES 50→30, OBS_MIN_BIAS 0.55→0.52 — markets cluster near 50%, old threshold too restrictive. |
+| Staleness diversity check | Current batch with >2 unique signatures passes even if history is stale. Prevented new diverse predictions from being blocked. |
+| Loop model switch | Nemotron-3-Super (86GB, unloaded) → llama3.3:70b (42GB, loads on demand). Gateway restarted, Telegram online. |
+| Cloudflare SSH verified | `ssh dgx-remote` works — was transient issue, not broken. HTTP origin still needs dashboard fix. |
+| 6 new tests | Price-level bias: bearish, bullish, decided-skip, uncertain-skip, merged sources, priority override. |
+| 3 commits | `39ed76e` prediction diversity, `6fb4357` staleness fix, `4efcbd8` docs |
+| Tests: 438/438 | +6 from Session 30's 432. |
 
-### P2: NemoClaw Integration (pilot → production)
-9. **Test OpenClaw agent inside NemoClaw sandbox** — connect the two environments
-10. **Wire NVIDIA API key** into NemoClaw for Privacy Router (local-first, cloud fallback)
-11. **Evaluate OpenShell vs Docker** — compare isolation, policy engine, monitoring
+### Key Finding: 87% of Markets Are Decided
+135 of 143 scanned markets had prices <0.15 — essentially resolved. The old system wasted prediction cycles on these dead markets. The near-decided filter removes them, and price-level bias provides directional signals for the remaining tradeable markets that lack outcome/observation history.
 
-### P3: Security Hardening
-12. **Trading sidecar** — separate process holds wallet key
-13. **Exec allowlist mode** — replace safeBins with granular command allowlist via OpenShell
+### Lessons
+- **Investigate data distribution before tuning thresholds.** The prediction diversity problem wasn't about thresholds being wrong — it was about 87% of markets being dead.
+- **Clean exits kill services with `Restart=on-failure`.** Always use `Restart=always` for long-running services.
+- **New features can interact with old guardrails.** Staleness detection (built for 2-market era) blocked the new 13-market predictions until we added a current-batch diversity check.
+- **Binary market resolution mechanics are a signal.** Price converging to 0 or 1 is structural, not noise.
+
+---
+
+## NEXT STEPS (Session 32+)
+
+### P0: Monitor Diverse Predictions
+1. **Track per-category accuracy** — politics, sports, crypto behave differently. Now we have data.
+2. **Verify Loop's first heartbeat on llama3.3:70b** — model loads on demand, quality unknown.
+3. **Wire whale signals into predictions** — whale_tracker detects but doesn't influence predictions yet.
+
+### P1: First Live Trade
+4. **Fund wallet with $5+ USDC** — human-only, last gate to first live trade.
+5. **Telegram approval gate** — HITL before executing real trades.
+6. **Lower signal threshold for non-crypto categories** — different markets need different sensitivity.
+
+### P2: Cloudflare + Infrastructure
+7. **Fix Cloudflare HTTP origin** — points to old .244 IP, needs dashboard fix (KWW task).
+8. **Update Claude Code to v2.1.84** — enables 1M context window for Opus 4.6 on Max.
+
+### P3: Loop Autonomy
+9. **Evaluate Loop quality on llama3.3:70b** — compare heartbeat quality vs old Nemotron.
+10. **Migrate Telegram to NemoClaw** (Task 47) — bot token injection into sandbox.
 
 ### Known Bugs
 - `core/api.py:148` references dead `masterloop_orchestrator.run_cycle()` (needs Vault auth)
