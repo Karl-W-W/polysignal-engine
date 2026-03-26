@@ -336,6 +336,24 @@ def prediction_node(state: LoopState) -> LoopState:
     except ImportError:
         pred_obs = observations
 
+    # ── Filter near-decided markets (Session 31) ────────────────────────
+    # Markets at extreme prices (< 0.05 or > 0.95) are essentially decided.
+    # No trading opportunity, predictions are trivially correct or NEUTRAL.
+    # 135 of 143 scanned markets were < 0.15 — wasting prediction capacity.
+    PREDICTION_MIN_PRICE = 0.05
+    PREDICTION_MAX_PRICE = 0.95
+    decided_count = 0
+    tradeable_obs = []
+    for obs in pred_obs:
+        price = obs.get("current_price", obs.get("price", 0.5))
+        if price < PREDICTION_MIN_PRICE or price > PREDICTION_MAX_PRICE:
+            decided_count += 1
+        else:
+            tradeable_obs.append(obs)
+    if decided_count:
+        print(f"  ⊘ {decided_count} near-decided market(s) filtered (price outside {PREDICTION_MIN_PRICE}-{PREDICTION_MAX_PRICE})")
+    pred_obs = tradeable_obs
+
     try:
         # ── Base rate predictor (Session 25) ─────────────────────────────────
         # Loop's audit: majority-class per market = 79.9% vs 17.4% production.
@@ -351,7 +369,7 @@ def prediction_node(state: LoopState) -> LoopState:
         fallback_obs = list(pred_obs)  # default: all go to fallback
         try:
             from lab.base_rate_predictor import BaseRatePredictor
-            predictor = BaseRatePredictor.from_all_sources()
+            predictor = BaseRatePredictor.from_all_sources(observations=pred_obs)
             if predictor.biases:
                 base_rate_preds = []
                 fallback_obs = []
@@ -426,19 +444,21 @@ def prediction_node(state: LoopState) -> LoopState:
                     for p in recent:
                         sig = (p.get("market_id"), p.get("hypothesis"), round(p.get("confidence", 0), 2))
                         signatures.add(sig)
-                    if len(signatures) == 1:
-                        stale_sig = list(signatures)[0]
+                    # Session 31: trigger if ≤2 unique signatures (catches
+                    # alternating markets like 559660/561229 repeating forever)
+                    if len(signatures) <= 2:
+                        stale_desc = ", ".join(f"{s[0]} {s[1]}@{s[2]}" for s in signatures)
                         # Cooldown: allow 1 prediction through every N cycles
                         cycle_num = state.get("cycle_number", 0)
                         if cycle_num % STALE_COOLDOWN != 0:
-                            print(f"  ⚠ STALE: Last {STALE_LOOKBACK} predictions identical: {stale_sig[0]} {stale_sig[1]} @ {stale_sig[2]}")
+                            print(f"  ⚠ STALE: Last {STALE_LOOKBACK} predictions only {len(signatures)} unique: {stale_desc}")
                             print(f"     Skipping (cooldown: next allowed at cycle {cycle_num + STALE_COOLDOWN - cycle_num % STALE_COOLDOWN}).")
                             state["predictions"] = []
                             state["stale_detected"] = True
                             state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
                             return state
                         else:
-                            print(f"  ⚠ STALE but cooldown expired (cycle {cycle_num}): allowing prediction through.")
+                            print(f"  ⚠ STALE ({len(signatures)} unique) but cooldown expired (cycle {cycle_num}): allowing prediction through.")
         except Exception as e:
             print(f"  ⊘ Staleness check skipped: {e}")
 

@@ -1,0 +1,27 @@
+{
+  "predictions": [
+    {
+      "market_id": "0xfake_btc",
+      "hypothesis": "Bullish",
+      "confidence": 0.82,
+      "price_at_prediction": 0.65,
+      "timestamp": "2026-03-18T21:43:32.789556+00:00",
+      "time_horizon": "4h",
+      "cycle_number": 1,
+      "xgb_p_correct": 0.7,
+      "evaluated": false,
+      "outcome": null,
+      "price_at_evaluation": null,
+      "evaluated_at": null,
+      "actual_delta": null
+    }
+  ],
+  "stats": {
+    "total_predictions": 1,
+    "total_evaluated": 0,
+    "correct": 0,
+    "incorrect": 0,
+    "neutral": 0,
+    "accuracy": 0.0
+  }
+}

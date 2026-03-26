@@ -40,8 +40,16 @@ MIN_SAMPLES = 10
 MIN_BIAS = 0.60
 
 # Observation-based biases need more samples (noisier signal)
-OBS_MIN_SAMPLES = 50
-OBS_MIN_BIAS = 0.55
+# Session 31: lowered from 50/0.55 to 30/0.52 for more coverage
+OBS_MIN_SAMPLES = 30
+OBS_MIN_BIAS = 0.52
+
+# Price-level bias thresholds (Session 31)
+# Markets at extreme prices have strong directional bias from resolution mechanics.
+# A market at 0.10 has ~90% chance of resolving NO → Bearish.
+PRICE_LEVEL_LOW = 0.30   # Below this → Bearish bias
+PRICE_LEVEL_HIGH = 0.70  # Above this → Bullish bias
+PRICE_LEVEL_MIN_CONFIDENCE = 0.55  # Minimum confidence for price-level predictions
 
 # Counter-signal threshold: only override base rate if delta exceeds this
 # relative to the market's typical volatility
@@ -82,7 +90,10 @@ class BaseRatePredictor:
     @classmethod
     def from_outcomes(cls, outcomes_path: Path = OUTCOMES_FILE) -> "BaseRatePredictor":
         """Build base rates from prediction outcome history."""
-        data = json.loads(Path(outcomes_path).read_text())
+        outcomes_path = Path(outcomes_path)
+        if not outcomes_path.exists():
+            return cls({})
+        data = json.loads(outcomes_path.read_text())
         preds = data.get("predictions", [])
 
         # Count directional outcomes per market
@@ -193,18 +204,84 @@ class BaseRatePredictor:
         return cls(biases)
 
     @classmethod
-    def from_all_sources(cls, outcomes_path: Path = OUTCOMES_FILE,
-                         db_path: str = OBS_DB_PATH) -> "BaseRatePredictor":
-        """Merge outcome-based and observation-based biases.
+    def from_price_levels(cls, observations: list) -> "BaseRatePredictor":
+        """Build biases from current market prices (Session 31).
 
-        Outcome biases (from evaluated predictions) take priority when available.
-        Observation biases fill in for new markets without prediction history.
+        Prediction markets converge to 0 or 1. A market at price 0.10 has ~90%
+        probability of resolving NO → Bearish. This provides directional bias
+        for markets without outcome or observation history.
+
+        Only generates biases for markets in the tradeable range (0.05-0.95).
+        Markets outside this range are essentially decided.
+        """
+        biases = {}
+        for obs in observations:
+            mid = obs.get("market_id")
+            price = obs.get("current_price", obs.get("price", 0.5))
+            if not mid or price is None:
+                continue
+
+            # Skip essentially-decided markets (no trading opportunity)
+            if price < 0.05 or price > 0.95:
+                continue
+
+            if price < PRICE_LEVEL_LOW:
+                # Price below 0.30 → Bearish (market likely resolves NO)
+                direction = "Bearish"
+                confidence = 1.0 - price  # e.g., price=0.10 → conf=0.90
+            elif price > PRICE_LEVEL_HIGH:
+                # Price above 0.70 → Bullish (market likely resolves YES)
+                direction = "Bullish"
+                confidence = price  # e.g., price=0.85 → conf=0.85
+            else:
+                continue  # 0.30-0.70: genuinely uncertain, no price-level bias
+
+            # Cap confidence — price level alone isn't as reliable as outcomes
+            confidence = min(confidence, 0.90)
+            if confidence < PRICE_LEVEL_MIN_CONFIDENCE:
+                continue
+
+            # Represent as a synthetic MarketBias
+            is_bullish = direction == "Bullish"
+            biases[mid] = MarketBias(
+                market_id=mid,
+                up_count=1 if is_bullish else 0,
+                down_count=0 if is_bullish else 1,
+                total=1,  # synthetic — single observation
+                up_rate=1.0 if is_bullish else 0.0,
+                dominant_direction=direction,
+                bias_strength=round(confidence, 3),
+                confident=True,
+            )
+
+        return cls(biases)
+
+    @classmethod
+    def from_all_sources(cls, outcomes_path: Path = OUTCOMES_FILE,
+                         db_path: str = OBS_DB_PATH,
+                         observations: list = None) -> "BaseRatePredictor":
+        """Merge outcome-based, observation-based, and price-level biases.
+
+        Priority: outcome > observation > price_level.
+        Outcome biases (from evaluated predictions) take highest priority.
+        Observation biases fill in for markets without prediction history.
+        Price-level biases (Session 31) provide coverage for new markets
+        based on current price position in the 0-1 range.
         """
         outcome_predictor = cls.from_outcomes(outcomes_path)
         obs_predictor = cls.from_observations(db_path)
 
-        merged = dict(obs_predictor.biases)  # observation biases as base
-        merged.update(outcome_predictor.biases)  # outcome biases override
+        # Start with price-level biases (lowest priority)
+        if observations:
+            price_predictor = cls.from_price_levels(observations)
+            merged = dict(price_predictor.biases)
+        else:
+            merged = {}
+
+        # Observation biases override price-level
+        merged.update(obs_predictor.biases)
+        # Outcome biases override everything
+        merged.update(outcome_predictor.biases)
 
         return cls(merged)
 
