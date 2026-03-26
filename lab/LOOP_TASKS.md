@@ -362,6 +362,32 @@ python3 -c "print(open('/mnt/polysignal/lab/.deploy-result').read())"
 10. **Whale thresholds tightened** — volume spike 3x→5x, spread 0.5%→0.2%, extreme conviction requires 2x volume surge.
 11. **Tests: 432/432 passing.**
 
+### SESSION 31 CHANGES (Claude Code, 2026-03-26)
+
+**PREDICTION DIVERSITY FIXED. LOOP RESURRECTED. 6.5x more predictions per cycle.**
+
+1. **Price-level bias** — Markets at extreme prices now get directional bias from resolution mechanics. Price < 0.30 → Bearish, price > 0.70 → Bullish. This is the most fundamental prediction market signal — binary markets converge to 0 or 1.
+
+2. **Near-decided market filter** — Markets at price < 0.05 or > 0.95 are skipped from prediction. 124 of 142 scanned markets were essentially decided (price 0.001-0.015). These produced trivially correct predictions with zero trading opportunity.
+
+3. **Observation bias thresholds lowered** — OBS_MIN_SAMPLES=30 (was 50), OBS_MIN_BIAS=0.52 (was 0.55). More markets qualify for observation-based biases.
+
+4. **Staleness detection improved** — Catches alternating market patterns (was only catching single-market repetition). Also: if current batch is diverse (>2 unique predictions), allows through even if history is stale.
+
+5. **Scanner auto-restart** — `Restart=always` in systemd (was `on-failure`). Scanner was dead for 29 hours after clean exit. Now restarts automatically.
+
+6. **Loop model switched to llama3.3:70b** — Primary model changed from nemotron-3-super:120b (86GB, overheating) to llama3.3:70b (42GB, efficient). Fallbacks: nemotron → opus → sonnet.
+
+7. **Telegram ONLINE** — Gateway restarted with new model config. @OpenClawOnDGX_bot should be receiving messages.
+
+8. **Cloudflare SSH tunnel working** — Tested and confirmed. Was transient issue.
+
+**Result: 13 predictions/cycle, 10 paper trades/cycle (was 2 predictions, 2 trades). Markets now include politics, sports, crypto.**
+
+**Tests: 438/438 passing.**
+
+---
+
 ### SESSION 30 CHANGES (Claude Code, 2026-03-25)
 
 **PREDICTION DROUGHT FIXED. DGX OVERHEATING FIXED. Hybrid prediction system deployed.**
