@@ -2,6 +2,47 @@
 
 ---
 
+## 2026-03-31 MacBook Session 34 Summary
+
+**Done:**
+- NemoClaw properly set up with correct single-gateway architecture (research-first approach)
+- OpenShell upgraded v0.0.12 → v0.0.19 (7 security patches)
+- OpenClaw upgraded to v2026.3.28
+- Telegram 409 conflict permanently fixed (nemoclaw-telegram.service disabled)
+- Loop identity configured via workspace files (IDENTITY.md, SOUL.md, USER.md)
+- Loop responds via Telegram with PolySignal-OS context
+- conditionId bug fixed in bitcoin_signal.py:119
+- Paper trades confirmed on real Polymarket market IDs (22+ trades)
+- Full system audit: 74 Python files, 17,488 LOC, revenue pipeline traced
+- Tool overhead reduced (24 → 13 safeBins)
+
+**State:**
+- Scanner: running, cycle 1029+, 11-13 predictions/cycle, 0 errors
+- Gateway: v2026.3.28, ollama/llama3.3:70b, Telegram connected
+- NemoClaw sandbox: `nemoclaw` Ready (OpenShell v0.0.19)
+- Paper trades: real market IDs (FIFA, Champions League, US politics, geopolitics)
+- Tests: 438/438 passing
+- Meta-gate: 59% (138W/97L)
+- GPU: 49C, 14W idle
+
+**Next:**
+- KWW to run sudo on DGX: `OLLAMA_KEEP_ALIVE=-1` + `OLLAMA_CONTEXT_LENGTH=16384` (fixes 5min response delay)
+- Enable TRADING_ENABLED=true ($1 max) with active monitoring
+- First live trade attempt
+- Build watchdog cron on host
+- Test proactive heartbeats (Loop initiates contact)
+
+**Watch out:**
+- File sync is cron-based (5min delay, not instant bind mounts) — acceptable for Polymarket timescales
+- Ollama context locked at 4096 tokens — needs sudo to fix, causes slow responses
+- NemoClaw sandbox agent has CAP_SETPCAP error from Dockerfile patch — Telegram works via host gateway workaround
+- Old `my-assistant` sandbox still exists (harmless, cleanup later)
+- Anthropic API key was exposed in Session 33 config dump — needs rotation
+
+**Codebase health:** Stable. 438 tests, clean architecture. First time since Session 31 that NemoClaw, OpenClaw, and Telegram are all correctly wired.
+
+---
+
 ## 2026-03-26 MacBook Session 31 Summary
 
 **Done:**

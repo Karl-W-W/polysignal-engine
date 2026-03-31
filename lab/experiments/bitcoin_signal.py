@@ -116,7 +116,7 @@ def fetch_crypto_markets(limit: int = 50) -> list:
                 price = 0.0
 
             crypto_markets.append({
-                "id":      m["id"],
+                "id":      str(m.get("conditionId") or m["id"]),
                 "title":   event.get("title", "Unknown"),
                 "outcome": m.get("question", "Yes"),
                 "price":   price,

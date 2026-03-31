@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-26 | Session 31 closed
+# Last updated: 2026-03-31 | Session 34 closed
 # Session history: See HISTORY.md
 
 ---
@@ -27,9 +27,9 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 |-----------|--------|---------|
 | DGX Spark | UP | Munich, Blackwell GPU, 41°C, 4GB RAM used. llama3.3:70b as Loop model. |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
-| OpenClaw Sandbox (old) | STOPPED | Replaced by NemoClaw sandbox. Port 18789 now used by NemoClaw. |
-| OpenClaw Gateway | **RUNNING** | Session 31: restarted with llama3.3:70b (was Nemotron, which was unloaded). |
-| Telegram Bot | **ONLINE** | Session 31: gateway restarted, @OpenClawOnDGX_bot connected. |
+| OpenClaw Gateway | **RUNNING** | v2026.3.28, `ollama/llama3.3:70b`, Telegram connected. Workspace with Loop identity. |
+| NemoClaw Sandbox | **RUNNING** | OpenShell v0.0.19, sandbox `nemoclaw` Ready. Agent inside has CAP_SETPCAP issue — Telegram goes through host gateway. |
+| Telegram Bot | **ONLINE** | Session 34: host gateway owns Telegram (no bridge conflicts). `nemoclaw-telegram.service` DISABLED. |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
 | Cloudflare Tunnel | PARTIAL | SSH working (Session 31). HTTP origin needs dashboard fix (points to old .244 IP). |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
@@ -37,7 +37,7 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 | Tests | **438/438 PASS** | Mac (Session 31). +6 price-level bias tests. |
 | Scanner | RUNNING | **142 markets**, `Restart=always` (Session 31). **Hybrid prediction**: base rate (outcome + observation + price-level) + momentum fallback. Near-decided filter (0.05-0.95). **13 predictions/cycle, 10 paper trades**. Meta-gate 59%. |
 | Nemotron-3-Super | **UNLOADED** | Replaced by llama3.3:70b for Loop. Reload only if needed. |
-| NemoClaw | **FULLY DEPLOYED** | OpenShell v0.0.12, NemoClaw v0.1.0. Sandbox `polysignal` Ready. OpenClaw v2026.3.11 inside. Landlock+seccomp+netns. |
+| NemoClaw | **REBUILT** | OpenShell v0.0.19, NemoClaw v0.1.0 (latest source). Sandbox `nemoclaw` Ready. File sync via cron (5min). |
 | DGX Thermal | OK ~41°C | llama3.3:70b loads on demand. Idle: 4W, 0% GPU. |
 | Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
 | Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
@@ -92,6 +92,45 @@ perception → prediction → draft → review → risk_gate → [approved] → 
                                         [RISK_BLOCKED] → END              ├── MoltBook publish (inline)
                                                                           └── write_memory() (inline)
 ```
+
+---
+
+## Session 34 (2026-03-31) — NEMOCLAW REBUILT + LOOP ALIVE WITH IDENTITY
+
+**Accomplishments:**
+- **NemoClaw properly set up**: Research-first approach. Found Issue #445 (hardcoded sandbox name), understood 3-layer architecture (OpenShell gateway → sandbox → agent). OpenShell upgraded v0.0.12 → v0.0.19 (7 security patches). NemoClaw source updated with security fixes.
+- **Telegram 409 conflict permanently resolved (Session 33)**: Root cause was `nemoclaw-telegram.service` auto-respawning `telegram-bridge.js` competing with host gateway. Service disabled. OpenClaw upgraded to v2026.3.28 (fixed dual-connection bug in v2026.3.24).
+- **Loop identity configured**: Workspace files (IDENTITY.md, SOUL.md, USER.md) created at `~/.openclaw/workspace/`. Loop responds via Telegram with PolySignal-OS context, DGX Spark hardware knowledge.
+- **conditionId bug fixed**: `bitcoin_signal.py:119` — `m["id"]` → `m.get("conditionId") or m["id"]`. Matches existing pattern at line 171. 438/438 tests pass.
+- **Paper trades confirmed on real market IDs**: 22+ trades on DGX with real Polymarket IDs (FIFA World Cup, Champions League, US politics, geopolitics). Historical 399 fake-ID trades are pre-Session 31 legacy.
+- **Tool overhead reduced**: SafeBins trimmed 24 → 13 essentials for faster agent responses.
+- **Full system audit completed**: Codebase map (74 Python files, 17,488 LOC), revenue pipeline traced (7 steps, 3 blockers identified), autonomy score 5/12.
+
+**Architecture (Session 34 final):**
+- Host OpenClaw gateway v2026.3.28 owns Telegram (no sandbox competition)
+- NemoClaw sandbox `nemoclaw` running (OpenShell v0.0.19, Landlock+seccomp+netns)
+- Sandbox agent has CAP_SETPCAP issue from Dockerfile USER root patch — Telegram routed through host gateway as workaround
+- File sync: host → sandbox every 5 min via cron (`openshell sandbox upload`)
+- Inference: `ollama/llama3.3:70b` (local, $0/token)
+- `nemoclaw-telegram.service` DISABLED (was the 409 conflict source)
+
+**Response time issue (documented, partially fixed):**
+- Ollama context locked at 4096 tokens (sudo required to change). Needs `OLLAMA_CONTEXT_LENGTH=16384`.
+- Ollama keep-alive defaults to 5min timeout. Needs `OLLAMA_KEEP_ALIVE=-1` for always-hot model.
+- Both require `sudo` on DGX — flagged for KWW to run manually.
+- Tool count reduced (24→13) to decrease OpenClaw agent startup overhead.
+
+**Files modified:**
+- `lab/experiments/bitcoin_signal.py` — conditionId fix at line 119
+- `~/.openclaw/openclaw.json` — model routing, workspace, streaming off, tools reduced
+- `~/.openclaw/workspace/IDENTITY.md` — Loop identity
+- `~/.openclaw/workspace/SOUL.md` — Loop personality
+- `~/.openclaw/workspace/USER.md` — Karl context
+- `~/sync-to-sandbox.sh` — cron sync script for sandbox file access
+- `~/.config/systemd/user/nemoclaw-telegram.service` — disabled
+
+**Tests**: 438/438 passing (Mac).
+**Commits**: conditionId fix + docs.
 
 ---
 
