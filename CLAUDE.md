@@ -39,7 +39,9 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **applyPatch**: ENABLED — native file editing from sandbox
 - **Ollama**: Reachable at `http://172.17.0.1:11434` (5 models: nemotron-3-super:120b, llama3.3:70b, deepseek-r1:70b, qwen2.5:14b, llama3.2:3b, zero cost)
 - **llama3.3:70b**: Primary heartbeat model (Session 31, replaced Nemotron-3-Super to prevent overheating). Direct chat = Opus 4.6.
-- **NemoClaw**: **FULLY DEPLOYED** (Session 29). OpenShell v0.0.12, NemoClaw v0.1.0. Sandbox `polysignal` with Landlock+seccomp+netns. OpenClaw v2026.3.11 inside. Provider: ollama-local. Old OpenClaw gateway STOPPED (port 18789 taken by NemoClaw).
+- **NemoClaw**: **REBUILT** (Session 34). OpenShell v0.0.19, NemoClaw v0.1.0 (latest source). Sandbox `nemoclaw` with Landlock+seccomp+netns. Host OpenClaw gateway v2026.3.28 owns Telegram (port 18789). `nemoclaw-telegram.service` DISABLED. File sync via cron (5min, not bind mounts).
+- **conditionId fix**: `bitcoin_signal.py:119` fixed (Session 34). `fetch_crypto_markets()` now uses `conditionId` like `fetch_all_liquid_markets()`.
+- **Response time**: ~5min due to Ollama context at 4096. KWW must run sudo to set `OLLAMA_CONTEXT_LENGTH=16384` + `OLLAMA_KEEP_ALIVE=-1`.
 - **Meta-gate**: 7-day rolling accuracy check in prediction_node. Halts predictions if <40%. Currently 59%.
 - **Near-decided filter**: Markets at price <0.05 or >0.95 are skipped (Session 31). Most markets are essentially decided.
 - **Price-level bias**: Markets at price <0.30 → Bearish, >0.70 → Bullish (Session 31). Uses resolution mechanics as signal.

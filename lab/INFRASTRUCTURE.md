@@ -159,26 +159,28 @@ Unified Memory (128GB):
 
 ---
 
-## NemoClaw Stack (Session 29 — DEPLOYED)
+## NemoClaw Stack (Session 34 — REBUILT)
 
 | Component | Version | Status |
 |-----------|---------|--------|
-| NemoClaw CLI | v0.1.0 | `~/.npm-global/bin/nemoclaw` |
-| OpenShell CLI | v0.0.12 | `~/.local/bin/openshell` |
-| OpenShell Gateway | v0.0.12 | **RUNNING** (Session 31: restarted with llama3.3:70b) |
-| OpenClaw (inside sandbox) | v2026.3.11 | Dashboard at http://localhost:18789/ |
-| Sandbox | `polysignal` | Ready, Landlock+seccomp+netns |
-| Inference | ollama-local | llama3.3:70b (primary), nemotron-3-super UNLOADED |
+| NemoClaw CLI | v0.1.0 (latest source) | `~/.npm-global/bin/nemoclaw` |
+| OpenShell CLI | **v0.0.19** | `~/.local/bin/openshell` (upgraded from v0.0.12) |
+| OpenShell Gateway | **v0.0.19** | Docker `openshell-cluster-nemoclaw` |
+| Host OpenClaw Gateway | **v2026.3.28** | Port 18789, owns Telegram, workspace at `~/.openclaw/workspace/` |
+| Sandbox | `nemoclaw` | Ready, Landlock+seccomp+netns |
+| Inference | ollama-local | llama3.3:70b via OpenShell routing |
 | Policies | pypi, npm, telegram | + claude_code, clawhub, github, nvidia, openclaw |
+| File sync | cron 5min | `~/sync-to-sandbox.sh` → `openshell sandbox upload` |
+| `nemoclaw-telegram.service` | **DISABLED** | Was source of 409 conflicts |
 
 **Key commands:**
 ```bash
-nemoclaw polysignal status          # Check sandbox health
-nemoclaw polysignal connect         # Connect to sandbox
-nemoclaw polysignal logs --follow   # Stream sandbox logs
-nemoclaw polysignal policy-add <X>  # Add policy preset
-openshell status                    # Gateway health
-openshell sandbox list              # List sandboxes
+nemoclaw nemoclaw status            # Check sandbox health
+nemoclaw nemoclaw connect           # Connect to sandbox
+nemoclaw status                     # Show sandboxes + services
+openshell sandbox list -g nemoclaw  # List sandboxes
+openshell inference get -g nemoclaw # Check inference route
+systemctl --user status openclaw-gateway.service  # Host gateway
 ```
 
 **DGX SSH recovery (after reboot):**

@@ -1,17 +1,18 @@
 # NOW.md — Loop's Operational State
 # If you wake up confused, read this first.
-# Updated: Session 31 (2026-03-26)
+# Updated: Session 34 (2026-03-31)
 
 ## Who You Are
 You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
-(GB10 Grace Blackwell, 128GB unified memory) via **NemoClaw** (OpenShell v0.0.12). Your human is KWW.
-- **ALL interactions**: llama3.3:70b via Ollama (Session 31: switched from Nemotron-3-Super to prevent overheating)
+(GB10 Grace Blackwell, 128GB unified memory). Your human is KWW.
+- **ALL interactions**: llama3.3:70b via Ollama
 - **Heartbeat interval**: 60 min
-- **NemoClaw sandbox**: `polysignal` — **FULLY DEPLOYED** (Session 29). Landlock + seccomp + netns.
-- **OpenClaw version**: v2026.3.11 (inside NemoClaw sandbox, upgraded from v2026.2.12)
-- **OpenClaw gateway**: RUNNING (Session 31: restarted with llama3.3:70b as primary model)
-- **Telegram**: ONLINE (Session 31: gateway restarted, bot @OpenClawOnDGX_bot connected)
-- **Cloudflare Tunnel**: SSH working (Session 31: tested OK). HTTP origin needs dashboard fix (points to old .244 IP).
+- **NemoClaw sandbox**: `nemoclaw` — Running (OpenShell v0.0.19). Landlock + seccomp + netns.
+- **Host OpenClaw gateway**: v2026.3.28, owns Telegram. Workspace at `~/.openclaw/workspace/`.
+- **Telegram**: ONLINE (Session 34: host gateway, no bridge conflicts. `nemoclaw-telegram.service` DISABLED.)
+- **File sync**: Host → sandbox every 5 min via cron (`openshell sandbox upload`). NOT live bind mounts.
+- **Identity**: Workspace files (IDENTITY.md, SOUL.md, USER.md) define Loop persona.
+- **Cloudflare Tunnel**: SSH working. HTTP origin needs dashboard fix.
 
 ## What's Running Right Now
 - **Scanner**: `systemctl --user status polysignal-scanner.service`
@@ -77,13 +78,13 @@ You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 - **Night (22:00-07:00)**: Scanner health → MoltBook deep scan → BUILD SOMETHING → prepare morning briefing
 - **Weekly (Sunday)**: Full backtest → compare to last week → MoltBook performance post
 
-## Current Goals (Priority Order — Session 31)
-1. **Monitor diverse prediction system**: Session 31 expanded to 13 predictions/cycle across politics, sports, crypto. Track per-category accuracy. Report on first heartbeat.
-2. **Validate whale tracker**: Check `lab/.whale-signals.jsonl`. Report top findings.
-3. **Category-aware prediction**: Politics/sports/crypto behave differently. Now we have data to analyze.
+## Current Goals (Priority Order — Session 34)
+1. **Respond to Karl on Telegram**: You are alive. When Karl messages, respond as Loop — direct, strategic, informed. Read your workspace files (IDENTITY.md, SOUL.md) on each session.
+2. **Monitor predictions**: 11-13 predictions/cycle across politics, sports, crypto, geopolitics. Track per-category accuracy.
+3. **Paper trades use real IDs**: conditionId fix deployed. Verify real Polymarket IDs in trading_log.json.
 4. **Check events + watchdog**: Read `lab/.events.jsonl` and `lab/.watchdog-alerts` on heartbeat.
-5. **Night protocol**: Build something overnight. MoltBook scan. Morning briefing.
-6. **Model quality**: Compare llama3.3:70b heartbeat quality vs old Nemotron. Report issues.
+5. **Prepare for live trading**: TRADING_ENABLED will be set to true next session ($1 max). Be ready.
+6. **Proactive heartbeats**: Don't just report "I'm alive." Report what MATTERS — high-confidence predictions, whale alerts, accuracy trends.
 
 ## Key Files
 - `lab/LOOP_TASKS.md` — your task queue (ALWAYS read this, NOT /mnt/polysignal/TASKS.md)

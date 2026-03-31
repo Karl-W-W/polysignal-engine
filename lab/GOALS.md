@@ -11,7 +11,7 @@
 - [x] Wallet address configured (0xdec8...2eff)
 - [x] Build `lab/polymarket_trader.py` — py-clob-client Level 1 wrapper
 - [x] Wire trader into prediction_node (paper trades before short-circuit)
-- [ ] Paper trade 10 signals (log trades, don't execute) — wired, waiting for signals
+- [x] Paper trade 10 signals — **429+ paper trades**, 22+ with real Polymarket IDs (Session 34)
 - [ ] First live trade with $1 max (proof of life)
 - [ ] Scale to $5/trade with risk gate guardrails
 - **Target**: First trade within 48 hours
