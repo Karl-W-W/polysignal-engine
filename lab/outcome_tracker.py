@@ -80,12 +80,15 @@ class OutcomeState:
             "neutral": 0,
             "accuracy": 0.0,
         }
+        # Per-market accuracy tracking (persists across 500-record cap)
+        self.per_market: Dict[str, Dict] = {}  # {market_id: {correct, incorrect, neutral, title}}
 
     def save(self, path: Path = OUTCOMES_FILE):
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "predictions": self.predictions[-500:],  # Cap at 500 records
             "stats": self.stats,
+            "per_market": self.per_market,
         }
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
@@ -99,6 +102,7 @@ class OutcomeState:
                     data = json.load(f)
                 state.predictions = data.get("predictions", [])
                 state.stats = data.get("stats", state.stats)
+                state.per_market = data.get("per_market", {})
             except (json.JSONDecodeError, KeyError):
                 pass
         return state
@@ -231,6 +235,20 @@ def evaluate_outcomes(current_observations: List[Dict],
         pred["actual_delta"] = round(delta, 4)
         evaluated_this_round += 1
 
+        # Track per-market accuracy (persists across 500-record cap)
+        if market_id not in state.per_market:
+            state.per_market[market_id] = {
+                "correct": 0, "incorrect": 0, "neutral": 0,
+                "title": pred.get("title", ""),
+            }
+        pm = state.per_market[market_id]
+        if outcome == "CORRECT":
+            pm["correct"] += 1
+        elif outcome == "INCORRECT":
+            pm["incorrect"] += 1
+        else:
+            pm["neutral"] += 1
+
     # Update stats
     state.stats["total_evaluated"] += evaluated_this_round
     state.stats["correct"] += correct
@@ -303,12 +321,24 @@ def get_gated_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
 def get_per_market_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
     """Return accuracy breakdown per market_id.
 
-    Enables identifying which markets are predictable vs unpredictable.
-    Only includes evaluated predictions with directional outcomes.
+    Uses persistent per_market stats that survive the 500-record cap.
+    Falls back to scanning active predictions if per_market is empty.
     """
     state = OutcomeState.load(state_path)
-    markets: Dict[str, Dict] = {}
 
+    # Prefer persistent per_market stats (survives 500-record cap)
+    if state.per_market:
+        markets = {}
+        for mid, pm in state.per_market.items():
+            m = dict(pm)
+            m["total"] = m["correct"] + m["incorrect"] + m["neutral"]
+            directional = m["correct"] + m["incorrect"]
+            m["accuracy"] = round(m["correct"] / directional, 3) if directional > 0 else 0.0
+            markets[mid] = m
+        return markets
+
+    # Fallback: scan active predictions (only covers last 500)
+    markets: Dict[str, Dict] = {}
     for pred in state.predictions:
         if not pred.get("evaluated"):
             continue
