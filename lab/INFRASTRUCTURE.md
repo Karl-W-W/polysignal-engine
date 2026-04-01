@@ -13,12 +13,12 @@
 | CPU (20-core ARM) | Scanner + Ollama + OpenClaw gateway | ~5% |
 | RAM (128GB unified) | ~4GB idle, ~46GB when llama3.3:70b loaded | ~4-36% |
 | NVMe (4TB) | 167GB used | ~5% |
-| Ollama | llama3.3:70b (Loop primary), 3 small models. Nemotron UNLOADED. | Host 0.0.0.0, reachable from containers |
+| Ollama | llama3.3:70b (Loop primary), 3 small models. Nemotron UNLOADED. | Host 0.0.0.0, context=16384, keep-alive=-1. Passwordless sudo for config. |
 | PyTorch | Installed but sm_121 NOT SUPPORTED by pip wheel | Needs NGC container |
 | RAPIDS | Not installed | - |
 | NIM | Not installed | - |
 | Triton | Not installed | - |
-| Swap | 16GB ON | Should be OFF per blueprint |
+| Swap | 16GB ON (13% used) | Should be OFF per blueprint |
 
 ## Phase 1: Immediate Wins (Done or In Progress)
 

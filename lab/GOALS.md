@@ -11,7 +11,7 @@
 - [x] Wallet address configured (0xdec8...2eff)
 - [x] Build `lab/polymarket_trader.py` — py-clob-client Level 1 wrapper
 - [x] Wire trader into prediction_node (paper trades before short-circuit)
-- [x] Paper trade 10 signals — **429+ paper trades**, 22+ with real Polymarket IDs (Session 34)
+- [x] Paper trade 10 signals — **115 real paper trades** with real Polymarket IDs (Session 35: fakes purged, gitignored)
 - [ ] First live trade with $1 max (proof of life)
 - [ ] Scale to $5/trade with risk gate guardrails
 - **Target**: First trade within 48 hours
@@ -215,11 +215,11 @@
 
 | Metric | Current | 1 Week | 1 Month | 3 Months |
 |--------|---------|--------|---------|----------|
-| Prediction Accuracy | **59%** (hybrid system, 13 predictions/cycle) | 65% | 70% | 80% |
+| Prediction Accuracy | **~53%** (hybrid system, 9 predictions/cycle) | 65% | 70% | 80% |
 | Trades Executed | 0 | 5 | 50 | 500 |
 | P&L (USDC) | $0 | -$5 to +$5 | +$50 | +$500 |
 | API Costs/month | **~$0** (llama3.3:70b local, loads on demand) | $25 | $20 | $15 |
-| Loop Autonomy | 5/10 (gateway running, Telegram online, llama3.3:70b) | 6/10 | 8/10 | 9/10 |
+| Loop Autonomy | 6/10 (exec working, Telegram online, llama3.3:70b, real paper trades) | 7/10 | 8/10 | 9/10 |
 | GPU Utilization | ~0% idle, spikes when llama3.3:70b loads for heartbeat | 20% | 50% | 80% |
 | MoltBook Karma | 4 | 50 | 200 | 1000 |
 | ClawHub Skills | 0 | 2 | 5 | 10 |

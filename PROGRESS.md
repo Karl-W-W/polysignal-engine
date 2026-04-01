@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-03-31 | Session 34 closed
+# Last updated: 2026-04-01 | Session 35 closed
 # Session history: See HISTORY.md
 
 ---
@@ -25,17 +25,17 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| DGX Spark | UP | Munich, Blackwell GPU, 41°C, 4GB RAM used. llama3.3:70b as Loop model. |
+| DGX Spark | UP | Munich, Blackwell GPU, 55°C, 8% RAM. llama3.3:70b as Loop model. Ollama context=16384, keep-alive=-1. |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
-| OpenClaw Gateway | **RUNNING** | v2026.3.28, `ollama/llama3.3:70b`, Telegram connected. Workspace with Loop identity. |
-| NemoClaw Sandbox | **RUNNING** | OpenShell v0.0.19, sandbox `nemoclaw` Ready. Agent inside has CAP_SETPCAP issue — Telegram goes through host gateway. |
-| Telegram Bot | **ONLINE** | Session 34: host gateway owns Telegram (no bridge conflicts). `nemoclaw-telegram.service` DISABLED. |
+| OpenClaw Gateway | **RUNNING** | v2026.3.28, `ollama/llama3.3:70b`, Telegram connected. Exec: `host=gateway`, `security=full`. |
+| NemoClaw Sandbox | **RUNNING** | OpenShell v0.0.19, sandbox `nemoclaw` Ready. Exec routes through host gateway (not sandbox runtime). |
+| Telegram Bot | **ONLINE** | Session 35: Loop confirmed executing real commands via Telegram. |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
 | Cloudflare Tunnel | PARTIAL | SSH working (Session 31). HTTP origin needs dashboard fix (points to old .244 IP). |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
-| GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore) |
-| Tests | **438/438 PASS** | Mac (Session 31). +6 price-level bias tests. |
-| Scanner | RUNNING | **142 markets**, `Restart=always` (Session 31). **Hybrid prediction**: base rate (outcome + observation + price-level) + momentum fallback. Near-decided filter (0.05-0.95). **13 predictions/cycle, 10 paper trades**. Meta-gate 59%. |
+| GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore). Runtime files gitignored (Session 35). |
+| Tests | **438/438 PASS** | Mac (Session 35). |
+| Scanner | RUNNING | **137 markets**, cycle 1201+, `Restart=always`. **9 predictions/cycle**. Hybrid: base rate + momentum fallback. Real market IDs in paper trades. |
 | Nemotron-3-Super | **UNLOADED** | Replaced by llama3.3:70b for Loop. Reload only if needed. |
 | NemoClaw | **REBUILT** | OpenShell v0.0.19, NemoClaw v0.1.0 (latest source). Sandbox `nemoclaw` Ready. File sync via cron (5min). |
 | DGX Thermal | OK ~41°C | llama3.3:70b loads on demand. Idle: 4W, 0% GPU. |
@@ -92,6 +92,43 @@ perception → prediction → draft → review → risk_gate → [approved] → 
                                         [RISK_BLOCKED] → END              ├── MoltBook publish (inline)
                                                                           └── write_memory() (inline)
 ```
+
+---
+
+## Session 35 (2026-04-01) — LOOP GETS HANDS + DATA INTEGRITY FIX
+
+**Infrastructure session. 0 code changes, 6 critical config fixes. Loop confirmed executing real commands.**
+
+### Accomplishments
+
+| What | Impact |
+|------|--------|
+| trading_log.json untracked from git | DGX cron `git reset --hard` was overwriting trading log every 10 min, destroying ~11,500 real paper trades. 399 fake trades purged, 115 real trades preserved. |
+| Exec tool fixed (security: full, host: gateway) | Gateway was ignoring 9/13 safeBins due to missing safeBinProfiles in `allowlist` mode. Then sandbox runtime was unavailable. Changed to `full` security + `gateway` host. Loop can now execute python3, git, curl, etc. |
+| Ollama context 4096→16384 + keep-alive | Loop's response time ~5min → ~30-60sec. Added passwordless sudo rules for future Ollama config changes. |
+| "Never fabricate data" rule in IDENTITY.md | Loop was generating fake round numbers when exec failed. Rule: report failures, never invent data. |
+| LOOP_TASKS.md rewritten (833→123 lines) | 3 weeks stale. Old file was accumulated changelogs from Sessions 18-31. Replaced with focused task queue. |
+| All scanner runtime files gitignored | trading_log.json, .scanner-status.json, .events.jsonl, .whale-signals.jsonl, etc. — safe from git reset. |
+
+### Lessons
+- `git reset --hard` destroys tracked runtime data silently. Any file the scanner writes to MUST be gitignored.
+- OpenClaw v2026.3.28 `security: "allowlist"` silently ignores safeBins without `safeBinProfiles` — a breaking change from earlier versions.
+- OpenClaw `exec.host: "sandbox"` requires `agents.defaults.sandbox.mode` config that was never set. Fallback to `gateway` exec works.
+- Heredocs with indented `EOF` lines fail silently in bash — caused 10 min of debugging for a config write.
+- `sudo tee` only passwordless for specific paths in sudoers — added `/etc/systemd/system/ollama.service.d/*` for future.
+
+### Key Metrics
+- Tests: 438/438 passing (unchanged)
+- Scanner: cycle 1201, 137 observations, 9 predictions, 0 errors
+- Paper trades: 115 real (0 fake), real Polymarket market IDs
+- Commits: 3 (gitignore fix, LOOP_TASKS rewrite, session docs)
+
+### Open Items for Session 36
+1. Wire Anthropic API for Loop's complex reasoning (model routing: local for routine, Claude for hard tasks)
+2. Enable TRADING_ENABLED=true ($1 max) — real market IDs confirmed, next blocker is Telegram approval gate
+3. Harden exec: move from `host: gateway` back to sandbox routing (needs `agents.defaults.sandbox.mode` config)
+4. Test proactive heartbeats — Loop should initiate, not just respond
+5. Create claude.ai Project with multi-agent systems book for strategic planning
 
 ---
 

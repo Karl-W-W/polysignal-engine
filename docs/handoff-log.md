@@ -2,6 +2,41 @@
 
 ---
 
+## 2026-04-01 MacBook Session 35 Summary
+
+**Done:**
+- Fixed trading_log.json data loss: untracked from git, 399 fake trades purged, 115 real trades preserved
+- Fixed Loop exec: `security=full`, `host=gateway` — Loop confirmed executing real commands via Telegram
+- Fixed Ollama: context 4096→16384, keep-alive=-1, added passwordless sudo rules for future
+- Added "never fabricate data" rule to Loop's IDENTITY.md
+- Rewrote LOOP_TASKS.md: 833→123 lines, clean and current
+
+**State:**
+- Scanner: cycle 1201+, 137 observations, 9 predictions/cycle, 0 errors
+- Gateway: v2026.3.28, exec working (host mode), Telegram connected
+- Paper trades: 115 real (0 fake), real Polymarket market IDs (FIFA, Champions League, politics, geopolitics)
+- Tests: 438/438 passing
+- Ollama: llama3.3:70b, context 16384, keep-alive=-1
+- Loop: CONFIRMED executing exec tool and returning real scanner data
+
+**Next:**
+- Wire Anthropic API for Loop's complex reasoning (model routing: local for routine, Claude for hard tasks)
+- Enable TRADING_ENABLED=true ($1 max) — needs Telegram approval gate first
+- Move exec from gateway back to sandbox routing (security hardening)
+- Create claude.ai Project with multi-agent systems book
+- Test proactive heartbeats (Loop initiates contact, not just responds)
+
+**Watch out:**
+- Exec runs on HOST (gateway), not in NemoClaw sandbox — acceptable for home network, needs hardening for production
+- `security: "full"` means Loop can execute any binary on the host — monitor for unexpected behavior
+- OpenClaw v2026.3.28 has breaking change: `allowlist` security silently ignores safeBins without profiles
+- Anthropic API key exposure from Session 33 still not rotated
+- 1 zombie process on DGX (harmless but should investigate)
+
+**Codebase health:** Stable. 438 tests, no code changes this session (infrastructure only). trading_log.json properly gitignored. All scanner runtime files protected from git reset.
+
+---
+
 ## 2026-03-31 MacBook Session 34 Summary
 
 **Done:**
