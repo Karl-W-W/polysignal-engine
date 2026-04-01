@@ -54,34 +54,40 @@ EOF
 
 ---
 
-## SESSION 35 CHANGES (2026-04-01)
+## SESSION 36 CHANGES (2026-04-01)
 
 ### Infrastructure Fixes (Claude Code)
 
-1. **trading_log.json UNTRACKED from git** — was being overwritten every 10 min by DGX cron `git reset --hard`. 399 fake trades purged, only real trades remain. File is now gitignored — safe from future resets.
+1. **Anthropic API key ROTATED** — old exposed key from Session 33 revoked. New key deployed to openclaw.json.
 
-2. **Exec tool FIXED** — `tools.exec.security` changed from `"allowlist"` (which required safeBinProfiles for each binary) to `"full"`. All 15 safeBins now work: python3, bash, git, curl, sqlite3, etc. The NemoClaw sandbox (Landlock + seccomp + netns) provides the security boundary.
+2. **Claude Sonnet wired as primary model** — `agents.defaults.model.primary=anthropic/claude-sonnet-4-6`. **BLOCKED: account needs credits.** Falls back to llama3.3:70b. Once funded, Loop will use Claude for Telegram conversations and tool calls.
 
-3. **"Never fabricate data" rule** added to IDENTITY.md. If a command fails, report the failure. Do not invent numbers.
+3. **Paper trade evaluation DEPLOYED** — `evaluate_paper_trades()` in TradingLog, wired into scanner perception node. Evaluates trades >4h old against current prices. Win/loss + P&L written to trading_log.json.
 
-4. **Ollama context upgraded** — OLLAMA_CONTEXT_LENGTH=16384 (was 4096), OLLAMA_KEEP_ALIVE=-1 (model stays loaded). Response time: ~5min → ~30-60sec expected.
+4. **Per-market accuracy tracking** — persistent `per_market` dict in prediction_outcomes.json. No longer lost when 500-record cap rotates.
+
+5. **Host watchdog installed** — cron every 5min checks scanner + gateway + Ollama. Auto-restarts if down.
+
+6. **Book insights extracted** — `lab/BOOK_TODO.md` with 30 action items from "Designing Multi-Agent Systems" (Dibia).
 
 ### What's Working Right Now
 
-- **Scanner**: Cycle 1188+, 136 markets, 8 predictions/cycle, 0 errors
-- **Paper trading**: Real Polymarket market IDs (566187, 558935, etc.) — fakes eliminated
-- **Meta-gate**: Active (check current accuracy)
+- **Scanner**: Cycle 1217+, 142 markets, 8-9 predictions/cycle, 0 errors, 5 days uptime
+- **Paper trading**: 519 real trades, NOW auto-evaluating (win/loss + P&L)
+- **Accuracy**: 50.7% (208W/202L) — declining, needs per-category analysis
+- **Meta-gate**: Active (40% threshold)
 - **Whale tracker**: Running at cycles 9/21/33
-- **Watchdog**: Every 12th cycle
-- **Tests**: 438/438 passing
+- **Watchdog**: Host-level (5min cron) + in-scanner (every 12th cycle)
+- **Tests**: 446/446 passing
+- **Model**: Claude Sonnet configured but blocked by billing. Falls back to llama3.3.
 
 ---
 
 ## ACTIVE TASKS — Priority Order
 
-### P0: Verify Exec Works (immediate)
+### P0: Report Real Data on Heartbeats (ongoing)
 
-**Why:** Exec was broken since sandbox creation. Now fixed. Need to verify.
+**Why:** llama3.3 narrates code instead of executing it and fabricates numbers. Until Claude Sonnet is funded, be honest about limitations.
 
 **What to do:**
 1. Run `python3 --version` — confirm exec works

@@ -66,12 +66,25 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 438/438 pass (Mac + DGX). `test_api` excluded (needs Flask in venv).
+Expected: 446/446 pass (Mac, Session 36). `test_api` excluded (needs Flask in venv).
 
-## Exec Configuration (Session 35)
+## Model Routing (Session 36)
+- **Primary**: `anthropic/claude-sonnet-4-6` — reliable tool calls, follows instructions. **BLOCKED: account needs credits.**
+- **Fallback chain**: `ollama/llama3.3:70b` → `anthropic/claude-sonnet-4-6` → `anthropic/claude-opus-4-6`
+- **Heartbeat**: `ollama/llama3.3:70b` (local, $0)
+- **Known issue**: llama3.3:70b narrates commands as text instead of executing them via tool calls. Fabricates data when tools fail. This is a model limitation, not a config issue.
+- **Fix**: Fund Anthropic API credits → Claude Sonnet becomes active → proper tool calls.
+
+## Exec Configuration (Session 35, updated Session 36)
 - **Host gateway exec**: `tools.exec.host=gateway`, `security=full`. Commands run on host, not in sandbox.
-- **Reason**: NemoClaw sandbox runtime not available as OpenClaw exec target (needs `agents.defaults.sandbox.mode` config). Gateway exec is the working fallback.
+- **safeBins**: Listed but logged as "unprofiled" warning. `safeBinProfiles` does NOT exist in OpenClaw v2026.3.28 schema. Don't try to add it — gateway will crash.
 - **Security**: Acceptable because DGX is behind home network. Long-term: route exec back to sandbox.
+
+## NemoClaw vs OpenClaw (CRITICAL)
+- **NemoClaw** = security sandbox (Landlock + seccomp + netns). The building.
+- **OpenClaw** = agent framework INSIDE the sandbox. The worker.
+- Both are always needed together. Never suggest replacing one with the other.
+- When changing Loop's model, you're changing what OpenClaw uses, not replacing OpenClaw.
 - **Passwordless sudo**: Added `/etc/systemd/system/ollama.service.d/*` and `systemctl daemon-reload/restart ollama` to sudoers.
 
 ## DGX SSH Access (CRITICAL — read before every session)

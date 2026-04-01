@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-04-01 | Session 35 closed
+# Last updated: 2026-04-01 | Session 36 closed
 # Session history: See HISTORY.md
 
 ---
@@ -8,14 +8,14 @@
 
 PolySignal-OS is an AI-native prediction market intelligence system. It scans Polymarket via the Gamma API, detects signals through a 7-node MasterLoop (LangGraph), publishes to MoltBook, and writes cycle learnings to memory. Deployed on NVIDIA DGX Spark (Munich), frontend on Vercel.
 
-**Pipeline (complete, risk-gated, publishing, learning):**
+**Pipeline (complete, risk-gated, publishing, learning, evaluating):**
 ```
-Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → COMMIT → MoltBook → Memory
+Polymarket → PERCEPTION [+evaluate outcomes +evaluate paper trades] → PREDICTION → DRAFT → REVIEW → RISK_GATE → COMMIT → MoltBook → Memory
 ```
 
 **Three-agent workflow:**
 - **Claude Code** — architect, strategy, complex implementations, testing
-- **Loop** (OpenClaw sandbox / Telegram) — autonomous developer, code reviews, DGX-local tasks
+- **Loop** (OpenClaw/NemoClaw on DGX / Telegram) — autonomous operator. NemoClaw=sandbox, OpenClaw=agent framework inside it.
 - **Antigravity** (IDE agent) — DGX ops, Docker rebuilds, file syncing (cheaper per prompt)
 - **KWW** — Vault authorizer, human-only tasks, strategic decisions
 
@@ -25,29 +25,64 @@ Polymarket → PERCEPTION → PREDICTION → DRAFT → REVIEW → RISK_GATE → 
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| DGX Spark | UP | Munich, Blackwell GPU, 55°C, 8% RAM. llama3.3:70b as Loop model. Ollama context=16384, keep-alive=-1. |
+| DGX Spark | UP | Munich, Blackwell GPU, ~41°C. Ollama context=16384, keep-alive=-1. |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
-| OpenClaw Gateway | **RUNNING** | v2026.3.28, `ollama/llama3.3:70b`, Telegram connected. Exec: `host=gateway`, `security=full`. |
-| NemoClaw Sandbox | **RUNNING** | OpenShell v0.0.19, sandbox `nemoclaw` Ready. Exec routes through host gateway (not sandbox runtime). |
-| Telegram Bot | **ONLINE** | Session 35: Loop confirmed executing real commands via Telegram. |
+| OpenClaw Gateway | **RUNNING** | v2026.3.28. Primary: `anthropic/claude-sonnet-4-6` (**BLOCKED: no API credits**). Fallback: `ollama/llama3.3:70b`. Heartbeat: `ollama/llama3.3:70b`. Exec: `host=gateway`, `security=full`. |
+| NemoClaw Sandbox | **RUNNING** | OpenShell v0.0.19, sandbox `nemoclaw` Ready. NemoClaw=sandbox wrapper, OpenClaw=agent inside. |
+| Telegram Bot | **ONLINE** | Loop responding via llama3.3 (Claude Sonnet blocked by billing). |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
-| Cloudflare Tunnel | PARTIAL | SSH working (Session 31). HTTP origin needs dashboard fix (points to old .244 IP). |
+| Cloudflare Tunnel | PARTIAL | SSH working (Session 31). HTTP origin needs dashboard fix. |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
-| GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore). Runtime files gitignored (Session 35). |
-| Tests | **438/438 PASS** | Mac (Session 35). |
-| Scanner | RUNNING | **137 markets**, cycle 1201+, `Restart=always`. **9 predictions/cycle**. Hybrid: base rate + momentum fallback. Real market IDs in paper trades. |
-| Nemotron-3-Super | **UNLOADED** | Replaced by llama3.3:70b for Loop. Reload only if needed. |
-| NemoClaw | **REBUILT** | OpenShell v0.0.19, NemoClaw v0.1.0 (latest source). Sandbox `nemoclaw` Ready. File sync via cron (5min). |
-| DGX Thermal | OK ~41°C | llama3.3:70b loads on demand. Idle: 4W, 0% GPU. |
-| Rogue Service | KILLED | `polysignal.service` stopped + disabled (was crash-looping 461K times) |
-| Outcome Tracker | FIXED | evaluate_outcomes() moved after market fetch — was passing empty obs (Session 14) |
+| GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore). |
+| Tests | **446/446 PASS** | Mac (Session 36). +8 new paper trade eval tests. |
+| Scanner | RUNNING | **142 markets**, cycle 1217+, `Restart=always`. **8-9 predictions/cycle**. 5 days uptime. |
+| Paper Trade Eval | **NEW** | `evaluate_paper_trades()` wired into scanner perception node. Evaluates after 4h min age. |
+| Per-Market Tracking | **NEW** | Persistent `per_market` dict in prediction_outcomes.json. Survives 500-record cap. |
+| Host Watchdog | **NEW** | Cron every 5min, checks scanner + gateway + Ollama. Auto-restarts if down. |
+| Anthropic API Key | **ROTATED** | Old exposed key (Session 33) revoked. New key in openclaw.json. Account needs credits. |
+| Outcome Tracker | ENHANCED | evaluate_outcomes() + per-market stats. Paper trade eval alongside. |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
 | MoltBook Publisher | **LIVE** | Non-blocking in commit_node. JWT obtained. polysignal-os registered + verified. |
-| MoltBook Scanner | **LIVE** | `lab/moltbook_scanner.py` — first scan: 275 posts fetched, 138 saved, 49 dropped by sanitizer, 18 high-relevance |
-| MoltBook Engagement | **LIVE** | `lab/moltbook_engagement.py` — 10 submolts subscribed, 6 agents followed, wired into heartbeat |
-| MoltBook Math Solver | BUILT | `lab/moltbook_math_solver.py` — auto-solves verification challenges |
-| Auto-Merge CI | **PROVEN** | `.github/workflows/auto-merge-loop.yml` — 2 autonomous deploys this session (scanner-fix + gate-tracking) |
-| Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (Session 11 fix) |
+| Auto-Merge CI | **PROVEN** | `.github/workflows/auto-merge-loop.yml` |
+| Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (11,790 lines). |
+| Memory Sync | VERIFIED | brain/memory.md syncs to sandbox via cron (5min). |
+
+---
+
+## Session 36: Give Loop Eyes + Brain (2026-04-01)
+
+**4 commits. 446 tests. Anthropic key rotated. Paper trade evaluation deployed. Book insights extracted.**
+
+### Session 36 Accomplishments
+| What | Impact |
+|------|--------|
+| Anthropic API key rotated | Old key from Session 33 revoked, new key deployed. Security fix. |
+| Claude Sonnet wired as primary model | `agents.defaults.model.primary=anthropic/claude-sonnet-4-6`. **Blocked by zero credits.** Falls back to llama3.3. |
+| Paper trade evaluation deployed | `evaluate_paper_trades()` in TradingLog. Wired into scanner perception node. 8 new tests. |
+| Per-market accuracy tracking | Persistent `per_market` dict in OutcomeState. Survives 500-record cap. Enables per-category analysis. |
+| Host watchdog installed | Cron every 5min checks scanner + gateway + Ollama. Auto-restarts. |
+| Memory path verified | brain/memory.md (11,790 lines) syncing to sandbox. Loop needs working exec to read it. |
+| Book insights extracted | `lab/BOOK_TODO.md` — 30 action items from "Designing Multi-Agent Systems" (Dibia). Reviewed by Cowork (8.5/10). |
+| Diagnosed Loop fabrication | Root cause: safeBins warning is cosmetic (security=full still works). Real issue: llama3.3 can't make structured tool calls. Fix: Claude Sonnet. |
+| safeBinProfiles investigated | Doesn't exist in OpenClaw v2026.3.28 schema. Gateway crashed when attempted. Reverted. |
+
+### Key Findings
+- **Accuracy 50.7%** (208W/202L) — down from 59%. 76% of pending predictions are sports, 84% are Bearish.
+- **Paper trades never evaluated**: 519 trades at "pending" forever. Feedback loop had no data. Now fixed.
+- **Per-market stats were lost**: Outcome tracker capped at 500 records, dropping evaluated predictions. Now persistent.
+- **Loop fabricates data**: llama3.3:70b narrates commands as text instead of executing them. Prints code blocks, then makes up "plausible" numbers. Root cause is model limitation, not config.
+- **safeBinProfiles doesn't exist**: OpenClaw log message "use safeBinProfiles" refers to a feature not yet in the config schema. The real exec issue is model-side.
+- **Book's key insight**: "A well-designed single agent outperforms a poorly designed multi-agent system." Fix Loop's brain (Claude API) and eyes (evaluation) before adding coordination complexity.
+
+### Lessons
+1. Always check API billing status before wiring a new provider — the key worked but the account was empty.
+2. OpenClaw config schema validation is strict — invalid keys crash the gateway immediately. Test with `openclaw doctor` before restarting.
+3. The outcome tracker's 500-record cap silently destroys per-market analysis data. Any system that caps records should keep aggregated stats separately.
+4. The book (Dibia) recommends narrow, validated tools over broad exec — this directly addresses llama3.3's inability to format complex tool calls.
+
+### Accuracy: 50.7% (208W/202L/258N from 913 evaluated)
+### Tests: 446/446 (was 438/438)
+### Commits: 4 (60a8fe2, 4a4268f, + 2 doc commits)
 | Loop Autonomy | **UNLEASHED** | 4 skills, network, GPU, git+curl, PyPI, applyPatch, Ollama (4 models), paper trading, memory writes |
 | Data Readiness | READY | `lab/data_readiness.py` — 134 labeled, 131 evaluated (threshold: 50) |
 | Feature Eng. | READY | `lab/feature_engineering.py` — 15 features (10 price + 5 CLOB), temporal safety (`before` param) |

@@ -2,6 +2,44 @@
 
 ---
 
+## 2026-04-01 MacBook Session 36 Summary
+
+**Done:**
+- Rotated Anthropic API key (old exposed key from Session 33 revoked)
+- Wired Claude Sonnet as Loop's primary model (blocked by zero API credits — falls back to llama3.3)
+- Deployed paper trade evaluation into scanner cycle (evaluate_paper_trades(), 8 tests)
+- Added per-market accuracy tracking that survives 500-record cap
+- Installed host watchdog (5min cron: scanner + gateway + Ollama auto-restart)
+- Verified brain/memory.md syncs to sandbox (11,790 lines)
+- Extracted 30 action items from "Designing Multi-Agent Systems" book → lab/BOOK_TODO.md
+- Diagnosed Loop's data fabrication: llama3.3 can't make structured tool calls (model limitation, not config)
+
+**State:**
+- Scanner: cycle 1217+, 142 markets, 8-9 predictions/cycle, 0 errors, 5 days uptime
+- Gateway: v2026.3.28, primary=claude-sonnet-4-6 (BLOCKED by billing), fallback=llama3.3:70b
+- Accuracy: 50.7% (208W/202L) — declining from 59%, per-market tracking now accumulating
+- Paper trades: 519 total, auto-evaluating after 4h (was "pending" forever)
+- Tests: 446/446 passing
+- Loop: Still fabricating data (llama3.3 narrates instead of executing). Claude Sonnet fixes this once funded.
+
+**Next:**
+- **BLOCKER**: Fund Anthropic API credits (even $10 lasts weeks). This unblocks Claude Sonnet for Loop.
+- Once funded: verify Loop makes real tool calls on first heartbeat
+- Monitor paper trade evaluation results (will start accumulating after DGX git sync + 4h)
+- Per-category accuracy analysis once per_market data accumulates (which categories drag 50.7% down?)
+- Build Telegram approval gate for live trading (after accuracy improves)
+
+**Watch out:**
+- Claude Sonnet is wired but account has ZERO credits — all calls fail with billing error
+- safeBinProfiles does NOT exist in OpenClaw v2026.3.28 schema — don't try adding it (crashes gateway)
+- Outcome tracker caps at 500 predictions, dropping evaluated entries. per_market dict is the fix (now deployed)
+- llama3.3:70b generates malformed tool calls (read without path arg). This is inherent to the model.
+- Paper trade evaluation uses 4h minimum age — first results appear ~4h after DGX sync
+
+**Codebase health:** Stable, growing. 446 tests (+8), 2 new features (paper trade eval, per-market tracking). lab/BOOK_TODO.md added as strategic roadmap. No dead code or duplications introduced.
+
+---
+
 ## 2026-04-01 MacBook Session 35 Summary
 
 **Done:**

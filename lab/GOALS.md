@@ -215,11 +215,11 @@
 
 | Metric | Current | 1 Week | 1 Month | 3 Months |
 |--------|---------|--------|---------|----------|
-| Prediction Accuracy | **~53%** (hybrid system, 9 predictions/cycle) | 65% | 70% | 80% |
-| Trades Executed | 0 | 5 | 50 | 500 |
+| Prediction Accuracy | **50.7%** (208W/202L, 913 evaluated. Paper trade eval now deployed.) | 60% | 70% | 80% |
+| Trades Executed | 0 (519 paper, now auto-evaluating) | 5 | 50 | 500 |
 | P&L (USDC) | $0 | -$5 to +$5 | +$50 | +$500 |
-| API Costs/month | **~$0** (llama3.3:70b local, loads on demand) | $25 | $20 | $15 |
-| Loop Autonomy | 6/10 (exec working, Telegram online, llama3.3:70b, real paper trades) | 7/10 | 8/10 | 9/10 |
+| API Costs/month | **~$0** (llama3.3:70b local. Claude Sonnet wired but blocked by billing.) | $25 | $20 | $15 |
+| Loop Autonomy | 5/10 (exec works but llama3.3 can't use it reliably. Claude Sonnet blocked by billing.) | 7/10 | 8/10 | 9/10 |
 | GPU Utilization | ~0% idle, spikes when llama3.3:70b loads for heartbeat | 20% | 50% | 80% |
 | MoltBook Karma | 4 | 50 | 200 | 1000 |
 | ClawHub Skills | 0 | 2 | 5 | 10 |
