@@ -385,3 +385,117 @@ class TestInit:
         monkeypatch.setenv("POLYMARKET_BUILDER_API_KEY", "env-key")
         t = PolymarketTrader(api_key="explicit", log_path=tmp_log)
         assert t.api_key == "explicit"
+
+
+class TestEvaluatePaperTrades:
+    """Tests for TradingLog.evaluate_paper_trades()."""
+
+    def _make_trade(self, market_id="m1", side="BUY", price=0.50,
+                    size=2.0, hours_ago=5.0, confidence=0.8):
+        from datetime import timedelta
+        ts = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat()
+        return {
+            "success": True, "mode": "paper",
+            "trade_id": f"test-{market_id}-{side}",
+            "market_id": market_id, "title": f"Test {market_id}",
+            "side": side, "outcome": "Yes",
+            "size_usdc": size, "price_at_entry": price,
+            "confidence": confidence, "timestamp": ts,
+            "risk_verdict": "APPROVED",
+            "order_id": None, "error": None, "pnl": None,
+        }
+
+    def test_buy_winning_trade(self, tmp_path):
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        log._trades = [self._make_trade(side="BUY", price=0.50, hours_ago=5)]
+        log.save()
+
+        result = log.evaluate_paper_trades({"m1": 0.60}, min_age_hours=4.0)
+        assert result["evaluated"] == 1
+        assert result["wins"] == 1
+        assert result["losses"] == 0
+        assert log._trades[0]["pnl"] > 0
+        assert log._trades[0]["result"] == "win"
+
+    def test_buy_losing_trade(self, tmp_path):
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        log._trades = [self._make_trade(side="BUY", price=0.50, hours_ago=5)]
+        log.save()
+
+        result = log.evaluate_paper_trades({"m1": 0.40}, min_age_hours=4.0)
+        assert result["evaluated"] == 1
+        assert result["losses"] == 1
+        assert log._trades[0]["pnl"] < 0
+        assert log._trades[0]["result"] == "loss"
+
+    def test_sell_winning_trade(self, tmp_path):
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        log._trades = [self._make_trade(side="SELL", price=0.50, hours_ago=5)]
+        log.save()
+
+        result = log.evaluate_paper_trades({"m1": 0.40}, min_age_hours=4.0)
+        assert result["evaluated"] == 1
+        assert result["wins"] == 1
+        assert log._trades[0]["pnl"] > 0
+
+    def test_sell_losing_trade(self, tmp_path):
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        log._trades = [self._make_trade(side="SELL", price=0.50, hours_ago=5)]
+        log.save()
+
+        result = log.evaluate_paper_trades({"m1": 0.60}, min_age_hours=4.0)
+        assert result["evaluated"] == 1
+        assert result["losses"] == 1
+        assert log._trades[0]["pnl"] < 0
+
+    def test_too_young_skipped(self, tmp_path):
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        log._trades = [self._make_trade(hours_ago=1.0)]
+        log.save()
+
+        result = log.evaluate_paper_trades({"m1": 0.60}, min_age_hours=4.0)
+        assert result["evaluated"] == 0
+        assert result["too_young"] == 1
+        assert log._trades[0]["pnl"] is None
+
+    def test_no_price_skipped(self, tmp_path):
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        log._trades = [self._make_trade(market_id="m1", hours_ago=5)]
+        log.save()
+
+        result = log.evaluate_paper_trades({"m2": 0.60}, min_age_hours=4.0)
+        assert result["evaluated"] == 0
+        assert result["no_price"] == 1
+
+    def test_already_evaluated_skipped(self, tmp_path):
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        trade = self._make_trade(hours_ago=5)
+        trade["pnl"] = 0.10
+        log._trades = [trade]
+        log.save()
+
+        result = log.evaluate_paper_trades({"m1": 0.60}, min_age_hours=4.0)
+        assert result["evaluated"] == 0
+
+    def test_mixed_batch(self, tmp_path):
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        log._trades = [
+            self._make_trade(market_id="m1", side="BUY", price=0.50, hours_ago=5),
+            self._make_trade(market_id="m2", side="SELL", price=0.30, hours_ago=5),
+            self._make_trade(market_id="m3", side="BUY", price=0.70, hours_ago=1),  # too young
+        ]
+        log.save()
+
+        prices = {"m1": 0.55, "m2": 0.25, "m3": 0.80}
+        result = log.evaluate_paper_trades(prices, min_age_hours=4.0)
+        assert result["evaluated"] == 2
+        assert result["wins"] == 2  # BUY up + SELL down
+        assert result["too_young"] == 1

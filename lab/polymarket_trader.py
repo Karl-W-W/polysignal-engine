@@ -134,6 +134,83 @@ class TradingLog:
             if t.get("timestamp", "").startswith(today) and t.get("success")
         )
 
+    def evaluate_paper_trades(
+        self,
+        current_prices: Dict[str, float],
+        min_age_hours: float = 4.0,
+    ) -> Dict[str, int]:
+        """Evaluate pending paper trades against current market prices.
+
+        Compares entry price to current price to determine win/loss.
+        BUY side: win if price went up. SELL side: win if price went down.
+
+        Args:
+            current_prices: {market_id: current_price} from scanner observations
+            min_age_hours: Minimum age before evaluating (default 4h, matches outcome_tracker)
+
+        Returns:
+            {"evaluated": N, "wins": N, "losses": N, "too_young": N, "no_price": N}
+        """
+        now = datetime.now(timezone.utc)
+        stats = {"evaluated": 0, "wins": 0, "losses": 0, "too_young": 0, "no_price": 0}
+
+        for trade in self._trades:
+            # Skip already-evaluated or failed trades
+            if trade.get("pnl") is not None or not trade.get("success"):
+                continue
+
+            market_id = trade.get("market_id")
+            if not market_id or market_id not in current_prices:
+                stats["no_price"] += 1
+                continue
+
+            # Check minimum age
+            try:
+                trade_time = datetime.fromisoformat(trade["timestamp"])
+                age_hours = (now - trade_time).total_seconds() / 3600
+            except (KeyError, ValueError):
+                continue
+
+            if age_hours < min_age_hours:
+                stats["too_young"] += 1
+                continue
+
+            # Evaluate: compare entry price to current price
+            entry_price = trade.get("price_at_entry", 0.0)
+            current_price = current_prices[market_id]
+            size = trade.get("size_usdc", 0.0)
+            side = trade.get("side", "")
+
+            if entry_price <= 0 or size <= 0:
+                continue
+
+            price_delta = current_price - entry_price
+
+            if side == "BUY":
+                # Bought tokens: profit if price went up
+                pnl = (price_delta / entry_price) * size
+            elif side == "SELL":
+                # Sold tokens: profit if price went down
+                pnl = (-price_delta / entry_price) * size
+            else:
+                continue
+
+            trade["pnl"] = round(pnl, 4)
+            trade["result"] = "win" if pnl >= 0 else "loss"
+            trade["evaluated_at"] = now.isoformat()
+            trade["price_at_evaluation"] = current_price
+
+            stats["evaluated"] += 1
+            if pnl >= 0:
+                stats["wins"] += 1
+            else:
+                stats["losses"] += 1
+
+        if stats["evaluated"] > 0:
+            self.save()
+
+        return stats
+
 
 # ============================================================================
 # CLOB CLIENT WRAPPER

@@ -259,6 +259,25 @@ def perception_node(state: LoopState) -> LoopState:
     except Exception:
         pass  # First cycle or no prior predictions — expected
 
+    # ── Evaluate paper trades against fresh prices (non-blocking) ─────────
+    try:
+        from lab.polymarket_trader import TradingLog
+        trade_log = TradingLog()
+        current_prices = {}
+        for obs in state.get("observations", []):
+            mid = obs.get("market_id")
+            price = obs.get("current_price") or obs.get("price", 0.0)
+            if mid and price:
+                current_prices[mid] = price
+        if current_prices:
+            trade_eval = trade_log.evaluate_paper_trades(current_prices)
+            if trade_eval["evaluated"] > 0:
+                print(f"  💰 Paper trades: {trade_eval['wins']}W/{trade_eval['losses']}L "
+                      f"({trade_eval['evaluated']} evaluated, "
+                      f"{trade_eval['too_young']} too young)")
+    except Exception:
+        pass  # No trades yet or trading_log.json missing — expected
+
     state["stage_timings"]["perception"] = (datetime.now(timezone.utc) - start).total_seconds()
     return state
 
