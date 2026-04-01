@@ -7,5 +7,17 @@ __pycache__/
 .DS_Store
 core/secrets/
 *.json.bak*
+lab/trading_log.json
+lab/.scanner-status.json
+lab/.events.jsonl
+lab/.whale-signals.jsonl
+lab/.watchdog-alerts
+lab/.feedback-report
+lab/.evolution-log.jsonl
+lab/.retrain-trigger
+lab/.restart-scanner
+lab/.git-push-request
+lab/.deploy-trigger
+lab/.negotiator-log
 frontend/.next/
 .venv/
