@@ -215,9 +215,9 @@
 
 | Metric | Current | 1 Week | 1 Month | 3 Months |
 |--------|---------|--------|---------|----------|
-| Prediction Accuracy | **50.7%** (208W/202L, 913 evaluated. Paper trade eval now deployed.) | 60% | 70% | 80% |
-| Trades Executed | 0 (519 paper, now auto-evaluating) | 5 | 50 | 500 |
-| P&L (USDC) | $0 | -$5 to +$5 | +$50 | +$500 |
+| Prediction Accuracy | **89.3% paper** (2678W/321L, 2999 evaluated, $18.47 P&L). Outcome eval re-enabled (4h horizon). | 70% | 80% | 85% |
+| Trades Executed | 0 (3,214 paper, 2,999 evaluated — ready for first live trade) | 10 | 100 | 1000 |
+| P&L (USDC) | $0 (paper: +$18.47) | +$5 | +$100 | +$1000 |
 | API Costs/month | **~$0** (llama3.3:70b local. Claude Sonnet wired but blocked by billing.) | $25 | $20 | $15 |
 | Loop Autonomy | 5/10 (exec works but llama3.3 can't use it reliably. Claude Sonnet blocked by billing.) | 7/10 | 8/10 | 9/10 |
 | GPU Utilization | ~0% idle, spikes when llama3.3:70b loads for heartbeat | 20% | 50% | 80% |
