@@ -355,12 +355,15 @@ def prediction_node(state: LoopState) -> LoopState:
     except ImportError:
         pred_obs = observations
 
-    # ── Filter near-decided markets (Session 31) ────────────────────────
-    # Markets at extreme prices (< 0.05 or > 0.95) are essentially decided.
-    # No trading opportunity, predictions are trivially correct or NEUTRAL.
-    # 135 of 143 scanned markets were < 0.15 — wasting prediction capacity.
-    PREDICTION_MIN_PRICE = 0.05
-    PREDICTION_MAX_PRICE = 0.95
+    # ── Filter near-decided markets (Session 31, tightened Session 37) ─────
+    # Session 31: 0.05-0.95 — removed obviously dead markets (< 0.15 prices).
+    # Session 37: Tightened to 0.15-0.85 — paper trade analysis showed 98.8%
+    # of trades had price delta < 0.5pp (zero real movement). Only 3 markets
+    # in the 0.20-0.80 zone show meaningful price action. Trading near-decided
+    # markets produces economically empty signals: 0.3% return on $6,194 notional.
+    # Force predictions onto markets where being right actually pays off.
+    PREDICTION_MIN_PRICE = 0.15
+    PREDICTION_MAX_PRICE = 0.85
     decided_count = 0
     tradeable_obs = []
     for obs in pred_obs:
