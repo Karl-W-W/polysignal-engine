@@ -198,7 +198,7 @@ def _signal_to_observation(sig: dict) -> dict:
         "source":       "polymarket",
         "direction":    sig["direction"],
         "url":          sig["url"],
-        "time_horizon": sig.get("time_horizon", "24h"),
+        "time_horizon": sig.get("time_horizon", "4h"),
     }
 
 
@@ -402,7 +402,7 @@ def prediction_node(state: LoopState) -> LoopState:
                             "hypothesis": result.direction,
                             "confidence": result.confidence,
                             "reasoning": result.reasoning,
-                            "time_horizon": obs.get("time_horizon", "24h"),
+                            "time_horizon": obs.get("time_horizon", "4h"),
                             "title": obs.get("title", obs.get("question", "")),
                             "current_price": obs.get("current_price", obs.get("price", 0.0)),
                             "_predictor": "base_rate",
@@ -437,7 +437,7 @@ def prediction_node(state: LoopState) -> LoopState:
                     delta = abs(sig.get("change_24h", 0.0))
                     pred["confidence"] = round(min(0.55 + delta * 2, 0.85), 2)
                     pred["reasoning"] = f"Signal-enhanced: {sig['direction']} (delta: {sig.get('change_24h', 0):.3f})"
-                    pred["time_horizon"] = sig.get("time_horizon", "24h")
+                    pred["time_horizon"] = sig.get("time_horizon", "4h")
                     enhanced += 1
             for pred in momentum_preds:
                 pred["_predictor"] = "momentum"
