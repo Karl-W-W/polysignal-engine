@@ -158,7 +158,7 @@ class BaseRatePredictor:
         if not os.path.exists(db_path):
             return cls({})
 
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=30)
         try:
             cursor = conn.execute(
                 "SELECT market_id, price FROM observations ORDER BY market_id, timestamp"

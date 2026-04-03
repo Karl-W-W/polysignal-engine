@@ -256,8 +256,8 @@ def perception_node(state: LoopState) -> LoopState:
             print(f"  📊 Outcomes: {eval_result['correct']} correct, "
                   f"{eval_result['incorrect']} wrong, {eval_result['neutral']} neutral")
             print(f"     {get_accuracy_summary()}")
-    except Exception:
-        pass  # First cycle or no prior predictions — expected
+    except Exception as e:
+        print(f"  ⚠ evaluate_outcomes failed: {e}")
 
     # ── Evaluate paper trades against fresh prices (non-blocking) ─────────
     try:
@@ -275,8 +275,8 @@ def perception_node(state: LoopState) -> LoopState:
                 print(f"  💰 Paper trades: {trade_eval['wins']}W/{trade_eval['losses']}L "
                       f"({trade_eval['evaluated']} evaluated, "
                       f"{trade_eval['too_young']} too young)")
-    except Exception:
-        pass  # No trades yet or trading_log.json missing — expected
+    except Exception as e:
+        print(f"  ⚠ evaluate_paper_trades failed: {e}")
 
     state["stage_timings"]["perception"] = (datetime.now(timezone.utc) - start).total_seconds()
     return state

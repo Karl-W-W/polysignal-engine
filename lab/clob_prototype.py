@@ -62,7 +62,7 @@ def _api_get(url: str) -> dict:
 def get_tracked_market_ids() -> List[str]:
     """Get market IDs from our observations DB."""
     try:
-        db = sqlite3.connect(DB_PATH)
+        db = sqlite3.connect(DB_PATH, timeout=30)
         c = db.cursor()
         c.execute("SELECT DISTINCT market_id FROM observations")
         ids = [str(r[0]) for r in c.fetchall()]

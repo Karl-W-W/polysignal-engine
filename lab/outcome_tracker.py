@@ -85,8 +85,20 @@ class OutcomeState:
 
     def save(self, path: Path = OUTCOMES_FILE):
         path.parent.mkdir(parents=True, exist_ok=True)
+        # Protect unevaluated predictions from rotation — they need time
+        # to reach their evaluation horizon (4h/24h). Drop evaluated first
+        # since their stats are preserved in per_market and stats dicts.
+        MAX_RECORDS = 5000
+        if len(self.predictions) > MAX_RECORDS:
+            unevaluated = [p for p in self.predictions if not p.get("evaluated")]
+            evaluated = [p for p in self.predictions if p.get("evaluated")]
+            keep_evaluated = max(0, MAX_RECORDS - len(unevaluated))
+            self.predictions = evaluated[-keep_evaluated:] + unevaluated
+            # Hard cap: if unevaluated alone exceed limit, keep newest
+            if len(self.predictions) > MAX_RECORDS:
+                self.predictions = self.predictions[-MAX_RECORDS:]
         data = {
-            "predictions": self.predictions[-500:],  # Cap at 500 records
+            "predictions": self.predictions,
             "stats": self.stats,
             "per_market": self.per_market,
         }

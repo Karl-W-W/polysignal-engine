@@ -56,10 +56,11 @@ def get_db():
     if not os.path.exists(DB_PATH):
         # Local testing fallback
         fallback = os.path.join(os.path.dirname(__file__), "../../data/test.db")
-        conn = sqlite3.connect(fallback)
+        conn = sqlite3.connect(fallback, timeout=30)
     else:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 

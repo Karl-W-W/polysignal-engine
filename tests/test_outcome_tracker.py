@@ -234,12 +234,26 @@ class TestOutcomeState:
         assert len(state.predictions) == 0
         assert state.stats["total_predictions"] == 0
 
-    def test_predictions_capped_at_500(self, state_file):
+    def test_predictions_capped_at_5000(self, state_file):
         state = OutcomeState()
-        state.predictions = [{"i": i} for i in range(600)]
+        state.predictions = [{"i": i} for i in range(6000)]
         state.save(state_file)
         loaded = OutcomeState.load(state_file)
-        assert len(loaded.predictions) == 500
+        assert len(loaded.predictions) == 5000
+
+    def test_unevaluated_protected_from_rotation(self, state_file):
+        """Unevaluated predictions survive rotation even when cap is exceeded."""
+        state = OutcomeState()
+        # 4000 evaluated + 2000 unevaluated = 6000 total
+        evaluated = [{"i": i, "evaluated": True} for i in range(4000)]
+        unevaluated = [{"i": i + 4000} for i in range(2000)]
+        state.predictions = evaluated + unevaluated
+        state.save(state_file)
+        loaded = OutcomeState.load(state_file)
+        # All 2000 unevaluated must survive; 3000 evaluated kept (5000 total)
+        assert len(loaded.predictions) == 5000
+        unevaluated_loaded = [p for p in loaded.predictions if not p.get("evaluated")]
+        assert len(unevaluated_loaded) == 2000
 
 
 # ============================================================================
