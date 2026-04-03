@@ -54,32 +54,35 @@ EOF
 
 ---
 
-## SESSION 36 CHANGES (2026-04-01)
+## SESSION 37 CHANGES (2026-04-03)
 
-### Infrastructure Fixes (Claude Code)
+### Evaluation Pipeline Fix (Claude Code)
 
-1. **Anthropic API key ROTATED** — old exposed key from Session 33 revoked. New key deployed to openclaw.json.
+1. **Record cap raised 500→5000** — predictions were being rotated out in ~4.6h, before 24h evaluation horizon. Now unevaluated records are protected from rotation. Evaluated records dropped first.
 
-2. **Claude Sonnet wired as primary model** — `agents.defaults.model.primary=anthropic/claude-sonnet-4-6`. **BLOCKED: account needs credits.** Falls back to llama3.3:70b. Once funded, Loop will use Claude for Telegram conversations and tool calls.
+2. **Paper trade evaluation WORKING** — 2,999 trades evaluated: **89.3% win rate** (2678W/321L), **$18.47 P&L**. The system was performing well all along — we just couldn't see it.
 
-3. **Paper trade evaluation DEPLOYED** — `evaluate_paper_trades()` in TradingLog, wired into scanner perception node. Evaluates trades >4h old against current prices. Win/loss + P&L written to trading_log.json.
+3. **Time horizon 24h→4h** — outcome evaluations now happen at 4h (was 24h). Feedback loop 6x faster.
 
-4. **Per-market accuracy tracking** — persistent `per_market` dict in prediction_outcomes.json. No longer lost when 500-record cap rotates.
+4. **SQLite hardened** — timeout=30 + WAL mode on all DB connections. Prevents "database is locked" from concurrent access or Loop's runaway queries.
 
-5. **Host watchdog installed** — cron every 5min checks scanner + gateway + Ollama. Auto-restarts if down.
+5. **Error logging** — silent `except: pass` in perception_node replaced with `print(f"⚠ ... failed: {e}")`. Errors now visible in scanner logs.
 
-6. **Book insights extracted** — `lab/BOOK_TODO.md` with 30 action items from "Designing Multi-Agent Systems" (Dibia).
+6. **Scanner restarted** — was running since Mar 26. Session 36 code changes existed on disk but Python import caching meant they never loaded. **Always restart scanner after code changes.**
+
+7. **Workspace MEMORY.md restored** — was 0 bytes. Populated with key project context.
 
 ### What's Working Right Now
 
-- **Scanner**: Cycle 1217+, 142 markets, 8-9 predictions/cycle, 0 errors, 5 days uptime
-- **Paper trading**: 519 real trades, NOW auto-evaluating (win/loss + P&L)
-- **Accuracy**: 50.7% (208W/202L) — declining, needs per-category analysis
-- **Meta-gate**: Active (40% threshold)
+- **Scanner**: 149 markets, 9 predictions/cycle, 0 errors. Restarted Apr 3.
+- **Paper trading**: 3,214 trades, 2,999 evaluated — **89.3% win rate, $18.47 P&L**
+- **Outcome evaluation**: Re-enabled with 4h horizon. First fresh data expected ~4h after restart.
+- **Meta-gate**: Rebuilding (insufficient recent data, will self-correct in ~4h)
 - **Whale tracker**: Running at cycles 9/21/33
-- **Watchdog**: Host-level (5min cron) + in-scanner (every 12th cycle)
-- **Tests**: 446/446 passing
+- **Watchdog**: Host-level (5min cron) + in-scanner (every 12th cycle), 0 alerts
+- **Tests**: 447/447 passing (+1 new unevaluated protection test)
 - **Model**: Claude Sonnet configured but blocked by billing. Falls back to llama3.3.
+- **WARNING**: Do NOT run correlated subqueries on observations DB (167MB). Use GROUP BY.
 
 ---
 
