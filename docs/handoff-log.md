@@ -2,6 +2,55 @@
 
 ---
 
+## 2026-04-04 MacBook Session 37 Summary
+
+**Done:**
+- Fixed evaluation pipeline: 500→5000 record cap, unevaluated records protected from rotation
+- Fixed time horizon: 24h→4h for faster feedback
+- Fixed MIN_MOVE_THRESHOLD: 1pp→0.3pp (2,195 overnight evals were ALL NEUTRAL at 1pp)
+- Near-decided filter tightened: 0.05/0.95→0.15/0.85 (Loop's push, auto-merged)
+- Approval gate built by Loop (26 tests), wired into masterloop by Claude Code
+- draft_action enriched with trade metadata in risk_gate_node (Vault change)
+- Routing changed: TRADING_ENABLED=true routes ALL trades through approval (not just first 5)
+- Flask API rewritten: old routes queried dead tables, new routes serve live JSON
+- Fixed /api/run crash bug (undefined masterloop_orchestrator)
+- SQLite timeout=30 + WAL mode on all connections
+- Silent except:pass→error logging in perception_node
+- Loop memory restored: 204 lines strategic + 17 daily logs (was 0 bytes — lost during NemoClaw rebuild)
+- Added new routes: /api/scanner/status, /api/predictions/accuracy, /api/trades/summary, /api/predictions/latest
+- Multi-agent collaboration: Loop diagnosed, Claude Code fixed, both verified each other
+
+**State:**
+- Scanner: cycle 221+, 153 markets, 10 predictions/cycle, 0 errors, filter 0.15-0.85
+- Gateway: v2026.3.28, Claude Sonnet primary (BLOCKED by billing), llama3.3 fallback
+- Accuracy: UNKNOWN — old 50.7% is stale, 0.3pp threshold results pending (~21:15 CET Apr 4)
+- Paper trades: 5,454 total, 4,974 evaluated, 88.9% win rate, $22.95 P&L (mostly noise pre-filter)
+- Approval gate: WIRED — wait_approval_node calls wait_approval_node_with_hitl, fallback to auto-approve
+- Flask API: REWRITTEN — serves live scanner/prediction/trade JSON from files
+- Tests: 473/473 passing (+27 from Session 36)
+- Loop: Verified reads files, ships code on Claude Sonnet, narrates on llama3.3
+
+**Next:**
+- **Session 38 Task Zero**: KWW fixes Cloudflare tunnel HTTP origin + CNAMEs polysignal.app to Vercel
+- Check 0.3pp threshold directional W/L results (should have data by Session 38)
+- If accuracy >55% on mid-range: consider first live $1 trade (approval gate is ready)
+- XGBoost retrain with new directional labels
+- Dashboard Stage 1: polysignal.app shows live scanner data
+- Fund Anthropic API ($5-10) — Loop's autonomy unlock
+
+**Watch out:**
+- 0.3pp threshold was just deployed — first directional W/L data arrives ~21:15 CET Apr 4. Don't judge accuracy until this data is in.
+- Approval gate timeout (5 min) = REJECT. If Karl is asleep, all trades are rejected. This is by design but means first live trade needs Karl actively watching.
+- Flask API rewrite is Vault change — verify on DGX that new routes work before relying on dashboard
+- Loop ran a stuck O(n^2) SQLite query that locked the DB for 30+ minutes. Added timeout=30 + WAL but watch for recurrence.
+- Scanner must be restarted after ANY code change (Python import caching)
+
+**Loop overnight:** Monitor 0.3pp evaluation results. Report first directional W/L on Telegram when it appears. Do NOT run complex DB queries.
+
+**Codebase health:** Stable, significantly improved. 473 tests (+27), 3 Vault files updated (risk_integration.py, api.py, masterloop.py). No dead code or duplications. Approval gate is clean addition.
+
+---
+
 ## 2026-04-01 MacBook Session 36 Summary
 
 **Done:**

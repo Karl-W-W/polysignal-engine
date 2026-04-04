@@ -66,7 +66,7 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 # On Mac (from polysignal-engine/)
 .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
-Expected: 446/446 pass (Mac, Session 36). `test_api` excluded (needs Flask in venv).
+Expected: 473/473 pass (Mac, Session 37). `test_api` excluded (needs Flask in venv).
 
 ## Model Routing (Session 36)
 - **Primary**: `anthropic/claude-sonnet-4-6` — reliable tool calls, follows instructions. **BLOCKED: account needs credits.**

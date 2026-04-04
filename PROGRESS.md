@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-04-01 | Session 36 closed
+# Last updated: 2026-04-04 | Session 37 closed
 # Session history: See HISTORY.md
 
 ---
@@ -34,11 +34,12 @@ Polymarket → PERCEPTION [+evaluate outcomes +evaluate paper trades] → PREDIC
 | Cloudflare Tunnel | PARTIAL | SSH working (Session 31). HTTP origin needs dashboard fix. |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore). |
-| Tests | **446/446 PASS** | Mac (Session 36). +8 new paper trade eval tests. |
-| Scanner | RUNNING | **142 markets**, cycle 1217+, `Restart=always`. **8-9 predictions/cycle**. 5 days uptime. |
-| Paper Trade Eval | **NEW** | `evaluate_paper_trades()` wired into scanner perception node. Evaluates after 4h min age. |
-| Per-Market Tracking | **NEW** | Persistent `per_market` dict in prediction_outcomes.json. Survives 500-record cap. |
-| Host Watchdog | **NEW** | Cron every 5min, checks scanner + gateway + Ollama. Auto-restarts if down. |
+| Tests | **473/473 PASS** | Mac (Session 37). +27 tests (26 approval gate + 1 unevaluated protection). |
+| Scanner | RUNNING | **153 markets**, 10 predictions/cycle, `Restart=always`. Filter 0.15-0.85. |
+| Paper Trade Eval | **WORKING** | 4,974 evaluated, 88.9% win rate, $22.95 P&L (mostly noise on near-decided). |
+| Per-Market Tracking | **WORKING** | 10 markets tracked. Persists across 5000-record cap. |
+| Approval Gate | **WIRED** | `lab/approval_gate.py` → Telegram HITL. TRADING_ENABLED routes ALL trades through approval. |
+| Host Watchdog | RUNNING | Cron every 5min, checks scanner + gateway + Ollama. Auto-restarts if down. |
 | Anthropic API Key | **ROTATED** | Old exposed key (Session 33) revoked. New key in openclaw.json. Account needs credits. |
 | Outcome Tracker | ENHANCED | evaluate_outcomes() + per-market stats. Paper trade eval alongside. |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
@@ -46,6 +47,44 @@ Polymarket → PERCEPTION [+evaluate outcomes +evaluate paper trades] → PREDIC
 | Auto-Merge CI | **PROVEN** | `.github/workflows/auto-merge-loop.yml` |
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (11,790 lines). |
 | Memory Sync | VERIFIED | brain/memory.md syncs to sandbox via cron (5min). |
+
+---
+
+## Session 37: Fix Everything (2026-04-03 — 2026-04-04)
+
+**9 commits (6 Claude Code + 2 Loop + 1 auto-merge). 473 tests. Evaluation pipeline fixed. Approval gate wired. Flask API rewritten. Multi-agent collaboration session.**
+
+### Session 37 Accomplishments
+| What | Impact |
+|------|--------|
+| Evaluation cap 500→5000 | Root cause of months-stale evaluations. Unevaluated records protected from rotation. |
+| Time horizon 24h→4h | Feedback loop 6x faster. Matches paper trade evaluation. |
+| MIN_MOVE_THRESHOLD 1pp→0.3pp | 2,195 overnight evals were ALL NEUTRAL at 1pp. 0.3pp produces directional signal. |
+| Near-decided filter 0.15-0.85 (Loop) | Only mid-range markets get predictions. 98.8% of old trades had <0.5pp movement. |
+| Approval gate built (Loop) | 26 tests, Telegram HITL, HMAC signing, timeout=reject. |
+| Approval gate wired | draft_action enriched with trade metadata, routing always through approval when TRADING_ENABLED. |
+| Flask API rewritten | Old routes queried dead tables. New: /api/scanner/status, /api/predictions/accuracy, /api/trades/summary. Crash bug fixed. |
+| SQLite timeout+WAL | All DB connections use timeout=30 + WAL mode. Prevents "database is locked". |
+| Silent exceptions→logging | except:pass replaced with error logging in perception_node. |
+| Loop memory restored | 204 lines strategic + 17 daily logs from old sandbox. Was 0 bytes. |
+| Loop verified Claude Code's work | Full deep-dive prompt, honest accuracy critique, architectural analysis. |
+
+### Key Findings
+- **89.3% paper win rate is noise** — 98.8% of trades had <0.5pp movement. Median delta = 0.0000. Loop caught this.
+- **Real accuracy UNKNOWN** — old 50.7% is stale, 0.3pp threshold results pending (~21:15 CET Apr 4).
+- **Loop on Claude Sonnet shipped production code** — 26-test approval gate, filter change auto-merged. Zero code on llama3.3.
+- **Multi-agent collaboration works** — Loop diagnosed, Claude Code fixed, both verified each other's work.
+
+### Lessons
+1. When changing time horizons, always adjust the move threshold proportionally.
+2. Python import caching means scanner MUST restart after code changes.
+3. Loop on llama3.3 reports but can't execute. On Claude Sonnet it ships code. Fund the API.
+4. Draft action enrichment is a real integration concern — always check what downstream nodes expect.
+5. "89% win rate" can be meaningless. Always check price delta distribution.
+
+### Accuracy: PENDING (0.3pp threshold deployed, first directional data ~21:15 CET Apr 4)
+### Tests: 473/473 (was 446/446, +27)
+### Commits: 9 (fe1abcd, 979666e, d24318a, e5d6f53, d3a7921, e5da1c9, a69fd9b, f219df6, 25e4cd1)
 
 ---
 
