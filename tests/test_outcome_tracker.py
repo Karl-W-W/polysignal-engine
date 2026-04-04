@@ -181,8 +181,8 @@ class TestEvaluateOutcomes:
     def test_neutral_if_small_move(self, state_file):
         self._seed_predictions(state_file)
         obs = [
-            {"market_id": "0xbtc", "current_price": 0.605},  # +0.005, below 1pp threshold
-            {"market_id": "0xeth", "current_price": 0.495},  # -0.005, below 1pp threshold
+            {"market_id": "0xbtc", "current_price": 0.6015},  # +0.0015, below 0.3pp threshold
+            {"market_id": "0xeth", "current_price": 0.4985},  # -0.0015, below 0.3pp threshold
         ]
         result = evaluate_outcomes(obs, state_path=state_file)
         assert result["neutral"] == 2

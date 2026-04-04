@@ -39,10 +39,11 @@ EVAL_HORIZONS = {
 DEFAULT_HORIZON = "4h"
 
 # Minimum price change to count as a directional move (avoid noise)
-# Session 23: Lowered from 0.02 → 0.01 because 78% of outcomes were NEUTRAL
-# at 2pp threshold, leaving only 51 training samples. At 1pp we get ~3x more
-# labeled data without introducing pure noise (crypto markets regularly move 1pp).
-MIN_MOVE_THRESHOLD = 0.01  # 1pp (was 2pp — too aggressive for quiet markets)
+# Session 23: Lowered from 0.02 → 0.01 (78% NEUTRAL at 2pp, only 51 samples)
+# Session 37: Lowered from 0.01 → 0.003 because time_horizon was changed from
+# 24h to 4h. At 4h, max observed delta was 0.0095 — zero predictions ever crossed
+# 1pp. At 0.3pp (0.003), mid-range markets yield ~35 directional evals per batch.
+MIN_MOVE_THRESHOLD = 0.003  # 0.3pp (was 1pp — too high for 4h horizon)
 
 
 # ── Data Model ───────────────────────────────────────────────────────────────
