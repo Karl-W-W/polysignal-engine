@@ -43,8 +43,9 @@ SCAN_ALL_MARKETS  = os.getenv("SCAN_ALL_MARKETS", "false").lower() in ("true", "
 # Session 24: Antigravity audit found 2 more toxic markets:
 #   1541748: 36% accuracy (7C/12I), 692258: 0% accuracy (0C/5I)
 # Without these 6: post-exclusion accuracy jumps to ~88% (bullish-only).
+# Session 38: 559653 "AOC 2028 Dem Primary" — 41.7% accuracy (45W/63L), toxic.
 EXCLUDED_MARKETS  = set(
-    m.strip() for m in os.getenv("EXCLUDED_MARKETS", "824952,556062,1373744,965261,1541748,692258").split(",") if m.strip()
+    m.strip() for m in os.getenv("EXCLUDED_MARKETS", "824952,556062,1373744,965261,1541748,692258,559653").split(",") if m.strip()
 )
 TELEGRAM_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID  = os.getenv("TELEGRAM_CHAT_ID")

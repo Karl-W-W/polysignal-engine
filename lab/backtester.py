@@ -38,7 +38,8 @@ OUTCOMES_DEFAULT = os.getenv(
     "OUTCOMES_PATH", "/opt/loop/data/prediction_outcomes.json"
 )
 # Markets known to be toxic (Session 23: Loop's per-market audit)
-EXCLUDED_MARKETS = {"824952", "556062", "1373744", "965261", "1541748", "692258"}
+# Session 38: 559653 "AOC 2028 Dem Primary" — 41.7% accuracy (45W/63L)
+EXCLUDED_MARKETS = {"824952", "556062", "1373744", "965261", "1541748", "692258", "559653"}
 
 
 # ============================================================================
