@@ -235,9 +235,21 @@ def risk_gate_node(state: LoopState) -> LoopState:
             print(f"  [ALERT] {verdict.to_telegram_message()}")
 
     else:
-        # Approved — pass through, record the approved size for commit to use
+        # Approved — enrich draft_action with trade metadata for approval gate
         if state.get("draft_action"):
             state["draft_action"]["risk_approved_size_usdc"] = verdict.approved_size_usdc
+            if trade:
+                state["draft_action"]["market_id"] = trade.market_id
+                state["draft_action"]["title"] = trade.title
+                state["draft_action"]["side"] = trade.side
+                state["draft_action"]["outcome"] = trade.outcome
+                state["draft_action"]["size_usdc"] = verdict.approved_size_usdc
+                state["draft_action"]["price"] = trade.current_price
+                state["draft_action"]["confidence"] = trade.confidence
+        # Always route through approval gate when trading is enabled
+        import os
+        if os.getenv("TRADING_ENABLED", "").lower() in ("true", "1", "yes"):
+            state["human_approval_needed"] = True
         print(f"  ✅ Risk approved: ${verdict.approved_size_usdc:.2f} USDC")
 
     state["stage_timings"]["risk_gate"] = (

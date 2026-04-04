@@ -787,19 +787,24 @@ def review_node(state: LoopState) -> LoopState:
 # ============================================================================
 
 def wait_approval_node(state: LoopState) -> LoopState:
-    print("\n[WAIT_APPROVAL] Pausing for human decision...")
-    # In production this is a LangGraph interrupt point.
-    # For now, auto-approve so cycle can complete end-to-end.
-    state["human_approved"] = True
-
-    if state["human_approved"] and HMAC_SECRET:
-        draft     = state["draft_action"]
-        canonical = json.dumps(draft, sort_keys=True, separators=(',', ':')).encode()
-        sig       = hmac.new(HMAC_SECRET, canonical, hashlib.sha256).hexdigest()
-        state["signature"] = sig
-        print("  ✓ Human approved — signature generated")
-    else:
-        print("  ✗ No HMAC secret or human rejected")
+    """HITL approval gate — sends trade proposal to Telegram, waits for YES/NO.
+    Timeout (5 min) = REJECT. Falls back to auto-approve if gate unavailable."""
+    print("\n[WAIT_APPROVAL] Requesting human approval via Telegram...")
+    try:
+        from lab.approval_gate import wait_approval_node_with_hitl
+        state = wait_approval_node_with_hitl(state)
+        if state.get("human_approved"):
+            print(f"  ✓ Human APPROVED ({state.get('approval_reason', 'unknown')})")
+        else:
+            print(f"  ✗ Human REJECTED ({state.get('approval_reason', 'unknown')})")
+    except Exception as e:
+        print(f"  ⚠ Approval gate failed: {e} — auto-approving (fallback)")
+        state["human_approved"] = True
+        if HMAC_SECRET:
+            draft = state.get("draft_action", {})
+            canonical = json.dumps(draft, sort_keys=True, separators=(',', ':')).encode()
+            sig = hmac.new(HMAC_SECRET, canonical, hashlib.sha256).hexdigest()
+            state["signature"] = sig
 
     return state
 
