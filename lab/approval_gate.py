@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "").split(",")[0].strip()  # Primary only
-HMAC_SECRET        = os.getenv("HMAC_SECRET", "").encode() if os.getenv("HMAC_SECRET") else b""
+HMAC_SECRET        = os.getenv("HMAC_SECRET_KEY", os.getenv("HMAC_SECRET", "")).encode() or b""
 
 APPROVAL_TIMEOUT_SECONDS = int(os.getenv("APPROVAL_TIMEOUT_SECONDS", "300"))   # 5 min
 POLL_INTERVAL_SECONDS    = float(os.getenv("APPROVAL_POLL_INTERVAL", "3.0"))   # Check every 3s
