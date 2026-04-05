@@ -165,13 +165,38 @@ def risk_gate_node(state: LoopState) -> LoopState:
     signal_obs = [o for o in observations if o.get("direction")]
 
     if not signal_obs:
-        # No actionable signals — this might be a non-trade command (e.g. "ls")
-        # Let it through; the risk gate only applies to trade-like actions
-        print("  ✓ No trade signals in observations — passthrough (non-trade action)")
-        state["stage_timings"]["risk_gate"] = (
-            datetime.now(timezone.utc) - start
-        ).total_seconds()
-        return state
+        # Fall back to predictions for directional intent
+        predictions = state.get("predictions", [])
+        directional = [
+            p for p in predictions
+            if p.get("hypothesis") and p.get("hypothesis") not in ("Neutral", "")
+        ]
+        if directional and os.getenv("TRADING_ENABLED", "").lower() in ("true", "1", "yes"):
+            pred = directional[0]
+            state["human_approval_needed"] = True
+            state["draft_action"] = state.get("draft_action") or {}
+            state["draft_action"].update({
+                "market_id":  pred.get("market_id", "unknown"),
+                "title":      pred.get("title", pred.get("market_id", "unknown")),
+                "side":       "BUY" if pred.get("hypothesis") == "Bullish" else "SELL",
+                "outcome":    pred.get("hypothesis", "unknown"),
+                "price":      pred.get("price", pred.get("current_price", 0.0)),
+                "confidence": pred.get("confidence", 0.0),
+                "source":     "prediction_fallback",
+            })
+            print(f"  ⚡ No signal_obs but {len(directional)} directional prediction(s) — "
+                  f"routing to human approval")
+            state["stage_timings"]["risk_gate"] = (
+                datetime.now(timezone.utc) - start
+            ).total_seconds()
+            return state
+        else:
+            # No actionable signals — non-trade command (e.g. "ls")
+            print("  ✓ No trade signals in observations — passthrough (non-trade action)")
+            state["stage_timings"]["risk_gate"] = (
+                datetime.now(timezone.utc) - start
+            ).total_seconds()
+            return state
 
     # Use the first/strongest signal
     obs = signal_obs[0]
@@ -247,7 +272,6 @@ def risk_gate_node(state: LoopState) -> LoopState:
                 state["draft_action"]["price"] = trade.current_price
                 state["draft_action"]["confidence"] = trade.confidence
         # Always route through approval gate when trading is enabled
-        import os
         if os.getenv("TRADING_ENABLED", "").lower() in ("true", "1", "yes"):
             state["human_approval_needed"] = True
         print(f"  ✅ Risk approved: ${verdict.approved_size_usdc:.2f} USDC")

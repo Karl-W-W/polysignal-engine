@@ -158,6 +158,39 @@ class TestRiskGateNode:
         assert result.get("execution_status") != "RISK_BLOCKED"
         assert result["signature"] == "fakesig123"
 
+    @patch.dict("os.environ", {"TRADING_ENABLED": "true"})
+    def test_prediction_fallback_routes_to_approval(self):
+        """When no signal_obs but directional predictions exist and trading enabled,
+        route to human approval instead of passthrough."""
+        state = _make_state()
+        # Empty directional observations (like real scanner data)
+        state["observations"] = [{"market_id": "558934", "title": "Spain FIFA",
+                                   "price": 0.16, "volume": 500000,
+                                   "direction": "", "source": "polymarket",
+                                   "timestamp": datetime.now(timezone.utc).isoformat()}]
+        # Directional predictions (from base rate predictor)
+        state["predictions"] = [{"market_id": "558934", "title": "Spain FIFA",
+                                  "hypothesis": "Bearish", "confidence": 0.84,
+                                  "price": 0.16}]
+        result = risk_gate_node(state)
+        assert result["human_approval_needed"] is True
+        assert result["draft_action"]["market_id"] == "558934"
+        assert result["draft_action"]["side"] == "SELL"
+        assert result["draft_action"]["source"] == "prediction_fallback"
+
+    @patch.dict("os.environ", {"TRADING_ENABLED": "false"})
+    def test_prediction_fallback_passthrough_when_trading_disabled(self):
+        """With trading disabled, directional predictions don't trigger approval."""
+        state = _make_state()
+        state["observations"] = [{"market_id": "558934", "title": "Spain FIFA",
+                                   "price": 0.16, "volume": 500000,
+                                   "direction": "", "source": "polymarket",
+                                   "timestamp": datetime.now(timezone.utc).isoformat()}]
+        state["predictions"] = [{"market_id": "558934", "hypothesis": "Bearish",
+                                  "confidence": 0.84}]
+        result = risk_gate_node(state)
+        assert result["human_approval_needed"] is not True
+
     def test_no_signature_skips(self):
         """Already blocked by supervisor — risk gate skips."""
         state = _make_state(has_signature=False)
