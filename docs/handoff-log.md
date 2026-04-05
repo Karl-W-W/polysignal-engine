@@ -12,6 +12,11 @@
 - Scanner restarted, DGX synced, 0 errors.
 - Triggered XGBoost retrain — insufficient directional samples (16/30 needed). Current model stays at 91.3%.
 - Loop updated NOW.md and LOOP_TASKS.md to reflect Session 38 changes.
+- **FOUND & FIXED approval gate routing bug** (Vault change, authorized): risk_gate_node only checked observations for direction signals — observations never have direction. Now falls back to predictions for directional intent.
+- **Wired scanner secrets**: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, HMAC_SECRET_KEY added to systemd drop-in (secrets.conf, chmod 600).
+- **Fixed HMAC env var mismatch**: masterloop read HMAC_SECRET_KEY, approval_gate read HMAC_SECRET — aligned both.
+- **PROVEN END-TO-END**: Approval gate fired on Telegram, Karl approved in 59s. Trade blocked at commit (CLOB bridge not running — expected). Gate works.
+- **Removed shadowed `import os`** inside risk_gate_node that would have caused UnboundLocalError.
 
 **State:**
 - Scanner: cycle 176+, 2 predictions/cycle, 0 errors, 153 markets observed
@@ -24,16 +29,18 @@
 - Tests: 473/473 passing
 
 **Next:**
-- **First live $1 trade**: System is ready. Karl sets TRADING_ENABLED=true, approval gate catches every trade.
-- **XGBoost retrain**: Re-trigger in ~24h when 30+ directional samples accumulate at 0.3pp threshold.
-- **Rotate Anthropic API key**: openclaw.json content was displayed in Session 38 conversation. Low risk but rotate as hygiene.
+- **Fix approval gate metadata**: Telegram shows Size=$0.00 and Confidence=0% — prediction fallback path doesn't set `size_usdc` or propagate confidence correctly. Cosmetic, not safety-critical.
+- **First live $1 trade**: System is ready. Karl sets TRADING_ENABLED=true, approval gate proven end-to-end.
+- **XGBoost retrain**: Re-trigger when 30+ directional samples at 0.3pp threshold.
+- **Rotate Anthropic API key**: openclaw.json content was displayed in Session 38 conversation.
 - **polysignal.app DNS**: Still undone. Cloudflare tunnel HTTP origin + CNAME to Vercel.
-- **Monitor thermal**: 67.8°C spike at 18:42 CET. Watch for sustained elevation.
 
 **Watch out:**
 - Accuracy at 54% is above the 40% meta-gate halt threshold but below the 60% goal. Paper trade accuracy (89%) is much higher because the gate filters noise.
 - Scanner stopped overnight between 23:55 UTC and ~07:00 UTC. May be related to active hours config or service issue. Loop caught it and it was restarted.
 - API key was visible in session context (not committed to git). Rotate after session.
+- **Thermal spike to 94.5°C** during approval gate test (draft/review nodes call Ollama, loading llama3.3:70b spikes GPU). Cooled to 58-69°C after short-circuit mode restored. When TRADING_ENABLED=true, expect thermal load from LLM calls every cycle.
+- **CLOB execution bridge (localhost:9001)** not running — commit_node fails at execution. This is the last piece before real trades execute.
 
 ---
 
@@ -62,7 +69,7 @@
 - Paper trades: 5,454 total, 4,974 evaluated, 88.9% win rate, $22.95 P&L (mostly noise pre-filter)
 - Approval gate: WIRED — wait_approval_node calls wait_approval_node_with_hitl, fallback to auto-approve
 - Flask API: REWRITTEN — serves live scanner/prediction/trade JSON from files
-- Tests: 473/473 passing (+27 from Session 36)
+- Tests: 475/475 passing (Session 38: +2 prediction fallback tests)
 - Loop: Verified reads files, ships code on Claude Sonnet, narrates on llama3.3
 
 **Next:**
