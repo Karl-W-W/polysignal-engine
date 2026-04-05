@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-04-04 | Session 37 closed
+# Last updated: 2026-04-05 | Session 38 closed
 # Session history: See HISTORY.md
 
 ---
@@ -27,26 +27,62 @@ Polymarket → PERCEPTION [+evaluate outcomes +evaluate paper trades] → PREDIC
 |-----------|--------|---------|
 | DGX Spark | UP | Munich, Blackwell GPU, ~41°C. Ollama context=16384, keep-alive=-1. |
 | Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
-| OpenClaw Gateway | **RUNNING** | v2026.3.28. Primary: `anthropic/claude-sonnet-4-6` (**BLOCKED: no API credits**). Fallback: `ollama/llama3.3:70b`. Heartbeat: `ollama/llama3.3:70b`. Exec: `host=gateway`, `security=full`. |
+| OpenClaw Gateway | **RUNNING** | v2026.3.28. Primary+Heartbeat: `anthropic/claude-sonnet-4-6` (**ACTIVE, $30 balance**). Fallback: `ollama/llama3.3:70b`. Exec: `host=gateway`, `security=full`. |
 | NemoClaw Sandbox | **RUNNING** | OpenShell v0.0.19, sandbox `nemoclaw` Ready. NemoClaw=sandbox wrapper, OpenClaw=agent inside. |
-| Telegram Bot | **ONLINE** | Loop responding via llama3.3 (Claude Sonnet blocked by billing). |
+| Telegram Bot | **ONLINE** | Loop responding via Claude Sonnet. Real tool calls verified (Session 38). |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
 | Cloudflare Tunnel | PARTIAL | SSH working (Session 31). HTTP origin needs dashboard fix. |
 | LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
 | GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore). |
-| Tests | **473/473 PASS** | Mac (Session 37). +27 tests (26 approval gate + 1 unevaluated protection). |
-| Scanner | RUNNING | **153 markets**, 10 predictions/cycle, `Restart=always`. Filter 0.15-0.85. |
-| Paper Trade Eval | **WORKING** | 4,974 evaluated, 88.9% win rate, $22.95 P&L (mostly noise on near-decided). |
+| Tests | **475/475 PASS** | Mac (Session 38). +2 prediction fallback tests. Loop: 478 on DGX. |
+| Scanner | RUNNING | **153 markets**, 2 predictions/cycle (correct — 91% near-decided), `Restart=always`. Filter 0.15-0.85. |
+| Paper Trade Eval | **WORKING** | 5,526 total, 4644W/568L = 89.1%. Outcome tracker: 54% (232W/202L). |
 | Per-Market Tracking | **WORKING** | 10 markets tracked. Persists across 5000-record cap. |
-| Approval Gate | **WIRED** | `lab/approval_gate.py` → Telegram HITL. TRADING_ENABLED routes ALL trades through approval. |
+| Approval Gate | **PROVEN** | `lab/approval_gate.py` → Telegram HITL. Routing bug fixed (Session 38). Karl approved test trade in 59s. |
 | Host Watchdog | RUNNING | Cron every 5min, checks scanner + gateway + Ollama. Auto-restarts if down. |
-| Anthropic API Key | **ROTATED** | Old exposed key (Session 33) revoked. New key in openclaw.json. Account needs credits. |
+| Anthropic API Key | **ACTIVE** | $30 balance. Key in openclaw.json. Was displayed in Session 38 context — rotate as hygiene. |
 | Outcome Tracker | ENHANCED | evaluate_outcomes() + per-market stats. Paper trade eval alongside. |
 | Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
 | MoltBook Publisher | **LIVE** | Non-blocking in commit_node. JWT obtained. polysignal-os registered + verified. |
 | Auto-Merge CI | **PROVEN** | `.github/workflows/auto-merge-loop.yml` |
 | Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (11,790 lines). |
 | Memory Sync | VERIFIED | brain/memory.md syncs to sandbox via cron (5min). |
+
+---
+
+## Session 38: Prove It (2026-04-04 — 2026-04-05)
+
+**6 commits (Claude Code) + 2 auto-merged (Loop). 475 tests. Approval gate proven end-to-end. Sonnet heartbeats live. Routing bug found and fixed.**
+
+### Session 38 Accomplishments
+| What | Impact |
+|------|--------|
+| Heartbeat model → Sonnet | `agents.defaults.heartbeat.model` changed from `ollama/llama3.3:70b` to `anthropic/claude-sonnet-4-6`. Loop now makes real tool calls. |
+| AOC 2028 excluded (559653) | 45W/63L = 41.7% win rate. 7th toxic market. Added to bitcoin_signal.py + backtester.py. |
+| Approval gate routing bug FOUND | risk_gate_node checked observations for direction — observations never have direction. Predictions do. Gate was never reached. |
+| Approval gate routing bug FIXED | Vault change (authorized): prediction fallback path sets `human_approval_needed=True` when directional predictions exist + TRADING_ENABLED. |
+| Scanner secrets wired | TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, HMAC_SECRET_KEY added to systemd secrets.conf (chmod 600). |
+| HMAC env var mismatch fixed | masterloop read `HMAC_SECRET_KEY`, approval_gate read `HMAC_SECRET`. Aligned. |
+| Shadowed `import os` removed | Local `import os` inside risk_gate_node caused UnboundLocalError. Module-level import sufficient. |
+| Approval gate PROVEN | Karl approved test trade via Telegram in 59s. Commit blocked at execution bridge (expected — CLOB not running). |
+| Predictions/cycle diagnosed | 91% of 180 markets below 0.15 price. 2/cycle is correct for 10 tradeable markets at 7% hit rate. |
+| XGBoost retrain triggered | 16/30 directional samples at 0.3pp. Needs ~24h. Current model stays at 91.3%. |
+
+### Key Findings
+- **The approval gate was wired but never reachable** — biggest finding. Observations never carry direction data; only signal_obs from price delta detection does. With 91% near-decided markets, signal detection rarely fires. The prediction fallback path was the missing link.
+- **Heartbeat model was deliberately hardcoded to llama3.3** — not a billing fallback. OpenClaw config has separate `model.primary` and `heartbeat.model` fields.
+- **91% of markets are near-decided** — 163/180 below 0.15 price. Only 13 in tradeable range. The 0.15/0.85 filter is correct.
+- **Thermal spikes from LLM calls** — draft/review nodes load llama3.3:70b, causing 55→94°C spikes. Short-circuit mode (TRADING_ENABLED=false) avoids this.
+
+### Lessons
+1. Always trace the full graph path with real data before calling a feature "wired." Code review isn't enough — the data shape matters.
+2. `import os` inside a function shadows the module-level import for the ENTIRE function, even before the import statement. Python scoping gotcha.
+3. Thermal monitoring is essential when enabling LLM-heavy pipeline paths. Draft+review = 2 Ollama calls per cycle = GPU heat.
+4. The system has multiple safety nets: approval gate → HMAC signature → commit_node signature check → execution bridge. Even with the routing bug, no unauthorized trade could execute.
+5. Scanner secrets (Telegram, HMAC) were never in the scanner's environment. Infrastructure assumptions must be verified, not assumed from docs.
+
+### Tests: 475/475 (was 473, +2 prediction fallback tests)
+### Commits: 6 (265101b, 40ca419, 817b529, 920b6ee, 03ee09c, 9c3ef25) + 2 Loop auto-merges
 
 ---
 
