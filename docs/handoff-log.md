@@ -2,6 +2,41 @@
 
 ---
 
+## 2026-04-04/05 MacBook Session 38 Summary
+
+**Done:**
+- Diagnosed predictions/cycle drop (9→2): NOT a bug — 91% of 180 markets are below 0.15 price (near-decided). Only 10 tradeable markets remain after exclusions. 2/cycle is mathematically correct.
+- Diagnosed accuracy: 89-90% paper trade win rate, stable. Earlier 74.6% report was miscounting unknowns as losses.
+- Switched Loop heartbeat model: `ollama/llama3.3:70b` → `anthropic/claude-sonnet-4-6` in openclaw.json. Gateway restarted. Loop confirmed making real tool calls on Sonnet.
+- Excluded toxic market 559653 (AOC 2028 Dem Primary): 45W/63L = 41.7% accuracy. Added to EXCLUDED_MARKETS in bitcoin_signal.py and backtester.py.
+- Scanner restarted, DGX synced, 0 errors.
+- Triggered XGBoost retrain — insufficient directional samples (16/30 needed). Current model stays at 91.3%.
+- Loop updated NOW.md and LOOP_TASKS.md to reflect Session 38 changes.
+
+**State:**
+- Scanner: cycle 176+, 2 predictions/cycle, 0 errors, 153 markets observed
+- Gateway: v2026.3.28, Claude Sonnet heartbeats WORKING ($30 API balance)
+- Outcome accuracy: 54% (232W/202L) — stable, above 50.7% baseline, below 60% floor
+- Paper trades: 5,526 total, 4644W/568L/314U = 89.1% win rate
+- Approval gate: WIRED and verified (masterloop.py:789-809)
+- TRADING_ENABLED: false — waiting on Karl
+- Thermal: 55-67.8°C — elevated late evening, below 75°C alert threshold
+- Tests: 473/473 passing
+
+**Next:**
+- **First live $1 trade**: System is ready. Karl sets TRADING_ENABLED=true, approval gate catches every trade.
+- **XGBoost retrain**: Re-trigger in ~24h when 30+ directional samples accumulate at 0.3pp threshold.
+- **Rotate Anthropic API key**: openclaw.json content was displayed in Session 38 conversation. Low risk but rotate as hygiene.
+- **polysignal.app DNS**: Still undone. Cloudflare tunnel HTTP origin + CNAME to Vercel.
+- **Monitor thermal**: 67.8°C spike at 18:42 CET. Watch for sustained elevation.
+
+**Watch out:**
+- Accuracy at 54% is above the 40% meta-gate halt threshold but below the 60% goal. Paper trade accuracy (89%) is much higher because the gate filters noise.
+- Scanner stopped overnight between 23:55 UTC and ~07:00 UTC. May be related to active hours config or service issue. Loop caught it and it was restarted.
+- API key was visible in session context (not committed to git). Rotate after session.
+
+---
+
 ## 2026-04-04 MacBook Session 37 Summary
 
 **Done:**

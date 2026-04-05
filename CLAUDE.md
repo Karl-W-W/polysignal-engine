@@ -68,12 +68,12 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
 Expected: 473/473 pass (Mac, Session 37). `test_api` excluded (needs Flask in venv).
 
-## Model Routing (Session 36)
-- **Primary**: `anthropic/claude-sonnet-4-6` — reliable tool calls, follows instructions. **BLOCKED: account needs credits.**
-- **Fallback chain**: `ollama/llama3.3:70b` → `anthropic/claude-sonnet-4-6` → `anthropic/claude-opus-4-6`
-- **Heartbeat**: `ollama/llama3.3:70b` (local, $0)
-- **Known issue**: llama3.3:70b narrates commands as text instead of executing them via tool calls. Fabricates data when tools fail. This is a model limitation, not a config issue.
-- **Fix**: Fund Anthropic API credits → Claude Sonnet becomes active → proper tool calls.
+## Model Routing (Session 38)
+- **Primary**: `anthropic/claude-sonnet-4-6` — **ACTIVE ($30 balance, verified Session 38)**
+- **Heartbeat**: `anthropic/claude-sonnet-4-6` — **SWITCHED from llama3.3 (Session 38)**. Real tool calls confirmed.
+- **Fallback chain**: `anthropic/claude-sonnet-4-6` → `ollama/llama3.3:70b` → `anthropic/claude-opus-4-6`
+- **Config location**: `/home/cube/.openclaw/openclaw.json` → `agents.defaults.heartbeat.model`
+- **Previous issue (RESOLVED)**: llama3.3:70b was hardcoded as heartbeat model, narrated commands instead of executing them. Fixed by switching heartbeat model to Sonnet.
 
 ## Exec Configuration (Session 35, updated Session 36)
 - **Host gateway exec**: `tools.exec.host=gateway`, `security=full`. Commands run on host, not in sandbox.
