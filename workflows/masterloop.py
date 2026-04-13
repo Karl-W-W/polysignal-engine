@@ -399,7 +399,10 @@ def prediction_node(state: LoopState) -> LoopState:
         frozen_count = 0
         for obs in pred_obs:
             mid = obs.get("market_id")
-            swing = market_swings.get(mid, 0.0)
+            if mid not in market_swings:
+                volatile_obs.append(obs)  # No history — don't pre-filter new markets
+                continue
+            swing = market_swings[mid]
             if swing >= VOLATILITY_MIN_DELTA:
                 volatile_obs.append(obs)
             else:

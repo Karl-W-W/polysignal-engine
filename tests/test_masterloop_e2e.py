@@ -37,14 +37,15 @@ def reset_risk_state():
 
 
 @pytest.fixture(autouse=True)
-def isolate_outcomes_file(monkeypatch):
+def isolate_outcomes_file(monkeypatch, tmp_path):
     """Prevent meta-gate and staleness detection from reading production data.
 
     On DGX, /opt/loop/data/prediction_outcomes.json exists and has low accuracy
-    (31%), causing the meta-gate to halt predictions during tests. Pointing
-    OUTCOMES_FILE to a non-existent path makes both checks skip gracefully.
+    (31%), causing the meta-gate to halt predictions during tests. Each test gets
+    its own temp file so record_predictions in earlier tests can't pollute
+    the staleness check for later tests.
     """
-    monkeypatch.setenv("OUTCOMES_FILE", "/tmp/_test_nonexistent_outcomes.json")
+    monkeypatch.setenv("OUTCOMES_FILE", str(tmp_path / "outcomes.json"))
     
     # Also mock BaseRatePredictor to prevent it from loading production data
     # and bypassing the predict_market_moves mocks in e2e tests.
