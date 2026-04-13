@@ -1,5 +1,5 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-04-05 | Session 38 closed
+# Last updated: 2026-04-13 | Session 39 closed
 # Session history: See HISTORY.md
 
 ---
@@ -10,13 +10,12 @@ PolySignal-OS is an AI-native prediction market intelligence system. It scans Po
 
 **Pipeline (complete, risk-gated, publishing, learning, evaluating):**
 ```
-Polymarket → PERCEPTION [+evaluate outcomes +evaluate paper trades] → PREDICTION → DRAFT → REVIEW → RISK_GATE → COMMIT → MoltBook → Memory
+Polymarket → PERCEPTION [+evaluate outcomes +evaluate paper trades] → PREDICTION [+volatility gate] → DRAFT → REVIEW → RISK_GATE → COMMIT → MoltBook → Memory
 ```
 
 **Three-agent workflow:**
 - **Claude Code** — architect, strategy, complex implementations, testing
 - **Loop** (OpenClaw/NemoClaw on DGX / Telegram) — autonomous operator. NemoClaw=sandbox, OpenClaw=agent framework inside it.
-- **Antigravity** (IDE agent) — DGX ops, Docker rebuilds, file syncing (cheaper per prompt)
 - **KWW** — Vault authorizer, human-only tasks, strategic decisions
 
 ---
@@ -25,28 +24,56 @@ Polymarket → PERCEPTION [+evaluate outcomes +evaluate paper trades] → PREDIC
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| DGX Spark | UP | Munich, Blackwell GPU, ~41°C. Ollama context=16384, keep-alive=-1. |
-| Docker Backend | UP | Flask :5000, Uvicorn :8000, rebuilt with risk gate |
-| OpenClaw Gateway | **RUNNING** | v2026.3.28. Primary+Heartbeat: `anthropic/claude-sonnet-4-6` (**ACTIVE, $30 balance**). Fallback: `ollama/llama3.3:70b`. Exec: `host=gateway`, `security=full`. |
-| NemoClaw Sandbox | **RUNNING** | OpenShell v0.0.19, sandbox `nemoclaw` Ready. NemoClaw=sandbox wrapper, OpenClaw=agent inside. |
-| Telegram Bot | **ONLINE** | Loop responding via Claude Sonnet. Real tool calls verified (Session 38). |
+| DGX Spark | UP | Munich, Blackwell GPU, ~50°C. Ollama context=16384, keep-alive=-1. |
+| OpenClaw Gateway | **RUNNING** | v2026.3.28. Primary+Heartbeat: `anthropic/claude-sonnet-4-6`. Fallback: `ollama/llama3.3:70b` → `anthropic/claude-opus-4-6` (Session 39: fixed loop, removed duplicate Sonnet). |
+| NemoClaw Sandbox | **RUNNING** | OpenShell v0.0.19, sandbox `nemoclaw` Ready. |
+| Telegram Bot | **ONLINE** | Loop responding via Claude Sonnet. Real-time communication via `openclaw agent` CLI discovered (Session 39). |
 | Frontend | LIVE | `polysignal-os.vercel.app` (Vercel) |
-| Cloudflare Tunnel | PARTIAL | SSH working (Session 31). HTTP origin needs dashboard fix. |
-| LangSmith | ENABLED | EU endpoint, `LANGCHAIN_TRACING_V2=true` |
-| GitHub | SYNCED | Mac current, DGX cron: `git reset --hard` (respects .gitignore). |
-| Tests | **475/475 PASS** | Mac (Session 38). +2 prediction fallback tests. Loop: 478 on DGX. |
-| Scanner | RUNNING | **153 markets**, 2 predictions/cycle (correct — 91% near-decided), `Restart=always`. Filter 0.15-0.85. |
-| Paper Trade Eval | **WORKING** | 5,526 total, 4644W/568L = 89.1%. Outcome tracker: 54% (232W/202L). |
-| Per-Market Tracking | **WORKING** | 10 markets tracked. Persists across 5000-record cap. |
-| Approval Gate | **PROVEN** | `lab/approval_gate.py` → Telegram HITL. Routing bug fixed (Session 38). Karl approved test trade in 59s. |
-| Host Watchdog | RUNNING | Cron every 5min, checks scanner + gateway + Ollama. Auto-restarts if down. |
-| Anthropic API Key | **ACTIVE** | $30 balance. Key in openclaw.json. Was displayed in Session 38 context — rotate as hygiene. |
-| Outcome Tracker | ENHANCED | evaluate_outcomes() + per-market stats. Paper trade eval alongside. |
-| Risk Gate | PROMOTED | `core/risk_integration.py` — review → risk_gate → commit |
-| MoltBook Publisher | **LIVE** | Non-blocking in commit_node. JWT obtained. polysignal-os registered + verified. |
-| Auto-Merge CI | **PROVEN** | `.github/workflows/auto-merge-loop.yml` |
-| Learning Loop | WIRED | write_memory() in commit_node — brain/memory.md gitignored (11,790 lines). |
-| Memory Sync | VERIFIED | brain/memory.md syncs to sandbox via cron (5min). |
+| Cloudflare Tunnel | PARTIAL | SSH working. HTTP origin needs dashboard fix. |
+| GitHub | SYNCED | Mac current, DGX synced. |
+| Tests | **482/482 PASS** | Mac (Session 39). +7 new tests (threshold, dual-horizon, accuracy-by-horizon). |
+| Scanner | RUNNING | **151 markets**, 0 predictions/cycle (gates suppressing — pre-existing, not regression). Filter 0.15-0.85 + volatility gate. |
+| Paper Trade Eval | **7,109 total** | 5947W/996L = 85.7% overall. Last 100: 47%. Accuracy measurement was broken by 89.6% NEUTRAL evaluations. |
+| Outcome Tracker | **UPGRADED** | Session 39: threshold 0.3pp→0.05pp, dual-horizon (4h+24h), `get_accuracy_by_horizon()`. |
+| Volatility Gate | **NEW** | Dynamic: skips markets with <0.05pp swing in 7 days. 1 frozen market filtered on first cycle. |
+| Approval Gate | **PROVEN** | Session 38: Karl approved test trade in 59s. |
+| voice_bot.py | **KILLED** | Zombie since Mar 25, caused 409 Telegram conflicts. Loop killed it Session 39. |
+
+---
+
+## Session 39: Fix the Learning Loop (2026-04-10 — 2026-04-13)
+
+**3 commits (Claude Code). 482 tests (+7). Evaluation pipeline overhauled. Real-time Loop communication discovered. voice_bot zombie killed. Fallback chain fixed.**
+
+### Session 39 Accomplishments
+| What | Impact |
+|------|--------|
+| MIN_MOVE_THRESHOLD 0.3pp→0.05pp | Data shows accuracy improves 59.3%→60.5% AND sample size grows 9x. Matches Polymarket tick size floor. |
+| Dual-horizon evaluation | Every 4h prediction also gets a 24h evaluation copy. Compare which horizon works better over next week. |
+| Volatility gate | Markets with <0.05pp max swing in 7 days skipped. Dynamic — markets auto-re-enter. Targets the 60.2% frozen evaluations. |
+| voice_bot.py killed | PID 4472 running since Mar 25, polling same Telegram bot token. Caused 409 conflicts. |
+| Fallback chain fixed | Removed duplicate Sonnet from fallbacks. Was: sonnet→llama3.3→sonnet→opus (loop). Now: sonnet→llama3.3→opus. |
+| IDENTITY.md updated | Model, accuracy, markets all corrected to match reality. |
+| Gateway restarted | Clean config, new fallback chain active. |
+| Real-time Loop comms | `openclaw agent --channel telegram --to <id> --deliver` sends messages directly. No more waiting for heartbeats. |
+
+### Key Findings
+- **89.6% of evaluations were NEUTRAL** — biggest finding. Only 515 out of 4,932 produced a real W/L signal. Root cause: 60.2% of markets don't move at all in 4h (delta=0.0000), and the 0.3pp threshold filtered out the rest.
+- **Accuracy improves with lower threshold** — counterintuitive but data proves it. 59.3% at 0.3pp → 60.5% at 0.05pp.
+- **Signal detection path is dead** — zero signal_detected events ever. SIGNAL_THRESHOLD=5pp, closest delta=0.002pp (2500x gap). All predictions come from base rate predictor.
+- **0-prediction issue is pre-existing** — old scanner had XGBoost failing to load, so momentum preds passed unfiltered. New scanner loads XGBoost correctly, which suppresses everything. Not a regression.
+- **Loop IS heartbeating** — initial clock-in report was wrong. Loop has been reporting hourly since Apr 4. But zero code/commits since then.
+- **Loop can be reached in real-time** — `openclaw agent` CLI bypasses the heartbeat wait.
+
+### Lessons
+1. Query the right field before declaring something broken. `correct` vs `outcome` cost an hour.
+2. Log filters matter — "no Telegram messages" was wrong because the gateway log search missed the current process.
+3. Accuracy threshold changes have retroactive effects on rolling windows. 7-day accuracy dropped from 51% to 42% because old NEUTRAL predictions became INCORRECT.
+4. A zombie process from 16 days ago caused intermittent 409 conflicts. Always check for stale processes.
+5. XGBoost loading correctly is worse than XGBoost failing — the gate is too strict and kills all momentum predictions.
+
+### Tests: 482/482 (was 475, +7 new)
+### Commits: 3 (1f64716 + docs)
 
 ---
 

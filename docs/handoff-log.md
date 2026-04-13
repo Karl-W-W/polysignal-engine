@@ -2,6 +2,17 @@
 
 ---
 
+## 2026-04-13 MacBook Session 39
+
+**Done:** Fixed NEUTRAL evaluation problem (89.6% → should drop significantly). Lowered threshold 0.3pp→0.05pp, added dual-horizon (4h+24h), built volatility gate. Killed voice_bot.py zombie, fixed fallback chain loop, updated IDENTITY.md, restarted gateway. Discovered real-time Loop comms via `openclaw agent` CLI.
+**State:** Working. Scanner running, 0 predictions/cycle (gates too strict — pre-existing, not regression).
+**Next:** Wait 24-48h for clean data under new threshold. If still 0 predictions, lower base rate gate 0.55→0.50. Then XGBoost retrain with clean labels. Then: DEEP-DIVE → SPIKE → TEACH → HEALTH-CHECK sequence (Session 40).
+**Watch out:** 7-day accuracy dropped to 42% because old NEUTRAL predictions became INCORRECT under new threshold. Will recover as they roll off. Don't panic.
+**Loop overnight:** Monitor accuracy trend. Report predictions/cycle on each heartbeat. Flag if accuracy drops below 40% (meta-gate will halt). Read lab/SESSION39_BRIEFING.md for full context.
+**Codebase health:** Growing — needs DEEP-DIVE + HEALTH-CHECK (deferred to Session 40).
+
+---
+
 ## 2026-04-04/05 MacBook Session 38 Summary
 
 **Done:**

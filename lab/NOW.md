@@ -93,19 +93,26 @@ You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 ## Session 38 Changes (2026-04-04)
 - **Heartbeat model → Claude Sonnet**: Loop now runs anthropic/claude-sonnet-4-6 on every heartbeat. Real tool calls, real data.
 - **AOC 2028 excluded**: Market 559653 added to EXCLUDED_MARKETS (41.7% win rate, toxic). Scanner restarted.
-- **MIN_MOVE_THRESHOLD 0.3pp**: Deployed Session 37/38. First clean W/L data flowing — 223W/202L as of 20:40 CET.
 - **Approval gate WIRED**: wait_approval_node calls wait_approval_node_with_hitl(). Trade metadata enriched. Ready for live trading.
-- **TRADING_ENABLED**: Still false. Enable after confirming Sonnet heartbeat works correctly.
-- **Predictions/cycle**: 2/cycle is correct — only ~10 markets in 15-85% tradeable range out of 153 observed.
-- **Accuracy**: 52% overall (223W/202L). Last 4h: 39W/1L = 97.5% on clean 0.3pp data.
+- **TRADING_ENABLED**: Still false.
 
-## Current Goals (Priority Order — Session 38)
-1. **You are on Claude Sonnet now.** Make real tool calls. Run real exec commands. No narrating, no guessing.
-2. **Follow HEARTBEAT.md strictly** — it's your checklist. Run every command. Report real numbers.
-3. **Monitor accuracy trend**: Target >60% on mid-range markets. Current: 52% overall, 97.5% last 4h clean.
-4. **Watch for TRADING_ENABLED=true**: Karl will set this when ready. When it fires, the approval gate handles it.
-5. **XGBoost retrain is overdue**: 913+ evaluated predictions. Trigger: `echo "retrain" > lab/.retrain-trigger`
-6. **DO NOT run correlated subqueries on observations DB**: Use GROUP BY, not nested SELECT. The DB is 430K+ rows.
+## Session 39 Changes (2026-04-13)
+- **MIN_MOVE_THRESHOLD 0.3pp→0.05pp**: Data proved accuracy improves (59.3%→60.5%) AND sample size grows 9x. Matches Polymarket tick size floor.
+- **Dual-horizon evaluation**: Every 4h prediction also gets a 24h copy. Both evaluated independently. Compare with `get_accuracy_by_horizon()`.
+- **Volatility gate**: Markets with <0.05pp max swing in 7 days skipped from prediction. Dynamic — markets auto-re-enter. Filtered 1 frozen market on first cycle.
+- **voice_bot.py KILLED**: PID 4472, running since Mar 25, caused 409 Telegram conflicts.
+- **Fallback chain FIXED**: Removed duplicate Sonnet. Now: sonnet→llama3.3→opus (no loops).
+- **IDENTITY.md UPDATED**: Model, accuracy, markets corrected.
+- **Gateway RESTARTED**: Clean config active.
+- **Real-time comms**: `openclaw agent --channel telegram --to 1822532651 --deliver --message "..."` sends messages to Loop instantly.
+- **0 predictions/cycle**: Pre-existing issue now visible. XGBoost gate + base rate confidence gate (0.55) suppress all predictions. Not a regression — old scanner had XGBoost failing to load. Monitor for 24-48h as stale data rolls off 7-day window.
+
+## Current Goals (Priority Order — Session 39)
+1. **Monitor accuracy under new threshold**: 7-day rolling is 42% (contaminated by old data). Should recover as stale NEUTRAL→INCORRECT predictions age out.
+2. **Monitor predictions/cycle**: Currently 0 — gates are too strict. If still 0 after 24-48h, lower base rate gate from 0.55 to 0.50.
+3. **XGBoost retrain DEFERRED**: Wait for 24-48h of clean data under new 0.05pp threshold, THEN retrain. Old data had 89.6% NEUTRAL labels = noise.
+4. **Compare 4h vs 24h accuracy**: Use `get_accuracy_by_horizon()` after 24h evaluations start arriving.
+5. **DO NOT run correlated subqueries on observations DB**: Use GROUP BY, not nested SELECT. The DB is 590K+ rows.
 
 ## Key Files
 - `lab/LOOP_TASKS.md` — your task queue (ALWAYS read this, NOT /mnt/polysignal/TASKS.md)
