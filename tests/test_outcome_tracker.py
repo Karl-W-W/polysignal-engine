@@ -15,6 +15,7 @@ from lab.outcome_tracker import (
     get_accuracy_summary,
     get_gated_accuracy,
     get_per_market_accuracy,
+    get_accuracy_by_horizon,
     OutcomeState,
     PredictionRecord,
     MIN_MOVE_THRESHOLD,
@@ -60,8 +61,9 @@ class TestRecordPredictions:
         assert count == 2
 
         state = OutcomeState.load(state_file)
-        assert len(state.predictions) == 2
-        assert state.stats["total_predictions"] == 2
+        # Session 39: 4h predictions also create a 24h copy (BTC is 4h, ETH is 1h)
+        assert len(state.predictions) == 3  # 2 primary + 1 dual-horizon (BTC 24h)
+        assert state.stats["total_predictions"] == 3
 
     def test_skips_neutral_predictions(self, sample_observations, state_file):
         preds = [{"market_id": "0xbtc", "hypothesis": "Neutral", "confidence": 0.5}]
@@ -112,8 +114,9 @@ class TestRecordPredictions:
         record_predictions(sample_predictions, sample_observations,
                           cycle_number=2, state_path=state_file)
         state = OutcomeState.load(state_file)
-        assert len(state.predictions) == 4
-        assert state.stats["total_predictions"] == 4
+        # Session 39: each cycle has 2 primary + 1 dual-horizon = 3 records
+        assert len(state.predictions) == 6
+        assert state.stats["total_predictions"] == 6
 
 
 # ============================================================================
@@ -180,13 +183,25 @@ class TestEvaluateOutcomes:
 
     def test_neutral_if_small_move(self, state_file):
         self._seed_predictions(state_file)
+        # Session 39: threshold lowered to 0.0005 (0.05pp)
         obs = [
-            {"market_id": "0xbtc", "current_price": 0.6015},  # +0.0015, below 0.3pp threshold
-            {"market_id": "0xeth", "current_price": 0.4985},  # -0.0015, below 0.3pp threshold
+            {"market_id": "0xbtc", "current_price": 0.60025},  # +0.00025, below 0.05pp
+            {"market_id": "0xeth", "current_price": 0.49975},  # -0.00025, below 0.05pp
         ]
         result = evaluate_outcomes(obs, state_path=state_file)
         assert result["neutral"] == 2
         assert result["correct"] == 0
+
+    def test_directional_at_new_threshold(self, state_file):
+        """Session 39: 0.05pp (0.0005) moves should now be directional, not NEUTRAL."""
+        self._seed_predictions(state_file)
+        obs = [
+            {"market_id": "0xbtc", "current_price": 0.601},   # +0.001 (0.1pp), bullish correct
+            {"market_id": "0xeth", "current_price": 0.499},   # -0.001 (0.1pp), bearish correct
+        ]
+        result = evaluate_outcomes(obs, state_path=state_file)
+        assert result["correct"] == 2
+        assert result["neutral"] == 0
 
     def test_skips_if_horizon_not_reached(self, state_file):
         self._seed_predictions(state_file, hours_ago=1)  # Only 1h ago, need 4h
@@ -361,3 +376,103 @@ class TestPerMarketAccuracy:
 
         result = get_per_market_accuracy(state_file)
         assert result["btc"]["total"] == 1
+
+
+# ============================================================================
+# DUAL-HORIZON (Session 39)
+# ============================================================================
+
+class TestDualHorizon:
+    def test_4h_prediction_creates_24h_copy(self, state_file):
+        """Recording a 4h prediction should also create a 24h evaluation copy."""
+        preds = [{"market_id": "0xbtc", "hypothesis": "Bullish",
+                  "confidence": 0.82, "time_horizon": "4h"}]
+        obs = [{"market_id": "0xbtc", "current_price": 0.65}]
+        count = record_predictions(preds, obs, state_path=state_file)
+        assert count == 1  # Only the primary counts as "recorded"
+
+        state = OutcomeState.load(state_file)
+        assert len(state.predictions) == 2  # 4h + 24h
+        horizons = [p["time_horizon"] for p in state.predictions]
+        assert "4h" in horizons
+        assert "24h" in horizons
+        # Both should have same prediction data
+        assert state.predictions[0]["market_id"] == state.predictions[1]["market_id"]
+        assert state.predictions[0]["hypothesis"] == state.predictions[1]["hypothesis"]
+
+    def test_non_4h_prediction_no_duplicate(self, state_file):
+        """1h predictions should NOT get a 24h copy."""
+        preds = [{"market_id": "0xeth", "hypothesis": "Bearish",
+                  "confidence": 0.75, "time_horizon": "1h"}]
+        obs = [{"market_id": "0xeth", "current_price": 0.40}]
+        record_predictions(preds, obs, state_path=state_file)
+
+        state = OutcomeState.load(state_file)
+        assert len(state.predictions) == 1
+        assert state.predictions[0]["time_horizon"] == "1h"
+
+    def test_dual_horizon_evaluated_independently(self, state_file):
+        """4h copy should evaluate at 4h, 24h copy should wait until 24h."""
+        state = OutcomeState()
+        ts_5h_ago = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        base = {
+            "market_id": "0xbtc", "hypothesis": "Bullish", "confidence": 0.8,
+            "price_at_prediction": 0.60, "timestamp": ts_5h_ago,
+            "cycle_number": 1, "evaluated": False, "outcome": None,
+            "price_at_evaluation": None, "evaluated_at": None, "actual_delta": None,
+            "xgb_p_correct": None,
+        }
+        state.predictions = [
+            {**base, "time_horizon": "4h"},   # 5h ago, past 4h horizon
+            {**base, "time_horizon": "24h"},  # 5h ago, NOT past 24h horizon
+        ]
+        state.stats["total_predictions"] = 2
+        state.save(state_file)
+
+        obs = [{"market_id": "0xbtc", "current_price": 0.70}]
+        result = evaluate_outcomes(obs, state_path=state_file)
+        assert result["evaluated"] == 1  # Only the 4h one
+        assert result["correct"] == 1
+
+        state = OutcomeState.load(state_file)
+        p4h = [p for p in state.predictions if p["time_horizon"] == "4h"][0]
+        p24h = [p for p in state.predictions if p["time_horizon"] == "24h"][0]
+        assert p4h["evaluated"] is True
+        assert p24h["evaluated"] is False
+
+
+# ============================================================================
+# ACCURACY BY HORIZON (Session 39)
+# ============================================================================
+
+class TestAccuracyByHorizon:
+    def test_splits_by_horizon(self, state_file):
+        state = OutcomeState()
+        state.predictions = [
+            {"time_horizon": "4h", "evaluated": True, "outcome": "CORRECT"},
+            {"time_horizon": "4h", "evaluated": True, "outcome": "INCORRECT"},
+            {"time_horizon": "24h", "evaluated": True, "outcome": "CORRECT"},
+            {"time_horizon": "24h", "evaluated": True, "outcome": "CORRECT"},
+        ]
+        state.save(state_file)
+
+        result = get_accuracy_by_horizon(state_file)
+        assert result["4h"]["accuracy"] == 0.5
+        assert result["24h"]["accuracy"] == 1.0
+        assert result["4h"]["total"] == 2
+        assert result["24h"]["total"] == 2
+
+    def test_empty(self, state_file):
+        result = get_accuracy_by_horizon(state_file)
+        assert result == {}
+
+    def test_skips_unevaluated(self, state_file):
+        state = OutcomeState()
+        state.predictions = [
+            {"time_horizon": "4h", "evaluated": False, "outcome": None},
+            {"time_horizon": "4h", "evaluated": True, "outcome": "CORRECT"},
+        ]
+        state.save(state_file)
+
+        result = get_accuracy_by_horizon(state_file)
+        assert result["4h"]["total"] == 1

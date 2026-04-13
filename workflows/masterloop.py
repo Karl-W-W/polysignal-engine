@@ -376,6 +376,40 @@ def prediction_node(state: LoopState) -> LoopState:
         print(f"  ⊘ {decided_count} near-decided market(s) filtered (price outside {PREDICTION_MIN_PRICE}-{PREDICTION_MAX_PRICE})")
     pred_obs = tradeable_obs
 
+    # ── Volatility gate (Session 39) ─────────────────────────────────────
+    # Skip markets that haven't moved more than 0.05pp in 7 days.
+    # 60.2% of evaluations were NEUTRAL with delta=0.0 (frozen markets).
+    # Dynamic: markets auto-re-enter when they wake up (no hardcoded list).
+    VOLATILITY_MIN_DELTA = 0.0005  # 0.05pp — same as eval threshold
+    VOLATILITY_LOOKBACK_DAYS = 7
+    try:
+        from lab.experiments.bitcoin_signal import get_db
+        db_conn = get_db()
+        cutoff_ts = (datetime.now(timezone.utc) - timedelta(days=VOLATILITY_LOOKBACK_DAYS)).isoformat()
+        # For each market, get max price swing in the lookback window
+        cursor = db_conn.execute(
+            "SELECT market_id, MAX(price) - MIN(price) as max_swing "
+            "FROM observations WHERE timestamp > ? GROUP BY market_id",
+            (cutoff_ts,)
+        )
+        market_swings = {row[0]: row[1] for row in cursor.fetchall()}
+        db_conn.close()
+
+        volatile_obs = []
+        frozen_count = 0
+        for obs in pred_obs:
+            mid = obs.get("market_id")
+            swing = market_swings.get(mid, 0.0)
+            if swing >= VOLATILITY_MIN_DELTA:
+                volatile_obs.append(obs)
+            else:
+                frozen_count += 1
+        if frozen_count:
+            print(f"  ❄ {frozen_count} frozen market(s) filtered (7-day swing < {VOLATILITY_MIN_DELTA})")
+        pred_obs = volatile_obs
+    except Exception as e:
+        print(f"  ⚠ Volatility gate skipped: {e}")
+
     try:
         # ── Base rate predictor (Session 25) ─────────────────────────────────
         # Loop's audit: majority-class per market = 79.9% vs 17.4% production.

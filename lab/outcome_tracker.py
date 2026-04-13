@@ -43,7 +43,7 @@ DEFAULT_HORIZON = "4h"
 # Session 37: Lowered from 0.01 → 0.003 because time_horizon was changed from
 # 24h to 4h. At 4h, max observed delta was 0.0095 — zero predictions ever crossed
 # 1pp. At 0.3pp (0.003), mid-range markets yield ~35 directional evals per batch.
-MIN_MOVE_THRESHOLD = 0.003  # 0.3pp (was 1pp — too high for 4h horizon)
+MIN_MOVE_THRESHOLD = 0.0005  # 0.05pp (Session 39: was 0.3pp. Data shows accuracy 59.3%→60.5% AND 9x more samples. Matches Polymarket tick size floor.)
 
 
 # ── Data Model ───────────────────────────────────────────────────────────────
@@ -176,6 +176,14 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
         state.predictions.append(record)
         state.stats["total_predictions"] += 1
         recorded += 1
+
+        # Session 39: Dual-horizon — also record a 24h evaluation for every
+        # 4h prediction so we can compare which horizon produces better accuracy.
+        if time_horizon == "4h":
+            record_24h = dict(record)
+            record_24h["time_horizon"] = "24h"
+            state.predictions.append(record_24h)
+            state.stats["total_predictions"] += 1
 
     state.save(state_path)
     return recorded
@@ -372,3 +380,34 @@ def get_per_market_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
         m["accuracy"] = round(m["correct"] / directional, 3) if directional > 0 else 0.0
 
     return markets
+
+
+def get_accuracy_by_horizon(state_path: Path = OUTCOMES_FILE) -> Dict:
+    """Return accuracy split by time horizon (4h vs 24h).
+
+    Session 39: Dual-horizon evaluation — compare which horizon
+    produces better accuracy so we can optimize over the next week.
+    """
+    state = OutcomeState.load(state_path)
+
+    horizons: Dict[str, Dict] = {}
+    for pred in state.predictions:
+        if not pred.get("evaluated"):
+            continue
+        h = pred.get("time_horizon", DEFAULT_HORIZON)
+        if h not in horizons:
+            horizons[h] = {"correct": 0, "incorrect": 0, "neutral": 0, "total": 0}
+        outcome = pred.get("outcome", "NEUTRAL")
+        horizons[h]["total"] += 1
+        if outcome == "CORRECT":
+            horizons[h]["correct"] += 1
+        elif outcome == "INCORRECT":
+            horizons[h]["incorrect"] += 1
+        else:
+            horizons[h]["neutral"] += 1
+
+    for h in horizons.values():
+        directional = h["correct"] + h["incorrect"]
+        h["accuracy"] = round(h["correct"] / directional, 3) if directional > 0 else 0.0
+
+    return horizons
