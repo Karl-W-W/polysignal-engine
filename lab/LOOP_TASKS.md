@@ -88,38 +88,36 @@ EOF
 
 ## ACTIVE TASKS — Priority Order
 
-### P0: Report Real Data on Heartbeats (ongoing)
+### P0: Monitor Accuracy Recovery (ongoing — Session 39)
 
-**Why:** llama3.3 narrates code instead of executing it and fabricates numbers. Until Claude Sonnet is funded, be honest about limitations.
+**Why:** 7-day accuracy dropped to 42% after threshold change (old NEUTRAL predictions now count as INCORRECT). Should recover as stale data ages out.
 
 **What to do:**
-1. Run `python3 --version` — confirm exec works
-2. Run `cat /mnt/polysignal/lab/.scanner-status.json` — read real scanner data
-3. Run `python3 -c "import json; print(json.load(open('/mnt/polysignal/lab/trading_log.json'))['total_trades'])"` — verify trading log
-4. Report REAL numbers on Telegram — not fabricated ones
-5. If ANY command fails, report "COMMAND FAILED: [reason]"
+1. On each heartbeat: report 7-day rolling accuracy
+2. Report predictions/cycle (currently 0 — gates suppressing)
+3. If 7-day accuracy drops below 40%: meta-gate will halt — flag immediately
+4. If any predictions break through the gate: report count, market, confidence
+5. After 24h: run `get_accuracy_by_horizon()` — compare 4h vs 24h
+6. Flag if 0 predictions persist after 48h — Session 40 will lower base rate gate
 
-### P1: Monitor Real Paper Trades (ongoing)
+### P1: Monitor Paper Trades + Horizon Comparison (ongoing)
 
-**Why:** Paper trades now use real Polymarket conditionIds. Need to track quality.
+**Why:** Dual-horizon deployed. Need to track which horizon (4h vs 24h) produces better accuracy.
 
 **What to do:**
 1. On each heartbeat, check `lab/trading_log.json` for new trades
 2. Report: count, markets, directions, confidence range
-3. After 50+ real trades: per-market accuracy breakdown
-4. Flag any trades that look wrong (fake IDs, Unknown Market, 0xfake)
+3. After 24h of dual-horizon data: compare 4h vs 24h accuracy
+4. Flag the 60.5% vs 44.9% accuracy gap (Phase B analysis vs live directional)
 
-### P2: Prepare for First Live Trade ($1 max)
+### P2: Prepare for XGBoost Retrain (Session 40)
 
-**Why:** TRADING_ENABLED will be set to true soon. Need approval gate.
+**Why:** XGBoost retrain deferred to Session 40 — needs 24-48h of clean data under new 0.05pp threshold.
 
 **What to do:**
-1. Build Telegram approval gate in `execute_trade()`:
-   - Before CLOB order, send trade proposal to Telegram
-   - Wait for KWW reply (YES/NO), 5-min timeout
-   - Timeout = REJECT (safe default)
-2. Test with paper trades first (log what WOULD be sent)
-3. Push to `loop/approval-gate` for review
+1. Do NOT trigger retrain yet — wait for Karl/Claude Code
+2. Monitor data readiness: need 50+ non-NEUTRAL evaluations at new threshold
+3. When ready, Karl will trigger: `echo "retrain" > lab/.retrain-trigger`
 
 ### P3: MoltBook Engagement (ongoing)
 
@@ -164,8 +162,15 @@ EOF
 
 ---
 
-## COMPLETED TASKS (Session 34 and earlier)
+## COMPLETED TASKS
 
+- [x] voice_bot.py killed — 409 Telegram conflict resolved (Session 39, Loop)
+- [x] Fallback chain fixed — removed duplicate Sonnet (Session 39, Claude Code)
+- [x] IDENTITY.md updated to match reality (Session 39, Claude Code)
+- [x] MIN_MOVE_THRESHOLD 0.3pp→0.05pp — 9x samples, accuracy up (Session 39)
+- [x] Dual-horizon evaluation — 4h + 24h (Session 39)
+- [x] Volatility gate — frozen market filter (Session 39)
+- [x] e2e test isolation fix — 6 DGX failures resolved (Session 39)
 - [x] conditionId fix deployed (Session 34)
 - [x] NemoClaw rebuilt with OpenShell v0.0.19 (Session 34)
 - [x] Host gateway owns Telegram, no bridge conflicts (Session 34)

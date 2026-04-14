@@ -71,6 +71,8 @@ Polymarket → PERCEPTION [+evaluate outcomes +evaluate paper trades] → PREDIC
 3. Accuracy threshold changes have retroactive effects on rolling windows. 7-day accuracy dropped from 51% to 42% because old NEUTRAL predictions became INCORRECT.
 4. A zombie process from 16 days ago caused intermittent 409 conflicts. Always check for stale processes.
 5. XGBoost loading correctly is worse than XGBoost failing — the gate is too strict and kills all momentum predictions.
+6. **60.5% (Phase B analysis) vs 44.9% (live directional) gap** — Loop flagged this. Phase B simulated accuracy retroactively on existing data. Live 4h directional accuracy is 44.9% (88W/108L). The difference needs understanding in Session 40: is the model degrading, or is the simulation measuring differently than live evaluation?
+7. Shared `/tmp` files in test fixtures leak state between tests. Always use `tmp_path` per test.
 
 ### Tests: 482/482 (was 475, +7 new)
 ### Commits: 3 (1f64716 + docs)

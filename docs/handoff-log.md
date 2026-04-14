@@ -2,14 +2,14 @@
 
 ---
 
-## 2026-04-13 MacBook Session 39
+## 2026-04-14 MacBook Session 39 (final)
 
-**Done:** Fixed NEUTRAL evaluation problem (89.6% → should drop significantly). Lowered threshold 0.3pp→0.05pp, added dual-horizon (4h+24h), built volatility gate. Killed voice_bot.py zombie, fixed fallback chain loop, updated IDENTITY.md, restarted gateway. Discovered real-time Loop comms via `openclaw agent` CLI.
-**State:** Working. Scanner running, 0 predictions/cycle (gates too strict — pre-existing, not regression).
-**Next:** Wait 24-48h for clean data under new threshold. If still 0 predictions, lower base rate gate 0.55→0.50. Then XGBoost retrain with clean labels. Then: DEEP-DIVE → SPIKE → TEACH → HEALTH-CHECK sequence (Session 40).
-**Watch out:** 7-day accuracy dropped to 42% because old NEUTRAL predictions became INCORRECT under new threshold. Will recover as they roll off. Don't panic.
-**Loop overnight:** Monitor accuracy trend. Report predictions/cycle on each heartbeat. Flag if accuracy drops below 40% (meta-gate will halt). Read lab/SESSION39_BRIEFING.md for full context.
-**Codebase health:** Growing — needs DEEP-DIVE + HEALTH-CHECK (deferred to Session 40).
+**Done:** Fixed NEUTRAL evaluation problem (89.6% → should drop). Threshold 0.3pp→0.05pp, dual-horizon (4h+24h), volatility gate. Killed voice_bot.py, fixed fallback chain, IDENTITY.md, gateway restart. Loop caught 6 DGX test failures — fixed (volatility gate unknown markets + e2e fixture isolation). Discovered real-time Loop comms via `openclaw agent` CLI.
+**State:** Working. Scanner cycle 205, 0 predictions/cycle (gates suppressing — pre-existing), 0 errors. 483 tests pass on DGX.
+**Next:** Check accuracy recovery. If 0 predictions persists, lower base rate gate 0.55→0.50. XGBoost retrain with clean data. Investigate 60.5% vs 44.9% accuracy gap (Loop flagged). Then DEEP-DIVE → SPIKE → TEACH → HEALTH-CHECK.
+**Watch out:** 7-day accuracy at 42% (contaminated by old data). 60.5% Phase B analysis vs 44.9% live directional — these measure different things, need understanding. 0 predictions/cycle means no new evaluable data accumulating.
+**Loop overnight:** Monitor accuracy trend + predictions/cycle. Flag if accuracy <40%. Compare 4h vs 24h after enough data. Do NOT change code or trigger retrain.
+**Codebase health:** Growing — needs DEEP-DIVE + HEALTH-CHECK (Session 40).
 
 ---
 

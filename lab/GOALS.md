@@ -215,12 +215,12 @@
 
 | Metric | Current | 1 Week | 1 Month | 3 Months |
 |--------|---------|--------|---------|----------|
-| Prediction Accuracy | **89.1% paper** (4644W/568L, 5526 trades). Outcome tracker: 54% (232W/202L). | 70% | 80% | 85% |
-| Trades Executed | 0 (5,526 paper — approval gate proven, Karl approved test trade in 59s) | 10 | 100 | 1000 |
-| P&L (USDC) | $0 (paper: estimated positive) | +$5 | +$100 | +$1000 |
-| API Costs/month | **~$5** (Claude Sonnet heartbeats, $30 balance, ~3000 exchanges) | $25 | $20 | $15 |
-| Loop Autonomy | **7/10** (Sonnet heartbeats LIVE, real tool calls, ships code. Approval gate proven.) | 8/10 | 9/10 | 9/10 |
-| GPU Utilization | ~0% idle, spikes to 94°C when draft/review nodes fire (Ollama llama3.3) | 20% | 50% | 80% |
+| Prediction Accuracy | **48% overall** (305W/330L). 4h directional: 44.9%. Session 39: threshold fix shows 60.5% potential — recovering. | 60% | 70% | 80% |
+| Trades Executed | 0 (7,109 paper — approval gate proven) | 10 | 100 | 1000 |
+| P&L (USDC) | $0 (paper: 5947W/996L overall, last 100: 47%) | +$5 | +$100 | +$1000 |
+| API Costs/month | **~$5** (Claude Sonnet heartbeats, $30 balance) | $25 | $20 | $15 |
+| Loop Autonomy | **7/10** (Sonnet heartbeats, real tool calls, real-time comms via openclaw agent CLI) | 8/10 | 9/10 | 9/10 |
+| GPU Utilization | ~0% idle, spikes when Ollama loads | 20% | 50% | 80% |
 | MoltBook Karma | 4 | 50 | 200 | 1000 |
 | ClawHub Skills | 0 | 2 | 5 | 10 |
 | Revenue Streams | 0 | 1 | 3 | 5 |
