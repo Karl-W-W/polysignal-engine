@@ -2,6 +2,54 @@
 
 ---
 
+## 2026-04-17 MacBook Session 40 (Claude Code)
+
+**Done:**
+- **Diagnosed $50 API burn Apr 5-16**: 41,304 Sonnet calls (60min heartbeats × 11 days with 10-15k input tokens each) + 206,337 failover retry loops after Anthropic balance hit zero. Billing-rejected 400s aren't billed, so the loop itself didn't cost — the preceding successful Sonnet heartbeats did.
+- **Cost cut**: heartbeat model `anthropic/claude-sonnet-4-6` → `anthropic/claude-haiku-4-5-20251001`, interval `60m → 120m`, workspace MEMORY.md trimmed 11344 → 2763 bytes (archived to `brain/memory-archive.md`). Projected cost ~$0.04/day (was ~$2-5/day on heartbeats alone). Gateway hot-reloaded at 16:01:23, restarted clean.
+- **META-GATE pushback**: Karl suggested the 13% accuracy was a NEUTRAL-in-denominator bug. Verified from raw data: code at `workflows/masterloop.py:316-323` already excludes NEUTRAL; 13.75% is the real directional figure (11W/69L). No code change; flagged for Karl.
+- **Accuracy root-cause analysis**: only 4 unique markets had directional predictions in 7d. Market 567560 (Orbán Hungarian PM) drove 41 of 69 losses. Forwarded analysis to Loop for independent verification.
+- **Loop caught a real error**: I diagnosed Orbán as "slow-trending-up mean-reverter" — wrong. Loop correctly identified it as a market that crashed from 0.295 → 0.035. First session where Loop functioned as a genuine second opinion rather than echoing.
+- **Bearish ban extended to base rate predictor** (`lab/base_rate_predictor.py:288-361`): `BAN_BEARISH_OUTPUT = True` module constant + suppression filter at end of `predict()`. Catches both dominant-Bearish and counter-signal Bullish→Bearish flips. 4 new tests + 1 retargeted. Codex reviewed, green-lit with 3 low-severity polish items queued for Session 41. 487 pass / 1 skip / 4 deselect.
+- **Session 41 agenda locked in LOOP_TASKS.md**: P1 eval metric redesign per-category horizons (crypto 4h / sports 24h / politics 7d), P2 price-level bias fix for crashing markets, P3 invert failover chain (Ollama primary for heartbeats), P4 Gemma 4 31B spike vs llama3.3, P5 Claude Managed Agents + Advisor pattern spike.
+
+**State:**
+- Scanner: cycle 373+, 151 markets, 0 predictions/cycle, META-GATE HALT active (will self-heal as stale Apr 10-11 Orbán data ages out of the 7d window)
+- Gateway: restarted 16:03:41 CEST, Haiku 4.5 on 120m cadence active
+- Trading log: 7342 total, 7154 resolved, 6094W/1060L = 85.2% lifetime, 60% last 100
+- Accuracy: 7d directional 13.75% (11W/69L, 113 NEUTRAL), real problem is long-horizon eval metric mismatch
+- Tests: **487 pass / 1 skip / 4 deselect** on Mac (+5 new base rate ban tests from baseline 482)
+- Loop: heartbeat model switched, workspace trimmed, full history archived at `brain/memory-archive.md`
+
+**Next:**
+- Session 41: execute P1-P5 priorities in LOOP_TASKS.md, then clear the 3 Codex polish items before re-enabling Bearish output
+- Watch META-GATE self-heal — crashed Orbán predictions age out of 7d window within 24-36h of Apr 17
+- Monitor first Haiku-powered heartbeat (~18:03 CEST Apr 17) — journal should show `model=claude-haiku-4-5-20251001`
+- Re-run DGX test suite to confirm 487 pass there too (run today locally, DGX not tested this session)
+- Top up Anthropic API if credits still low (failover retry loops ran Apr 13-17 until balance >0)
+
+**Watch out:**
+- Bearish ban is a temporary suppression. The underlying price-level bias bug at `base_rate_predictor.py:217-257` still creates Bearish synthetic biases for every market <0.30 — they just get filtered at output. Until Session 41 P2 fixes the source, `self.biases` carries dead entries that occupy the "market is covered" slot in `masterloop.py:437`, diverting those markets away from momentum fallback (though momentum has its own bearish ban too, so no regression).
+- No suppression counter/metric was added to `predict()` — when re-enabling Bearish in Session 41, we'll have no before/after baseline for "how much traffic was the filter absorbing." Queued as a Codex polish item.
+- Failover retry loop bug in OpenClaw gateway still exists (Session 41 P3 fixes it by inverting the chain). If credits hit zero again, the gateway will spin in the tight loop — CPU waste, not cost waste, but log noise and potential thermal impact.
+- The 4h eval horizon on 6-month political markets is an architectural mismatch. The 13.75% number will keep whipsawing until Session 41 P1 lands per-category horizons. Don't over-trust the META-GATE's accuracy-floor rejection until then.
+
+**Loop overnight:**
+- Monitor META-GATE self-heal trajectory — report 7d directional accuracy each heartbeat; flag when it crosses back above 40% (expect within 24-36h)
+- Do NOT trigger retrain, do NOT modify EXCLUDED_MARKETS (cosmetic — scanner already skips 567560 via near-decided filter)
+- First Haiku heartbeat at ~18:03 CEST: confirm model + interval in ack
+- Between heartbeats: no code changes. Session 41 is P1-P5 work.
+
+**Codebase health:** Growing. Base rate predictor has two layered bans (old for momentum, new for base rate output) — document merging/unifying them in Session 41 if possible. `workflows/masterloop.py` is 1097 lines and has accumulated enough session-specific workarounds that a structural refactor will land eventually; not urgent.
+
+**Lessons:**
+- **First genuine multi-agent verification event.** Forwarded the accuracy analysis to Loop via `openclaw agent --channel telegram --to 1822532651 --deliver --message ...`. Loop independently queried `data/prediction_outcomes.json`, ran its own computation, and caught my "trending-up" error — Orbán actually crashed from 0.295 → 0.035, opposite of what I claimed. This is meaningful progress toward Dibia-style multi-agent coordination: Loop functioned as a second opinion rather than echoing the architect. Karl's framing: "this is exactly how multi-agent verification should work." Pattern to reuse: when making non-trivial diagnostic claims, forward data + conclusion to Loop for independent verification before acting.
+- **META-GATE pushback worked.** User instinct was that the metric excluded NEUTRAL incorrectly. Verifying against raw data *before* editing the code prevented a pointless "fix" that would have broken working logic. Default to skepticism on metric bugs — check the math first, change second.
+- **Bearish ban is symptomatic, not causal.** We're suppressing an output because of an upstream bug in price-level bias on crashing markets. Queued the root-cause fix (P2) but the ban is the kind of technical debt that accumulates if Session 41 doesn't actually land. Put "re-enable Bearish after P2" on the Session 41 definition-of-done.
+- **Codex review caught a matrix-coverage gap** (weak counter-signal on Bearish-dominant bias) that my own test-writing missed. Fixed in-session; lesson is that the codex-reviewer agent meaningfully improves test completeness when the change has non-trivial logic branches.
+
+---
+
 ## 2026-04-14 MacBook Session 39 (final)
 
 **Done:** Fixed NEUTRAL evaluation problem (89.6% → should drop). Threshold 0.3pp→0.05pp, dual-horizon (4h+24h), volatility gate. Killed voice_bot.py, fixed fallback chain, IDENTITY.md, gateway restart. Loop caught 6 DGX test failures — fixed (volatility gate unknown markets + e2e fixture isolation). Discovered real-time Loop comms via `openclaw agent` CLI.

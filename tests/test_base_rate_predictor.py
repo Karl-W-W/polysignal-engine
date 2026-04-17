@@ -55,6 +55,40 @@ class TestBaseRatePredictor:
 
     def test_counter_signal_strong_overrides(self):
         from lab.base_rate_predictor import BaseRatePredictor, MarketBias
+        # Session 40: Bearish ban suppresses Bearish outputs, so we test the
+        # mirror case — Bearish-dominant bias flipped by strong positive signal.
+        # This still exercises the counter-signal override logic.
+        biases = {
+            "m1": MarketBias(
+                market_id="m1", up_count=15, down_count=85,
+                total=100, up_rate=0.15, dominant_direction="Bearish",
+                bias_strength=0.85, confident=True
+            )
+        }
+        predictor = BaseRatePredictor(biases)
+        # Large positive delta SHOULD override (Session 27: threshold raised to 10pp)
+        result = predictor.predict("m1", signal_delta=+0.12)
+        assert result.direction == "Bullish"
+
+    def test_bearish_ban_suppresses_dominant_bearish(self):
+        """Session 40: dominant-Bearish biases return Neutral under ban."""
+        from lab.base_rate_predictor import BaseRatePredictor, MarketBias
+        biases = {
+            "m1": MarketBias(
+                market_id="m1", up_count=15, down_count=85,
+                total=100, up_rate=0.15, dominant_direction="Bearish",
+                bias_strength=0.85, confident=True
+            )
+        }
+        predictor = BaseRatePredictor(biases)
+        result = predictor.predict("m1")
+        assert result.direction == "Neutral"
+        assert result.confidence == 0.0
+        assert "Bearish banned" in result.reasoning
+
+    def test_bearish_ban_suppresses_counter_signal_flip(self):
+        """Session 40: counter-signal flipping Bullish→Bearish is also banned."""
+        from lab.base_rate_predictor import BaseRatePredictor, MarketBias
         biases = {
             "m1": MarketBias(
                 market_id="m1", up_count=85, down_count=15,
@@ -63,9 +97,58 @@ class TestBaseRatePredictor:
             )
         }
         predictor = BaseRatePredictor(biases)
-        # Large negative delta SHOULD override (Session 27: threshold raised to 10pp)
+        # Strong negative signal would flip to Bearish — ban converts to Neutral
         result = predictor.predict("m1", signal_delta=-0.12)
+        assert result.direction == "Neutral"
+        assert "Bearish banned" in result.reasoning
+
+    def test_bearish_ban_disabled_restores_original(self, monkeypatch):
+        """Toggling BAN_BEARISH_OUTPUT=False restores pre-Session 40 behavior."""
+        from lab import base_rate_predictor as brp
+        monkeypatch.setattr(brp, "BAN_BEARISH_OUTPUT", False)
+        biases = {
+            "m1": brp.MarketBias(
+                market_id="m1", up_count=15, down_count=85,
+                total=100, up_rate=0.15, dominant_direction="Bearish",
+                bias_strength=0.85, confident=True
+            )
+        }
+        predictor = brp.BaseRatePredictor(biases)
+        result = predictor.predict("m1")
         assert result.direction == "Bearish"
+        assert result.confidence == 0.85
+
+    def test_bearish_ban_with_weak_counter_signal(self):
+        """Weak counter-signal below 10pp threshold on Bearish-dominant bias:
+        counter-signal is ignored (direction stays Bearish), then ban kicks in."""
+        from lab.base_rate_predictor import BaseRatePredictor, MarketBias
+        biases = {
+            "m1": MarketBias(
+                market_id="m1", up_count=15, down_count=85,
+                total=100, up_rate=0.15, dominant_direction="Bearish",
+                bias_strength=0.85, confident=True
+            )
+        }
+        predictor = BaseRatePredictor(biases)
+        # Weak bullish signal (< 10pp) — override rejected, direction stays Bearish, ban converts
+        result = predictor.predict("m1", signal_delta=+0.03)
+        assert result.direction == "Neutral"
+        assert "Bearish banned" in result.reasoning
+
+    def test_bearish_ban_does_not_affect_bullish(self):
+        """Session 40: Bullish predictions pass through the ban unchanged."""
+        from lab.base_rate_predictor import BaseRatePredictor, MarketBias
+        biases = {
+            "m1": MarketBias(
+                market_id="m1", up_count=80, down_count=20,
+                total=100, up_rate=0.8, dominant_direction="Bullish",
+                bias_strength=0.8, confident=True
+            )
+        }
+        predictor = BaseRatePredictor(biases)
+        result = predictor.predict("m1")
+        assert result.direction == "Bullish"
+        assert result.confidence == 0.8
 
     def test_summary_output(self):
         from lab.base_rate_predictor import BaseRatePredictor, MarketBias

@@ -55,6 +55,14 @@ PRICE_LEVEL_MIN_CONFIDENCE = 0.55  # Minimum confidence for price-level predicti
 # relative to the market's typical volatility
 COUNTER_SIGNAL_MULTIPLIER = 2.0
 
+# Session 40: Bearish ban extended to base rate predictor.
+# 7-day data (Apr 10-17, 2026): Bearish outputs scored 2W / 34L = 5.6%.
+# The <0.30 price-level rule fires Bearish on tail markets that either
+# mean-revert or keep dropping >0.05pp in 4h — both flip the eval against us.
+# Long-term fix tracked in Session 41 (eval metric redesign + price-level bias rework).
+# Until then, suppress Bearish output. Set to False to restore original behavior.
+BAN_BEARISH_OUTPUT = True
+
 
 @dataclass
 class MarketBias:
@@ -338,6 +346,19 @@ class BaseRatePredictor:
                     reasoning = f"Counter-trend signal ({signal_delta:+.3f}) overrides base rate ({bias.dominant_direction} {bias.bias_strength:.0%})"
                 else:
                     reasoning += f" (counter-signal {signal_delta:+.3f} below 10pp threshold, ignored)"
+
+        # ── Bearish ban (Session 40) ──────────────────────────────────
+        # Applied AFTER counter-signal logic so both direct dominant-Bearish
+        # and flipped-to-Bearish outputs are caught.
+        if BAN_BEARISH_OUTPUT and direction == "Bearish":
+            return PredictionResult(
+                market_id=market_id,
+                direction="Neutral",
+                confidence=0.0,
+                reasoning=f"Bearish banned (Session 40, 5.6% base rate acc). Suppressed: {reasoning}",
+                samples=bias.total,
+                bias=bias.bias_strength,
+            )
 
         return PredictionResult(
             market_id=market_id,

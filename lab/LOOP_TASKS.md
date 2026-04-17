@@ -1,5 +1,5 @@
 # Loop Task Queue
-# Updated: 2026-04-01 (Session 35 — Claude Code)
+# Updated: 2026-04-17 (Session 40 — Claude Code)
 #
 # WHY THIS FILE EXISTS:
 # TASKS.md and PROGRESS.md are mounted as individual file bind mounts in Docker.
@@ -86,84 +86,112 @@ EOF
 
 ---
 
-## ACTIVE TASKS — Priority Order
+## ACTIVE TASKS — Priority Order (Session 41 agenda, set by Karl 2026-04-17)
 
-### P0: Monitor Accuracy Recovery (ongoing — Session 39)
+### P1: Redesign eval metric for long-horizon markets
 
-**Why:** 7-day accuracy dropped to 42% after threshold change (old NEUTRAL predictions now count as INCORRECT). Should recover as stale data ages out.
-
-**What to do:**
-1. On each heartbeat: report 7-day rolling accuracy
-2. Report predictions/cycle (currently 0 — gates suppressing)
-3. If 7-day accuracy drops below 40%: meta-gate will halt — flag immediately
-4. If any predictions break through the gate: report count, market, confidence
-5. After 24h: run `get_accuracy_by_horizon()` — compare 4h vs 24h
-6. Flag if 0 predictions persist after 48h — Session 40 will lower base rate gate
-
-### P1: Monitor Paper Trades + Horizon Comparison (ongoing)
-
-**Why:** Dual-horizon deployed. Need to track which horizon (4h vs 24h) produces better accuracy.
+**Why:** Current eval in `lab/outcome_tracker.py:239-253` compares prediction direction against 4h price delta. For political election markets with 6+ month horizons (Orbán/Magyar Hungary PM, JD Vance 2028), 4h noise dominates real directional signal. Session 40 data: market 567560 scored 0W/41L — all Bullish calls evaluated against a crash from 0.29 → 0.035 over hours, not the actual resolution outcome weeks away.
 
 **What to do:**
-1. On each heartbeat, check `lab/trading_log.json` for new trades
-2. Report: count, markets, directions, confidence range
-3. After 24h of dual-horizon data: compare 4h vs 24h accuracy
-4. Flag the 60.5% vs 44.9% accuracy gap (Phase B analysis vs live directional)
+1. Implement per-category evaluation horizons. Proposed: crypto=4h, sports=24h, politics=7d.
+2. Add `category` field to market metadata (source: Gamma API `tags` or manual mapping).
+3. Extend `EVAL_HORIZONS` dict in `outcome_tracker.py`. Route `evaluate_outcomes()` by category.
+4. Backfill: re-evaluate last 14 days of predictions under new horizons, measure accuracy delta.
+5. New test matrix: each category × horizon combination.
 
-### P2: Prepare for XGBoost Retrain (Session 40)
+### P2: Fix base rate predictor price-level bias on crashing markets
 
-**Why:** XGBoost retrain deferred to Session 40 — needs 24-48h of clean data under new 0.05pp threshold.
-
-**What to do:**
-1. Do NOT trigger retrain yet — wait for Karl/Claude Code
-2. Monitor data readiness: need 50+ non-NEUTRAL evaluations at new threshold
-3. When ready, Karl will trigger: `echo "retrain" > lab/.retrain-trigger`
-
-### P3: MoltBook Engagement (ongoing)
-
-**Why:** Building reputation. Currently 4 karma.
+**Why:** Session 31's price-level bias (`base_rate_predictor.py:217-257`) fires Bullish on high-price markets and Bearish on low-price markets via resolution mechanics. But for markets in freefall (Orbán: 0.29 → 0.035), this produces confident-wrong Bullish calls because the entry price is still above the 0.30 threshold while the trajectory is down. Session 40 data: 10W/31L across 41 Bearish and Bullish calls on market 567560.
 
 **What to do:**
-1. Run MoltBook scan: `python3 /mnt/polysignal/lab/moltbook_scanner.py all`
-2. Run engagement: `python3 /mnt/polysignal/lab/moltbook_engagement.py cycle`
-3. Comment on 2-3 trending posts with real data (accuracy reports, architecture)
-4. Target: 50+ karma, 10+ followers
+1. Add price trajectory check to `from_price_levels()`: look back 24h, compute price-velocity.
+2. If |price_velocity| > 0.05pp/hour AND direction matches trajectory → skip the market (crashing; mean-reversion assumption fails).
+3. Alternative: gate the confidence by observed volatility — high-vol markets get lower bias strength.
+4. Tests: simulate crashing market (prices 0.35 → 0.30 → 0.25), confirm price-level bias is suppressed.
 
-### P4: Proactive Heartbeats (behavior change)
+### P3: Invert failover chain — Ollama primary for heartbeats
 
-**Why:** Heartbeats should report what MATTERS, not just "I'm alive."
+**Why:** Session 40 found 206,337 failover decisions logged Apr 5-16 when Anthropic balance hit zero. Gateway's failover logic has a bug: Sonnet billing-reject → "fallback" → switches back to Sonnet → retries → infinite loop. 400s aren't billed so no cost burn, but it's pathological CPU waste and log noise.
 
 **What to do:**
-1. Read IDENTITY.md and HEARTBEAT.md on each session
-2. Include in each heartbeat:
-   - Scanner health (1 line: cycle, predictions, errors)
-   - Any high-confidence predictions (>0.85)
-   - Any whale alerts since last heartbeat
-   - Any accuracy changes
-3. If nothing changed: "Scanner OK, cycle N, no changes." ONE LINE. Stop.
-4. Between heartbeats: pick a task from this list and execute it
+1. Edit `~/.openclaw/openclaw.json` on DGX: change `agents.defaults.heartbeat.model` from `anthropic/claude-haiku-4-5-20251001` to `ollama/llama3.3:70b`.
+2. Add fallback chain `heartbeat.fallbacks: [anthropic/claude-haiku-4-5-20251001]` (escalation, not primary).
+3. Hot-reload or restart gateway.
+4. Verify: heartbeats run on local Ollama (zero API cost), Haiku only fires when heartbeat logic explicitly escalates (alerts, Karl messages).
+5. Projected cost: $0.04/day → ~$0.00/day on routine heartbeats, ~$0.15/day with occasional Haiku escalation.
 
-### P5: Code Contributions (nightly build pattern)
+### P4: SPIKE — Evaluate Gemma 4 31B vs llama3.3:70b for local tool reliability
 
-**Why:** Loop should ship small useful things during off-hours.
+**Why:** Current local model (llama3.3:70b) "narrates tool calls instead of executing them" per NOW.md. Gemma 4 31B has stronger tool-calling benchmarks and fits in DGX memory easily. If it executes reliably, the Loop Daemon + Ollama-primary heartbeat chain becomes viable for real autonomy.
 
-**Ideas for nightly builds:**
-- Per-category accuracy analysis (politics vs sports vs crypto)
-- Feature importance analysis from XGBoost
-- Trading log summary with estimated P&L
-- Market volatility scanner (which markets move most?)
-- Improved whale signal formatting for Telegram
+**What to do:**
+1. `ollama pull gemma4:31b` (or current closest).
+2. Run a tool-reliability test harness: 50 synthetic tasks requiring exec/read/write, measure % executed vs narrated.
+3. Compare against llama3.3:70b baseline.
+4. Report decision: swap primary local model, keep both, or stay on llama.
 
-**How to ship:**
-1. Write code in `lab/`
-2. Write tests in `tests/`
-3. Push to `loop/your-feature` via git trigger
-4. CI auto-merges if tests pass
+### P5: SPIKE — Evaluate Claude Managed Agents API (advisor pattern)
+
+**Why:** Anthropic's Managed Agents (April 8, GA) plus Advisor Tool (April 9 beta) enable a fast-executor + high-intelligence-advisor pattern. Could let us run Haiku as the heartbeat executor with Sonnet as an on-demand advisor for complex decisions, replacing the current "one model does everything" architecture.
+
+**What to do:**
+1. Read current docs at docs.anthropic.com for Managed Agents + Advisor Tool.
+2. Build a minimal PoC: heartbeat calls Haiku, escalates to Sonnet advisor on alert trigger.
+3. Measure: cost per call (executor vs advisor), latency, accuracy of advisor intervention.
+4. Decision: integrate into OpenClaw or defer until OpenClaw supports these natively.
+
+---
+
+## CODEX POLISH (from Session 40 base rate ban review — low priority)
+
+These are cleanup items flagged during Codex review of the Bearish ban. Not urgent but should be done before re-enabling Bearish output in Session 41:
+
+- [ ] Add suppression counter/metric to `predict()` ban branch so we have a baseline ("how many Bearish predictions got banned per cycle") for Session 41 rollback calibration
+- [ ] Consider `confidence=0.3` instead of `0.0` in the ban return path — aligns with the "insufficient data" degradation semantics already used elsewhere in `predict()`
+- [ ] Consider making `from_price_levels()` skip creating Bearish synthetic biases while `BAN_BEARISH_OUTPUT=True` — keeps `self.biases` consistent with actual downstream behavior
+
+---
+
+## RESIDUAL LOOP HEARTBEAT TASKS (ongoing)
+
+### Accuracy + predictions monitoring
+- Report 7-day rolling accuracy + predictions/cycle each heartbeat
+- Flag if 7-day dips below 40% (META-GATE halt trigger)
+- Run `get_accuracy_by_horizon()` after 24h of fresh data
+
+### Paper trade tracking
+- Monitor `lab/trading_log.json` for new trades
+- After 24h of dual-horizon data: compare 4h vs 24h accuracy
+- Investigate the 60.5% (Phase B) vs 44.9% (live directional) gap
+
+### MoltBook engagement (ongoing)
+- Run scan + engagement cycles during quiet periods
+- Comment on trending posts with real data (accuracy reports, architecture)
+- Target: 50+ karma, 10+ followers
+
+### Proactive heartbeats (cost-optimized, Session 40)
+- HEARTBEAT_OK short-circuit: ≤50 output tokens when nothing changed
+- Full report only on: thermal >75°C, accuracy swing >5pp, scanner stalled, new trade, Karl message
+- Escalate to Sonnet only when Karl asks directly or alert requires reasoning
+
+### Nightly builds
+- Per-category accuracy (politics vs sports vs crypto)
+- XGBoost feature importance
+- Trading log P&L summary
+- Market volatility scanner
+- Improved whale signal formatting
+- Ship via `loop/*` branches → CI auto-merges if tests pass
 
 ---
 
 ## COMPLETED TASKS
 
+- [x] Bearish ban extended to base rate predictor (Session 40, Claude Code) — 5.6% directional acc over 7d, 4 new tests, 487 pass
+- [x] Heartbeat model cut Sonnet→Haiku 4.5, cadence 60m→120m (Session 40, Claude Code) — ~25-50× cost reduction
+- [x] Workspace MEMORY.md trimmed 11344→2763 bytes, full archive at brain/memory-archive.md (Session 40)
+- [x] Session 40 root cause for API burn: 60min Sonnet heartbeats × 11 days + 206K failover retry loops from zero-balance period
+- [x] META-GATE math verified correct — NEUTRAL already excluded (Session 40 pushback on assumed bug)
+- [x] Loop verified Claude Code's analysis independently, caught "trending-up" error (Session 40 — first real second-opinion event)
 - [x] voice_bot.py killed — 409 Telegram conflict resolved (Session 39, Loop)
 - [x] Fallback chain fixed — removed duplicate Sonnet (Session 39, Claude Code)
 - [x] IDENTITY.md updated to match reality (Session 39, Claude Code)
