@@ -13,7 +13,7 @@
 | CPU (20-core ARM) | Scanner + Ollama + OpenClaw gateway | ~5% |
 | RAM (128GB unified) | ~4GB idle, ~46GB when llama3.3:70b loaded | ~4-36% |
 | NVMe (4TB) | 167GB used | ~5% |
-| Ollama | llama3.3:70b (Loop primary), 3 small models. Nemotron UNLOADED. | Host 0.0.0.0, context=16384, keep-alive=-1. Passwordless sudo for config. |
+| Ollama | llama3.3:70b + 3 small models registered; **Loop primary moved to Haiku 4.5 (Session 40)**, Ollama now in fallback chain. | Host 0.0.0.0, context=16384, keep-alive=-1. Passwordless sudo for config. |
 | PyTorch | Installed but sm_121 NOT SUPPORTED by pip wheel | Needs NGC container |
 | RAPIDS | Not installed | - |
 | NIM | Not installed | - |
@@ -132,7 +132,7 @@
 ARM CPU (20 cores):
   ├── Scanner (5-min cycles, Restart=always)
   ├── Ollama host process (llama3.3:70b on demand)
-  ├── OpenClaw gateway — RUNNING (Session 31, llama3.3:70b)
+  ├── OpenClaw gateway — RUNNING (Session 40: primary=Haiku 4.5, 120m cadence)
   ├── Squid proxy
   ├── Cron (git sync)
   └── WebSocket feeds (future)

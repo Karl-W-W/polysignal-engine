@@ -1,18 +1,26 @@
 # Loop Heartbeat Protocol
-# Updated: Session 27 (2026-03-17) — Autonomy Upgrade Phase 1
+# Updated: Session 40 (2026-04-20) — Cost reset
 # Heartbeat = checkpoint, NOT work trigger. You work BETWEEN heartbeats.
 
 ---
 
-## COST DISCIPLINE
+## COST DISCIPLINE (Session 40)
 
-With llama3.3:70b local ($0/token), heartbeats are FREE.
-BUT: don't waste time on empty reports. Produce output or stay silent.
+You run on **Haiku 4.5** at a **120-min cadence**, ~$0.004/call ≈ $0.04/day.
+This is NOT free anymore. Every heartbeat costs real money — make it earn that cost.
 
 **Rules:**
-- If nothing changed AND no work to do: `HEARTBEAT_OK` is acceptable
-- Produce OUTPUT (code, analysis, engagement), not status reports
-- Every heartbeat: report what you DID, not what you SAW
+- **HEARTBEAT_OK short-circuit** when nothing changed: ≤50 output tokens. Do not write paragraphs when there's nothing to report.
+- **Full structured report** ONLY when one of these is true:
+  - Thermal >75°C
+  - 7-day accuracy swings >5pp (either direction)
+  - Scanner stalled (cycle count frozen)
+  - New paper trade
+  - Karl messaged directly
+  - `lab/.watchdog-alerts` has new entries
+- Produce OUTPUT (code, analysis, engagement) between heartbeats, not inside them
+- Every heartbeat: report what you DID since last beat, not what you SEE right now
+- **Escalate to Sonnet** only when Karl asks explicitly, or reasoning is insufficient on Haiku — mention the escalation in your reply so Karl sees the cost trade-off
 
 ---
 

@@ -2,6 +2,27 @@
 
 ---
 
+## 2026-04-20 MacBook Session 40 — Formal clock-out (Claude Code)
+
+**Done since 2026-04-17 entry:**
+- Ran full Phase 1-4 clock-out protocol (tests, docs, ship).
+- Tests: 487/487 pass (Mac, stable since Apr 17 commit).
+- Verified DGX sync: `6da6d53` on both Mac and DGX.
+- Updated stale docs: `PROGRESS.md` (Session 40 block), `lab/NOW.md` (heartbeat config + cadence + bearish ban state), `CLAUDE.md` (heartbeat section: Sonnet → Haiku, 60m → 120m), `lab/INFRASTRUCTURE.md` (heartbeat model references), `lab/HEARTBEAT.md` (cost discipline rules reflect Haiku reality), `lab/GOALS.md` (Tier 1.2 accuracy target/current updated).
+- Verified Loop session on DGX: bound to `claude-haiku-4-5-20251001`, session cost $0.19 on 22K tokens (vs $15.00 on Sonnet before the fix).
+- Scanner on DGX at cycle 611, 0 predictions/cycle, 0 errors.
+- META-GATE self-healed: 7-day directional now 2W/2L = 50% (was 11W/69L = 13.75% on Apr 17). Halt lifted, but sample is tiny because the scanner's 0 predictions/cycle problem persists.
+
+**State:** Stable. Haiku heartbeats active, cost on track. 0 predictions/cycle is the open Session 41 item.
+
+**Next (Session 41):** Execute P1 (per-category eval horizons) to unstick the prediction gates. P2-P5 queued in LOOP_TASKS.md.
+
+**Watch out:** The sticky-session bug still exists in OpenClaw — if Karl changes `defaults.model.primary` again, he must also delete `~/.openclaw/agents/main/sessions/sessions.json`'s `agent:main:main` entry AND restart the gateway, or the old session will keep winning. Documented in `CLAUDE.md` Model Routing section.
+
+**Codebase health:** Stable. No new tech debt introduced this clock-out. Bearish ban is the one known temp suppression; removal is gated on Session 41 P2.
+
+---
+
 ## 2026-04-17 MacBook Session 40 (Claude Code)
 
 **Done:**

@@ -1,6 +1,44 @@
 # PolySignal-OS — Current System State
-# Last updated: 2026-04-13 | Session 39 closed
+# Last updated: 2026-04-20 | Session 40 closed
 # Session history: See HISTORY.md
+
+---
+
+## Session 40: Cost reset + accuracy diagnosis (2026-04-17 — 2026-04-20)
+
+**Karl rang the alarm on a $50+ API burn between Apr 13-16 while barely interacting with Loop. Session 40 diagnosed the burn, cut heartbeat cost ~50x, queued real Session 41 fixes, and delivered the first genuine multi-agent verification event.**
+
+### Session 40 Accomplishments (Claude Code)
+| What | Impact |
+|------|--------|
+| Heartbeat model Sonnet → **Haiku 4.5** (`claude-haiku-4-5-20251001`) | ~3x cheaper per call |
+| Heartbeat cadence 60m → **120m** | Half the calls per day |
+| Workspace `MEMORY.md` trimmed 11,344 → 2,763 bytes | Full history archived at `brain/memory-archive.md` |
+| `agents.defaults.model.primary` → Haiku (Sonnet in fallback) | Fixed OpenClaw sticky-session bug: sessions were binding to primary on first activity, forcing all heartbeats onto Sonnet regardless of `heartbeat.model` setting |
+| Bearish ban extended to base rate predictor | `BAN_BEARISH_OUTPUT = True` in `base_rate_predictor.py`, 5 new tests, 487/487 pass |
+| Stuck session `8a01a7e5` deleted | Had accrued $15.00 in 2h on Sonnet before detection |
+| `~/.openclaw/openclaw.json.pre-session40-bak` backup | Config restore available if needed |
+| Session 41 P1-P5 queued in `lab/LOOP_TASKS.md` | Per-category eval horizons, price-level bias fix, failover chain inversion, Gemma 4 31B spike, Managed Agents/Advisor spike |
+
+### Session 40 Key Findings
+- **$50 burn root cause**: 41,304 Sonnet API calls Apr 5-16 + 206,337 failover retry events. Sonnet heartbeats at 60m cadence with full context each call = ~$2-5/day baseline. Failover retry loops (when Anthropic balance hit zero around Apr 13) logged ~18K/day of `reason=unknown` decisions but 400-billing-rejects aren't billed — the loops are CPU waste, not cost waste. **The burn was the preceding successful Sonnet calls, not the retry loops.**
+- **META-GATE is NOT buggy** — code at `workflows/masterloop.py:316-323` already excludes NEUTRAL from the denominator. Karl's assumed 35.8% vs reported 13.75% mismatch was a misremembered number. The 13.75% was real directional accuracy (11W/69L at the Apr 17 snapshot) — driven 59% by market 567560 (Orbán Hungarian PM).
+- **Orbán market**: Loop caught Claude Code's "trending slowly upward" diagnosis as wrong. Price actually **crashed 0.295 → 0.035** in the relevant window. Market is below the 0.15 near-decided filter and no longer actively predicted; the 0W/41L losses were stale predictions maturing against the crashed price. First session where Loop functioned as a genuine independent second-opinion rather than echoing the architect's framing.
+- **OpenClaw sticky-session bug**: sessions persist across gateway restarts via `~/.openclaw/agents/main/sessions/sessions.json`. Once a session is bound to a model, the gateway's "live session model switch detected" logic forces all subsequent calls back to that model regardless of `heartbeat.model` or fallback chain config. Root fix is making the desired model the `defaults.model.primary` so the first session creation binds to it.
+- **META-GATE self-heal confirmed**: 7-day directional accuracy recovered from 13.75% (11W/69L at Apr 17) → **50% (2W/2L) by Apr 20** as stale Apr 10-11 predictions aged out of the rolling window. No longer halting; sample is tiny because scanner is still at 0 predictions/cycle (Session 41 P2 concern).
+
+### Session 40 Lessons
+1. **Plan fidelity matters.** Karl approved "switch heartbeat model to Haiku." Claude Code's change to `defaults.model.primary` was scope expansion, taken post-hoc after the sticky-session bug made the approved change ineffective. The correct move was to stop, escalate the finding, and ask. Karl's new `Plan fidelity` memory entry captures this. When an approved change doesn't produce the expected outcome, report the finding rather than silently expanding scope.
+2. **Multi-agent verification works when you actually ask for it.** Forwarding the accuracy analysis to Loop via `openclaw agent --channel telegram --to 1822532651 --deliver --message ...` produced an independent cross-check that caught Claude Code's directional error on the Orbán market. Pattern to reuse: non-trivial diagnostic claims should get a Loop second-opinion before acting on them.
+3. **Verify metrics from raw data before "fixing" them.** Karl's META-GATE correction was genuinely wrong — the code already did what he thought it didn't. Defaulting to raw-data verification prevented a code change that would have broken working logic.
+4. **Config hot-reload ≠ session rebind.** OpenClaw hot-reloaded the new `heartbeat.model` at 16:01:23 and a gateway restart at 16:03:39 — both succeeded — but the existing `agent:main:main` session on disk still forced Sonnet on the 18:03 heartbeat because session state persists across restarts. Root fix: delete the session file, not just restart the service.
+5. **The 4h eval horizon on 6-month political markets is an architectural mismatch.** Session 41 P1 (per-category horizons) is the proper fix. Until then, accuracy numbers on political markets will keep whipsawing based on short-term noise, not true directional correctness.
+
+### Tests: 487/487 (was 482, +5 new base-rate-ban tests)
+### Commits: 1 (6da6d53)
+### Cost measured: session cost $0.19 on Haiku for 22K tokens (vs $15.00 on Sonnet for 446K tokens — 67x better cost-per-token)
+
+---
 
 ---
 

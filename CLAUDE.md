@@ -28,7 +28,7 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **Git push**: Write `lab/.git-push-request` → handler validates + pushes to `loop/*` branches
 - **4 skills**: polysignal-pytest, polysignal-data, polysignal-git (v2 with push), polysignal-scanner
 - **Sandbox image**: `openclaw-sandbox:bookworm-slim` with git, curl, PYTHONPATH, User-Agent baked in
-- **Heartbeat**: 30min, active 07:00-01:00 CET, Telegram delivery, MoltBook scan + engagement wired in
+- **Heartbeat**: **120min** (Session 40), active 07:00-01:00 CET, Telegram delivery, MoltBook scan + engagement wired in
 - **MoltBook JWT**: deployed to container environment
 - **Auto-merge CI**: pushes to `loop/*` auto-merge if 430 tests pass
 - **Watchdog**: `lab/watchdog.py` — runs every 12th scanner cycle, detects failures, writes alerts
@@ -38,7 +38,7 @@ Pipeline: `perception → prediction [+XGBoost gate] → [short-circuit if !TRAD
 - **Retrain trigger**: `echo "retrain" > lab/.retrain-trigger` → systemd watcher
 - **applyPatch**: ENABLED — native file editing from sandbox
 - **Ollama**: Reachable at `http://172.17.0.1:11434` (5 models: nemotron-3-super:120b, llama3.3:70b, deepseek-r1:70b, qwen2.5:14b, llama3.2:3b, zero cost)
-- **llama3.3:70b**: Primary heartbeat model (Session 31, replaced Nemotron-3-Super to prevent overheating). Direct chat = Opus 4.6.
+- **Haiku 4.5**: **Primary heartbeat + default model (Session 40)** — replaced Sonnet for cost, ~$0.004/call vs $0.04-0.25 on Sonnet. llama3.3:70b still registered but relegated to fallback chain. Direct chat from Karl to Loop on Telegram = Haiku 4.5 (escalates to Sonnet in fallbacks if Haiku errors).
 - **NemoClaw**: **REBUILT** (Session 34). OpenShell v0.0.19, NemoClaw v0.1.0 (latest source). Sandbox `nemoclaw` with Landlock+seccomp+netns. Host OpenClaw gateway v2026.3.28 owns Telegram (port 18789). `nemoclaw-telegram.service` DISABLED. File sync via cron (5min, not bind mounts).
 - **conditionId fix**: `bitcoin_signal.py:119` fixed (Session 34). `fetch_crypto_markets()` now uses `conditionId` like `fetch_all_liquid_markets()`.
 - **Response time**: ~30-60sec. Ollama context=16384, keep-alive=-1 (fixed Session 35). Passwordless sudo for future changes.
@@ -68,12 +68,14 @@ cd /opt/loop && .venv/bin/python3 -m pytest tests/ --tb=short -k 'not test_api'
 ```
 Expected: 473/473 pass (Mac, Session 37). `test_api` excluded (needs Flask in venv).
 
-## Model Routing (Session 38)
-- **Primary**: `anthropic/claude-sonnet-4-6` — **ACTIVE ($30 balance, verified Session 38)**
-- **Heartbeat**: `anthropic/claude-sonnet-4-6` — **SWITCHED from llama3.3 (Session 38)**. Real tool calls confirmed.
-- **Fallback chain**: `anthropic/claude-sonnet-4-6` → `ollama/llama3.3:70b` → `anthropic/claude-opus-4-6`
-- **Config location**: `/home/cube/.openclaw/openclaw.json` → `agents.defaults.heartbeat.model`
-- **Previous issue (RESOLVED)**: llama3.3:70b was hardcoded as heartbeat model, narrated commands instead of executing them. Fixed by switching heartbeat model to Sonnet.
+## Model Routing (Session 40)
+- **Primary**: `anthropic/claude-haiku-4-5-20251001` — **ACTIVE (Session 40, 2026-04-17)**
+- **Heartbeat**: `anthropic/claude-haiku-4-5-20251001` — must match primary due to OpenClaw sticky-session bug (sessions bind to primary, not to heartbeat.model)
+- **Cadence**: **120m** (up from 60m in Session 40)
+- **Fallback chain**: `ollama/llama3.3:70b` → `anthropic/claude-sonnet-4-6` → `anthropic/claude-opus-4-6`
+- **Config location**: `/home/cube/.openclaw/openclaw.json` → `agents.defaults.model.primary` and `agents.defaults.heartbeat.model` (keep both in sync)
+- **Session state**: `~/.openclaw/agents/main/sessions/sessions.json` — persists across gateway restarts. After changing primary model, delete the `agent:main:main` entry AND restart gateway to force fresh session binding.
+- **Previous issue (RESOLVED Session 40)**: $50 burn Apr 5-16 traced to 41K Sonnet calls at 60m cadence + 206K failover-loop events (400 billing-rejections, not themselves billed). Haiku + 120m + trimmed MEMORY.md reduces ~50x.
 
 ## Exec Configuration (Session 35, updated Session 36)
 - **Host gateway exec**: `tools.exec.host=gateway`, `security=full`. Commands run on host, not in sandbox.

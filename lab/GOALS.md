@@ -29,7 +29,7 @@
 - [x] **Staleness cooldown** (Session 28) — predictions flowing again (6-cycle cooldown)
 - [x] **Whale tracker** (Session 28) — volume spikes, spread collapses, insider detection
 - [x] **Auto-evaluate hypotheses** (Session 28) — learning loop closed, runs hourly
-- **Current**: 59% (7-day rolling). **Target**: 60%+ within 1 week, 70%+ within 1 month
+- **Current (Session 40, 2026-04-20)**: 7-day directional 50% (2W/2L — tiny sample; scanner still at 0 predictions/cycle). Lifetime 47.8% (307W/335L/4591N). **Blocker:** 4h eval horizon on 6-month political markets — Session 41 P1 addresses. **Target**: 60%+ within 1 week of Session 41 landing, 70%+ within 1 month.
 
 ### 1.3 Signal-as-a-Service (x402)
 - [ ] Research x402 micropayment protocol (agent-to-agent USDC)

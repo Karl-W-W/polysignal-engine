@@ -1,14 +1,15 @@
 # NOW.md — Loop's Operational State
 # If you wake up confused, read this first.
-# Updated: Session 36 (2026-04-01)
+# Updated: Session 40 (2026-04-20)
 
 ## Who You Are
 You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 (GB10 Grace Blackwell, 128GB unified memory). Your human is KWW.
-- **Primary model**: anthropic/claude-sonnet-4-6 (**ACTIVE as of Session 38, 2026-04-04**)
-- **Heartbeat model**: anthropic/claude-sonnet-4-6 (switched from llama3.3 in Session 38)
-- **Fallback chain**: claude-sonnet-4-6 → ollama/llama3.3:70b
-- **Heartbeat interval**: 60 min
+- **Primary model**: `anthropic/claude-haiku-4-5-20251001` (**ACTIVE as of Session 40, 2026-04-17**)
+- **Heartbeat model**: `anthropic/claude-haiku-4-5-20251001` (matches primary — both Haiku now; Session 40 found OpenClaw's sticky-session logic binds whatever model creates the session, so primary and heartbeat must match to get the cost benefit)
+- **Fallback chain**: `ollama/llama3.3:70b` → `anthropic/claude-sonnet-4-6` → `anthropic/claude-opus-4-6` (escalation, not default)
+- **Heartbeat interval**: **120 min** (up from 60m in Session 40 for cost reduction)
+- **Cost profile**: ~$0.004/heartbeat × 9 heartbeats/day ≈ $0.04/day (was ~$2-5/day on Sonnet)
 - **NemoClaw sandbox**: `nemoclaw` — Running (OpenShell v0.0.19). Landlock + seccomp + netns.
 - **Host OpenClaw gateway**: v2026.3.28, owns Telegram. Workspace at `~/.openclaw/workspace/`.
 - **Telegram**: ONLINE (Session 34: host gateway, no bridge conflicts. `nemoclaw-telegram.service` DISABLED.)
@@ -24,7 +25,7 @@ You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
   - **Events**: `lab/.events.jsonl` — prediction_made, error_detected, **whale_detected** (Session 28)
 - **TRADING_ENABLED**: false (short-circuit path). **LIVE_TRADING**: false (disabled overnight — needs approval gate)
 - **Paper trading**: LIVE — every gated prediction → `lab/trading_log.json`
-- **Bearish predictions**: ALLOWED for base rate predictor (Session 26). Still banned for old momentum predictor.
+- **Bearish predictions**: **BANNED** for base rate predictor (Session 40 — `BAN_BEARISH_OUTPUT=True` in `lab/base_rate_predictor.py`). Temporary suppression until Session 41 P2 fixes price-level bias on crashing markets. Still banned for old momentum predictor.
 - **Predictor**: **HYBRID** (Session 31 upgrade) — base rate path + momentum fallback
   - **Session 31: Price-level bias** — markets at extreme prices get directional bias from resolution mechanics (price < 0.30 → Bearish, price > 0.70 → Bullish)
   - **Session 31: Near-decided filter** — markets at price < 0.05 or > 0.95 are skipped (124 of 142 markets were essentially decided, wasting predictions)
@@ -95,6 +96,15 @@ You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
 - **AOC 2028 excluded**: Market 559653 added to EXCLUDED_MARKETS (41.7% win rate, toxic). Scanner restarted.
 - **Approval gate WIRED**: wait_approval_node calls wait_approval_node_with_hitl(). Trade metadata enriched. Ready for live trading.
 - **TRADING_ENABLED**: Still false.
+
+## Session 40 Changes (2026-04-17 → 2026-04-20)
+- **Heartbeat cost slashed**: Sonnet → Haiku 4.5, 60m → 120m, MEMORY.md 11KB → 2.7KB. Verified session cost $0.19 on Haiku (was $15.00 in 2h on Sonnet — 67x better cost-per-token).
+- **OpenClaw sticky-session bug**: sessions persist to `~/.openclaw/agents/main/sessions/sessions.json` across gateway restarts and force all calls to the session's bound model regardless of `heartbeat.model` config. Fixed by making Haiku the `defaults.model.primary` so fresh sessions bind to Haiku on first activity.
+- **Bearish ban on base rate predictor**: `BAN_BEARISH_OUTPUT=True` in `lab/base_rate_predictor.py` suppresses Bearish outputs at `predict()` — was 2W/34L = 5.6% directional accuracy over 7 days.
+- **META-GATE self-healed**: 7d accuracy recovered 13.75% → 50% (2W/2L) as stale Apr 10-11 Orbán predictions aged out. Halt lifted.
+- **Scanner still 0 predictions/cycle**: pre-existing issue (Session 41 P2). Closest signal delta 0.001 vs 0.05 threshold.
+- **Loop verification pattern proven**: Karl forwarded Claude Code's diagnosis to Loop, Loop caught the "Orbán trending up" error (was actually crashing 0.295 → 0.035). First real second-opinion event.
+- **Session 41 P1-P5 queued** in LOOP_TASKS.md: eval metric per-category horizons (crypto 4h / sports 24h / politics 7d), price-level bias fix, Ollama-primary failover chain, Gemma 4 31B spike, Managed Agents + Advisor pattern PoC.
 
 ## Session 39 Changes (2026-04-13)
 - **MIN_MOVE_THRESHOLD 0.3pp→0.05pp**: Data proved accuracy improves (59.3%→60.5%) AND sample size grows 9x. Matches Polymarket tick size floor.
