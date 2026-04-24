@@ -544,7 +544,7 @@ def prediction_node(state: LoopState) -> LoopState:
         mom_preds = [p for p in predictions if p.get("_predictor") != "base_rate"]
 
         # ── Base rate confidence gate ─────────────────────────────────────
-        BASE_RATE_GATE_THRESHOLD = 0.55  # Session 30: lowered from 0.60 to allow observation-based biases
+        BASE_RATE_GATE_THRESHOLD = 0.50  # Session 41: lowered from 0.55 — scanner at 0 predictions/cycle for 9d, closest signal 25-33x under threshold
         br_gated = []
         br_suppressed = 0
         for pred in br_preds:

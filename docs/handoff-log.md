@@ -2,6 +2,51 @@
 
 ---
 
+## 2026-04-24 DGX Session 41 — Clock-out (Claude Code, Opus 4.7 on DGX)
+
+**Focus: data-integrity cleanup + predictor unblock. Two small, bounded changes; no Vault touches; no Loop-role decision.**
+
+**Done:**
+- **E2E test pollution fixed.** `tests/test_masterloop_e2e.py` now has an autouse `isolate_trading_log` fixture that monkey-patches `lab.polymarket_trader._DEFAULT_LOG_PATH` to `tmp_path / "trading_log.json"`. Every test run now writes to its own tmp log instead of polluting production `lab/trading_log.json`. Also patched `lab.xgboost_baseline.load_model` to `FileNotFoundError` in the two tests that were failing against tightened gates (`test_short_circuit_skips_draft_review_risk`, `test_full_pipeline_trading_enabled`) — mirrors the existing `test_xgboost_gate_graceful_fallback` pattern. Neither change alters production masterloop behaviour; both just stop the e2e fixtures from hitting real XGBoost/production paths.
+- **One-shot cleanup script.** `lab/cleanup_trading_log.py` removes every `0xfake_*` row from `lab/trading_log.json` and writes a pre-cleanup backup at `lab/trading_log.json.pre-s41-cleanup.bak`. Ran it once: **129 fake rows removed, 7,265 real rows kept.** Real lifetime win rate unchanged at 85.0% (6030W / 7090 resolved). Real last-100 win rate is now **44.6%** (25W / 56 resolved) — this is the first uncontaminated last-100 reading in weeks. The stale 68.1% number Loop and the watchdog saw before was test residue, not performance.
+- **Base rate gate lowered 0.55 → 0.50.** Single-line change in `workflows/masterloop.py:547`. Comment updated to reference Session 41 rationale (scanner at 0 predictions/cycle for 9 days, closest-signal delta 25–33× under the old threshold). Scanner restarted via `lab/.restart-scanner` trigger after the change.
+- **Six-seat operator console drafted.** `lab/SEATS.md` documents the terminal layout proposed during clock-in (Fire, Scanner, Truth Board, Compounding Brain, Loop, Vitals + Mac-Claude). Each seat has a plain-language question, an opens-on-startup command, and a working-vs-dead signal. Wire up tomorrow.
+
+**State:**
+- Scanner: cycle 1417+, 159 markets, 0 predictions/cycle **at the moment of the threshold change** — restart was issued via `lab/.restart-scanner`. Expect predictions to start flowing within 1–2 cycles as the 0.50 gate admits markets whose strongest bias is in the 0.50–0.54 band.
+- Trading log: **7,265 real trades, 0 fake**. Lifetime 85.0% win rate. Last-100 real: 44.6% win.
+- Tests (DGX): **488 passed / 4 deselected in 224s** — the two S40 e2e failures are now green with the fixture + XGBoost mocks. Pre-fix baseline was 486/2/4.
+- Accuracy windows from `data/prediction_outcomes.json` unchanged by this session (no new evaluations yet): 7d directional 0% on 2 samples, 14d 13.4% on 82, 30d 42.7% on 232, lifetime 47.8% on 642. Gate change should start populating the 7d/14d windows over the next 24–48 h.
+- Loop: Haiku 4.5 at 120m cadence, no model drift. Latest heartbeat 2026-04-24 14:17 UTC. Session cost $0.18 / 23K tokens (~$0.40/day actual, not the $0.04/day S40 projection — the `HEARTBEAT_OK ≤50 tokens` short-circuit isn't actually being enforced yet). **Loop role deferred to next session.**
+
+**Next (Session 42 / KWW):**
+- **S41 P1 — per-category eval horizons** is the next session's architecture work. The 4h horizon on 6-month political markets is the root of the 14d 13.4% number (Orbán-crashed predictions evaluating against short-horizon noise, not resolution). Proposal in `lab/LOOP_TASKS.md` → crypto 4h, sports 24h, politics 7d. Landing this unblocks trust in the accuracy numbers.
+- Watch the 7d window fill. If predictions/cycle stays at 0 even with the 0.50 gate for 24+ h, we know the base rate predictor's biases are structurally too weak and the bigger fix (P2 price-level bias on crashing markets) is needed sooner.
+- Decide Loop's role — monitor-only / escalated-monitor / Nightly-Build. Spec'd in the Session 41 clock-in; deferred to KWW.
+- Wire the 6-seat terminal layout using `lab/SEATS.md` as the blueprint.
+- Human blockers unchanged: first live $1 trade (flip `TRADING_ENABLED`), `polysignal.app` DNS, Anthropic credit top-up before any failover loop recurs.
+
+**Watch out:**
+- The watchdog's `paper_trade_quality` alert was based on "all last-20 are 0xfake_*" logic. After cleanup, that alert will clear on its next run (every 12th scanner cycle ≈ 1 h). If the alert persists after that, either the watchdog is reading a cached state or there's a different pollution source — check `lab/watchdog.py`.
+- The `isolate_trading_log` fixture depends on `lab.polymarket_trader._DEFAULT_LOG_PATH` staying evaluated-at-call-time inside `PolymarketTrader.__init__` (`log_path or _DEFAULT_LOG_PATH` at line 264). If someone refactors that constructor to capture the default at definition time, the monkey-patch silently stops working and pollution returns. Keep this in mind if you touch `lab/polymarket_trader.py`.
+- Base rate gate at 0.50 is an interim. The real cure for "0 predictions/cycle" is P2 (price-level bias on crashing markets) + P1 (per-category horizons). Don't lower the gate further in search of volume — if P1/P2 land and we still need more flow, that's a different problem.
+- The `isolate_trading_log` fixture was rolled back once mid-execution (reason unclear — interrupt caught at a bad moment). Re-applied after KWW confirmation. Both the fixture and the threshold change are in the same commit, so a future bisect won't split them.
+
+**Codebase health:**
+- No new Vault touches. `core/` untouched.
+- `workflows/masterloop.py` +1/-1, same shape.
+- Two new files in `lab/` (`cleanup_trading_log.py`, `SEATS.md`). One new fixture + two targeted patches in `tests/test_masterloop_e2e.py`.
+- Backup preserved at `lab/trading_log.json.pre-s41-cleanup.bak` (4.6 MB, gitignored). Safe to delete after a few sessions of confidence.
+
+**Lessons:**
+- **Test pollution is a silent systemic defect.** The `0xfake_*` rows had been accumulating for weeks, quietly corrupting every "recent performance" read. The watchdog caught it the right way (compared last-20 market IDs against known-fake patterns) but nobody prioritised the fix until the clock-in forced a truth-check against the raw data. Lesson: when a dashboard number changes, check whether the *source* changed before trusting the *trend*.
+- **Fixture-vs-production drift is a test-maintenance debt.** Both failing e2e tests were fine when written (S9/S38); they broke because production gates tightened. The tests asserted loose preconditions (`len(predictions) > 0`) that depended on gate behaviour that later changed. Fixture updates are boring work that never makes a changelog but is the price of keeping e2e tests honest.
+- **Scope fidelity works.** The plan was "fix tests, lower gate, ship SEATS + clock-out." No scope creep into Loop-role or Nightly-Build, even though those were explicitly tempting and on the table. Both are deferred to a separate decision as requested.
+
+**Commits:** 1 (on `loop/session-41-cleanup`, pushed via `lab/.git-push-request`).
+
+---
+
 ## 2026-04-20 MacBook Session 40 — Formal clock-out (Claude Code)
 
 **Done since 2026-04-17 entry:**
