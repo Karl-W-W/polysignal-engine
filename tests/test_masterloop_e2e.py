@@ -51,10 +51,26 @@ def isolate_outcomes_file(monkeypatch, tmp_path):
     # and bypassing the predict_market_moves mocks in e2e tests.
     try:
         from lab.base_rate_predictor import BaseRatePredictor
-        monkeypatch.setattr(BaseRatePredictor, "from_outcomes", 
+        monkeypatch.setattr(BaseRatePredictor, "from_outcomes",
                            MagicMock(side_effect=FileNotFoundError("Mocked for e2e tests")))
     except ImportError:
         pass
+
+
+@pytest.fixture(autouse=True)
+def isolate_trading_log(monkeypatch, tmp_path):
+    """Redirect paper trades to a per-test tmp file.
+
+    Without this, prediction_node's paper-trading branch writes 0xfake_btc /
+    0xfake_eth rows into the real lab/trading_log.json every test run. That
+    pollutes every "last N trades" winrate downstream (watchdog, dashboards,
+    Loop's heartbeat). PolymarketTrader reads _DEFAULT_LOG_PATH at call time
+    via `log_path or _DEFAULT_LOG_PATH`, so monkeypatching the module attr
+    redirects cleanly.
+    """
+    import lab.polymarket_trader as trader_mod
+    monkeypatch.setattr(trader_mod, "_DEFAULT_LOG_PATH",
+                        str(tmp_path / "trading_log.json"))
 
 
 def _fake_markets():
@@ -201,6 +217,11 @@ class TestMasterLoopE2EKillSwitchOn:
             patch.object(ml_module, "send_telegram_alert") as mock_tg,
             patch.object(ml_module, "openclaw_tool") as mock_openclaw,
             patch.object(ml_module, "brain") as mock_brain,
+            # Skip XGBoost gate — the fake 0xfake_btc market has no features in
+            # the production DB, so the real model scores it low and suppresses.
+            # Mirrors test_xgboost_gate_graceful_fallback — no model = pass-through.
+            patch("lab.xgboost_baseline.load_model",
+                  side_effect=FileNotFoundError("No model for e2e")),
         ):
             mock_brain.invoke.side_effect = _fake_llm_response
             mock_openclaw._run.return_value = "SUCCESS: test"
@@ -426,6 +447,12 @@ class TestMasterLoopE2ETradingEnabled:
             patch.object(ml_module, "send_telegram_alert"),
             patch.object(ml_module, "openclaw_tool") as mock_openclaw,
             patch.object(ml_module, "brain") as mock_brain,
+            # Skip XGBoost gate so the fake Bullish prediction (confidence 0.82)
+            # survives to risk_gate. Without this, the real model scores the
+            # unknown market low, predictions are emptied, and risk_gate falls
+            # back to observation confidence=0.5 < MIN_CONFIDENCE=0.75 → REJECT.
+            patch("lab.xgboost_baseline.load_model",
+                  side_effect=FileNotFoundError("No model for e2e")),
         ):
             mock_brain.invoke.side_effect = _fake_llm_response
             mock_openclaw._run.return_value = "SUCCESS: echo completed"
