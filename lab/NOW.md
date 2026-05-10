@@ -1,6 +1,6 @@
 # NOW.md — Loop's Operational State
 # If you wake up confused, read this first.
-# Updated: Session 42 (2026-05-07)
+# Updated: 2026-05-10 (Session 42 — code deploy + 48h Phase 11 watch begins)
 
 ## Session 42 Snapshot (2026-05-07)
 **Eval pipeline rebuilt for honesty. Six new structural changes landed today.**
@@ -52,19 +52,30 @@
   enough to clear the gate).
 - Tests on Mac: 509 passed.
 
-**Live state on DGX:**
-- Scanner is running on the OLD code in memory (cleanup un-froze its eval
-  loop at line 277 because the on-disk stats dict now has all 6 keys, so
-  `state.stats["neutral"] += neutral` no longer KeyErrors). Patched files
-  are on disk; a scanner restart picks them up. Restart pending KWW
-  green-light.
-- truth_board timer: ACTIVE. Last fire: 2026-05-07 20:34 CEST, 314 obs,
-  errors=[].
-- feedback timer: ACTIVE. Next fire: 2026-05-08 03:00 UTC.
+**Live state on DGX (post-deploy 2026-05-10 16:15 CEST):**
+- Auto-merge `b76e88b` is on `origin/main` and DGX `HEAD`. Deploy handler
+  ran 16:15:46 → 16:20:15 CEST (4m29s, scanner status active, exit clean).
+- Scanner: running on patched code from cycle 1 (16:20:30 CEST). 134 obs,
+  0 predictions, 0 errors, 18.9s/cycle. Journal grep for the 10min after
+  deploy: zero `KeyError`, zero `Exception`, zero `traceback`. The fix
+  at `lab/outcome_tracker.py:117,277` is live and silent.
+- META-GATE HALT firing as designed (7d 0W/67L below 40% floor; expected,
+  not a regression — meta-gate built for exactly this state).
+- truth_board timer: ACTIVE. First clean fire post-deploy: 2026-05-10
+  16:16:45 CEST — 316 obs, evaluated_count 0, errors=[], status JSON at
+  `lab/.truth-board-status.json` (435 bytes). Next fire 16:31:45.
+- feedback timer: ACTIVE. Last fire 2026-05-10 05:00 CEST (pre-deploy old
+  code); next fire 2026-05-11 05:00 CEST (will run on patched code).
 
 **Open follow-ups:**
-- Phase 11: remove in-line eval from masterloop after 48h of stable
-  truth_board data.
+- **Phase 11 — 48h watch in progress.** Remove in-line eval block at
+  `workflows/masterloop.py:252-279` once truth_board has been stable for
+  48h. Watch started 2026-05-10 16:16:45 CEST (first clean post-deploy
+  truth_board fire); **deadline ≈ 2026-05-12 16:15 CEST**. Definition of
+  stable: scanner journal has zero `KeyError('neutral')`, truth-board
+  status `errors: []` on every 15-min fire, and `last_eval_age_minutes`
+  stays bounded. If any of those breaks before the deadline, leave the
+  in-line eval as a fallback and re-anchor the watch.
 - Phase 12: drop dead-weight `MemorySaver()` checkpointer (recommendation
   pending KWW green-light).
 - `polysignal-retrain.service` is in `failed` state on DGX — Phase 10's
