@@ -36,9 +36,13 @@ from typing import List, Dict, Optional
 
 
 # ── Configuration ────────────────────────────────────────────────────────────
-OUTCOMES_FILE = Path(os.getenv(
-    "OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"
-))
+def _resolve_outcomes_file() -> Path:
+    """Resolve OUTCOMES_FILE at call time (Phase 1, S42)."""
+    return Path(os.getenv(
+        "OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"
+    ))
+
+
 REPORT_FILE = Path(os.getenv(
     "FEEDBACK_REPORT_FILE",
     os.path.join(os.path.dirname(__file__), ".feedback-report")
@@ -86,10 +90,11 @@ class FeedbackReport:
 
 def compute_market_reports(window_days: int = EVAL_WINDOW_DAYS) -> List[MarketReport]:
     """Compute per-market accuracy over recent window."""
-    if not OUTCOMES_FILE.exists():
+    outcomes_file = _resolve_outcomes_file()
+    if not outcomes_file.exists():
         return []
 
-    data = json.loads(OUTCOMES_FILE.read_text())
+    data = json.loads(outcomes_file.read_text())
     preds = data.get("predictions", [])
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)

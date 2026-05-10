@@ -499,3 +499,34 @@ class TestEvaluatePaperTrades:
         assert result["evaluated"] == 2
         assert result["wins"] == 2  # BUY up + SELL down
         assert result["too_young"] == 1
+
+    def test_friction_flips_tiny_move_to_loss(self, tmp_path):
+        """Phase 5, S42: a +0.0001 (0.01pp) price move on a BUY must score
+        as a 'loss' once 0.5pp default slippage is applied. The pre-S42
+        friction-free pnl scored these as wins, inflating lifetime win rate
+        to 83.7%. ARCHITECTURE.md §1 mandates friction awareness."""
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        log._trades = [self._make_trade(side="BUY", price=0.50, hours_ago=5)]
+        log.save()
+
+        result = log.evaluate_paper_trades({"m1": 0.5001}, min_age_hours=4.0)
+        assert result["evaluated"] == 1
+        assert result["losses"] == 1
+        assert result["wins"] == 0
+        assert log._trades[0]["pnl"] < 0
+        assert log._trades[0]["slippage_pp"] == 0.005
+
+    def test_friction_env_override(self, tmp_path, monkeypatch):
+        """Phase 5, S42: FRICTION_SLIPPAGE_PP env var override is honored.
+        With slippage=0, the same +0.0001 move scores as a win."""
+        log_path = str(tmp_path / "trades.json")
+        log = TradingLog(log_path=log_path)
+        log._trades = [self._make_trade(side="BUY", price=0.50, hours_ago=5)]
+        log.save()
+
+        monkeypatch.setenv("FRICTION_SLIPPAGE_PP", "0.0")
+        result = log.evaluate_paper_trades({"m1": 0.5001}, min_age_hours=4.0)
+        assert result["evaluated"] == 1
+        assert result["wins"] == 1
+        assert log._trades[0]["slippage_pp"] == 0.0

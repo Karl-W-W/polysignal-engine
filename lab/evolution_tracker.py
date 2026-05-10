@@ -47,10 +47,12 @@ from typing import List, Optional, Callable, Dict
 
 
 # ── Configuration ────────────────────────────────────────────────────────────
-EVOLUTION_LOG = Path(os.getenv(
-    "EVOLUTION_LOG",
-    os.path.join(os.path.dirname(__file__), ".evolution-log.jsonl")
-))
+def _resolve_evolution_log() -> Path:
+    """Resolve EVOLUTION_LOG at call time (Phase 1, S42)."""
+    return Path(os.getenv(
+        "EVOLUTION_LOG",
+        os.path.join(os.path.dirname(__file__), ".evolution-log.jsonl")
+    ))
 
 
 @dataclass
@@ -284,17 +286,19 @@ def get_evolution_summary() -> str:
 
 def _append_log(hyp: Hypothesis):
     """Append a hypothesis to the evolution log."""
-    EVOLUTION_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(EVOLUTION_LOG, "a") as f:
+    evolution_log = _resolve_evolution_log()
+    evolution_log.parent.mkdir(parents=True, exist_ok=True)
+    with open(evolution_log, "a") as f:
         f.write(json.dumps(asdict(hyp)) + "\n")
 
 
 def _read_log() -> List[Dict]:
     """Read all entries from evolution log."""
-    if not EVOLUTION_LOG.exists():
+    evolution_log = _resolve_evolution_log()
+    if not evolution_log.exists():
         return []
     entries = []
-    for line in EVOLUTION_LOG.read_text().strip().split("\n"):
+    for line in evolution_log.read_text().strip().split("\n"):
         if line.strip():
             try:
                 entries.append(json.loads(line))
@@ -305,10 +309,14 @@ def _read_log() -> List[Dict]:
 
 def _rewrite_log(entries: List[Dict]):
     """Rewrite the entire log (used after evaluation updates)."""
-    EVOLUTION_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(EVOLUTION_LOG, "w") as f:
+    evolution_log = _resolve_evolution_log()
+    evolution_log.parent.mkdir(parents=True, exist_ok=True)
+    # Atomic write (Phase 2, S42): tmp file + os.replace.
+    tmp = evolution_log.with_suffix(evolution_log.suffix + ".tmp")
+    with open(tmp, "w") as f:
         for entry in entries:
             f.write(json.dumps(entry) + "\n")
+    os.replace(tmp, evolution_log)
 
 
 def _parse_ts(ts_str: str) -> datetime:

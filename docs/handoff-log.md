@@ -2,7 +2,77 @@
 
 ---
 
-## 2026-04-24 DGX Session 41 — Clock-out (Claude Code, Opus 4.7 on DGX)
+## 2026-05-08 MacBook Session 42 — Eval Pipeline Honesty Pass (Claude Code, Opus 4.7)
+
+**Focus: address every issue from the deep-dive, bug-hunt, and clock-in. Pillar 1 (Wisdom — eval measurable), Pillar 3 (Justice — metrics truthful), Pillar 4 (Self-Control — clean architecture). 14 phases planned; 12 executed; Phase 11 deferred 48h per spec; Phase 14 left as advisory.**
+
+**Done:**
+
+- **Eval freeze (May 5 06:22 UTC) thawed (Phase 0).** Persisted stats dict had been edited to a 5-key shape missing `"neutral"`; `evaluate_outcomes` raised `KeyError('neutral')` every cycle for ~57h, swallowed by `perception_node`'s `try/except`. Two-line defense at `lab/outcome_tracker.py:117` (merge into defaults) and `:277` (defensive `.get(...)`). Two regression tests in `TestEvaluateOutcomesPartialStats`. Repro confirmed PASS post-fix.
+
+- **Test pollution path closed (Phase 1).** Same S41 `_DEFAULT_LOG_PATH` import-time-capture pattern was live in `lab/outcome_tracker.py`, `lab/feedback_loop.py`, `lab/watchdog.py`, `lab/evolution_tracker.py`. Replaced module-level `OUTCOMES_FILE` / `EVOLUTION_LOG` constants with `_resolve_*_file()` helpers; converted 9 function defaults from `state_path: Path = OUTCOMES_FILE` to `state_path: Optional[Path] = None` with body resolution. Existing tests using `monkeypatch.setattr` updated to `monkeypatch.setenv`. Two `TestPathResolutionAtCallTime` regression tests added.
+
+- **Atomic file writes (Phase 2).** `OutcomeState.save`, `TradingLog.save`, `EvolutionTracker._rewrite_log` now write to `path.tmp` then `os.replace(tmp, path)`. `TestAtomicWrites` regression test simulates crash-mid-write and asserts the previous good file remains parseable. Hard prereq for `truth_board.py` running concurrently with masterloop.
+
+- **Discriminator (Phase 3): H2 (test fixture wrote partial stats) REJECTED.** Grep across `tests/`, `scripts/`, `lab/`, `docs/` for any 5-key `correct/incorrect/accuracy` literal lacking `neutral` returned only my own Phase 0/1 regression tests. Most likely culprit was a one-shot manual jq/Python edit on DGX near 2026-05-05 06:22 UTC. Phase 0 defenses make recurrence impossible regardless of agent.
+
+- **0xfake_btc cleanup (Phase 4).** 110 test-fixture rows removed from `data/prediction_outcomes.json`. Backup at `data/prediction_outcomes.json.pre-s42-cleanup.bak`. Side effect: the live scanner's old in-memory `evaluate_outcomes` un-froze immediately because the on-disk stats dict now has all 6 keys. **The system has been evaluating again since cleanup ran (~20:00 UTC 2026-05-07).** 67 fresh evaluations have arrived since, all INCORRECT — recent prediction quality is genuinely poor.
+
+- **Friction model (Phase 5).** `lab/polymarket_trader.py:evaluate_paper_trades` was friction-free (ARCHITECTURE.md §1 violation). Added `slippage_pp` (default 0.005) and `fee_pp` (default 0.0) deducted from `effective_delta` before pnl. Env-overridable via `FRICTION_SLIPPAGE_PP` / `FRICTION_FEE_PP`. Backfill (`lab/refriction_trading_log.py`) re-evaluated all 7,327 historical trades: **lifetime "win rate" 83.68% → 1.86% (-81.82pp).** The 81.8pp drop is a measurement honesty fix, not a regression: pre-S42 PnL counted +0.0001 ticks as wins on markets with 0.5-2pp typical spread. Backup at `lab/trading_log.json.pre-friction.bak`.
+
+- **Per-category eval horizons (Phase 6, S41 P1).** `EVAL_HORIZONS_BY_CATEGORY = {crypto:4h, sports:24h, politics:7d, default:4h}`. Added title-based `classify_category()` and `horizon_for_category()`; `PredictionRecord` gained a `category` field; `record_predictions` derives category from observation; `evaluate_outcomes` routes horizon by category; observation factories in `workflows/masterloop.py` tag observations. 7 regression tests in `TestCategoryRouting`. Backfill (`lab/recompute_outcomes_per_category.py`): 593 records all bucketed as "default" because legacy records have no `title` field — forward-looking classification works on all new predictions. Backup at `data/prediction_outcomes.json.pre-percat.bak`.
+
+- **truth_board.py + 15-min systemd timer (Phases 7-9).** New `lab/truth_board.py` reads latest observation per market from `data/test.db`, calls `evaluate_outcomes` and `evaluate_paper_trades`, writes atomic `lab/.truth-board-status.json`. CLI: `python3 -m lab.truth_board`. Systemd: `polysignal-truth-board.{service,timer}` on `OnUnitActiveSec=15min`. First fire on DGX: clean run, 314 obs, errors=[]. Watchdog gained `check_truth_board_health()` (alerts critical if file missing / >30min stale, warning if non-empty errors). 4 truth-board tests, 4 watchdog tests. **In-line eval in `perception_node` is NOT removed yet — Phase 11 deferred 48h per spec to confirm timer stability before fallback removal.**
+
+- **Nightly feedback timer (Phase 10).** `polysignal-feedback.{service,timer}` runs at `03:00 UTC` daily. First manual run flagged: `558936` (38% on 386 samples), `665374` (0/67) — both queued for exclusion. Auto-wrote `lab/.retrain-trigger`; `polysignal-retrain.service` is in `failed` state (pre-existing, did not retrain — flagged for follow-up).
+
+- **MemorySaver dropped (Phase 12).** `workflows/masterloop.py:1076` `app = graph.compile(checkpointer=MemorySaver())` → `app = graph.compile()`. Per-cycle `scan_<timestamp>` thread_id meant the in-RAM checkpointer never resumed anything. ~3 lines net.
+
+- **Documentation reconciled (Phase 13).** `lab/NOW.md` rewritten to S42 reality. `lab/GOALS.md` Tier 1.2: lifetime directional 47.8% (claimed) → 31.0% (real); paper-trade win rate 83.7% → 1.86% under friction. `PROGRESS.md` gained Session 32-41 capsule + full Session 42 entry. `ARCHITECTURE.md` §1.A now catalogues four documented drifts: friction-free PnL (FIXED Phase 5), uniform 4h horizon (FIXED Phase 6), `BAN_BEARISH_OUTPUT` (TODO next session), `MIN_MOVE_THRESHOLD = 0.0005` (TODO next session).
+
+**State (post-restart, journalctl confirmed clean):**
+
+- Tests: 509 pass (started at 487; +22 regression tests across the session).
+- Live scanner: restarted on patched code via `lab/.deploy-trigger` after auto-merge of `loop/session-42` to main. Journal monitored 5min, zero `KeyError` lines, eval calls running cleanly.
+- Truth board timer: ACTIVE every 15min.
+- Feedback timer: ACTIVE nightly 03:00 UTC.
+- Lifetime directional accuracy: 31.0% (146/471 evaluated). Friction-adjusted lifetime win rate: 1.86%.
+- Trading_enabled: false (unchanged). Live trade gate stays closed pending directional ≥50% AND friction-adjusted win rate ≥45%.
+
+**Next (Session 43):**
+
+- **Phase 11 — remove in-line eval from `workflows/masterloop.py:252-279`** after 48h of stable truth_board data. The dual-write today is safe (both atomic, both path-resolve) but the eventual single-source-of-truth is truth_board.
+- **ARCHITECTURE drift #3** — re-enable Bearish on base rate predictor after S41 P2 (price-velocity guard in `from_price_levels`). Track suppression metric first.
+- **ARCHITECTURE drift #4** — raise `MIN_MOVE_THRESHOLD` from 0.0005 to ~0.005 (0.5pp) to align with the friction model's slippage assumption. Re-evaluate after 1 week of new horizon data.
+- **Investigate `polysignal-retrain.service` failure state** — Phase 10's auto-trigger landed but no retrain ran. Likely a stale shell script or env issue.
+- **`:memory:` test artifact** keeps regenerating because `tests/test_masterloop_e2e.py` patches `os.getenv` overbroadly. Tighten to `DB_PATH` only.
+- **Phase 14 — Loop role decision** is yours and Karl's. Three options briefed in the session report: (a) cheap watcher / (b) re-enable autonomous loop/* pushes with KR gates / (c) retire Loop, merge responsibilities into the timers.
+
+**Watch out:**
+
+- The 1.86% friction-adjusted win rate is the real number. Every dashboard, every Loop heartbeat, every "is it working" question now has a true answer that's far worse than the 83.7% claim. This is intentional — the prior number was fiction.
+- `:memory:` test artifact will keep re-appearing in the working tree. `.gitignore` blocks commits, but `git status` will show it as untracked or modified each test run. Don't accidentally `git add :memory:`.
+- The deploy handler (`scripts/deploy-handler.sh`) does `git reset --hard origin/main` — destructive but bounded. Anything scp'd to `/opt/loop/` outside of git tracking will be wiped. The systemd unit files in `~/.config/systemd/user/` are safe (separate path).
+- truth_board running in parallel with the masterloop's in-line eval means both write the outcomes file. Both use atomic writes (Phase 2), so there's no corruption — but there is a small window where the in-line eval and truth_board could each evaluate the same prediction record. The "evaluated check" at `evaluate_outcomes` line ~221 (`if pred.get("evaluated"): continue`) is the de-dup; it's safe.
+
+**Codebase health:**
+
+- `workflows/masterloop.py` is now 1140 lines + a few category lines. Still the biggest file in the repo. Phase 11 will trim it slightly.
+- New modules (`truth_board.py`, three backfill scripts) all under 150 lines, well-bounded.
+- Test suite up to 509. The +22 from this session are tightly scoped — each phase added regression tests for exactly its fix.
+
+**Lessons:**
+
+- **Silent excepts buy time and cost truth.** The eval pipeline froze for 57h with zero error visibility because `perception_node` wraps eval in `try/except` that prints to stdout. The watchdog caught the *symptom* (prediction drought) but not the *cause* (KeyError). Lesson: every silent-except in a critical path needs at least an `lab/.events.jsonl` emit.
+- **Headline metrics need re-derivation defenses.** "Lifetime 83.7% win rate" was reported in GOALS.md, in heartbeats, in PROGRESS.md — and was fiction. The friction model exposed it instantly. Lesson: never trust a headline number that doesn't have a *re-derivation script* you can run today and compare. We now have `cleanup_outcomes_pollution.py` and `refriction_trading_log.py` as those scripts.
+- **Import-time capture is a recurring bug class.** S41 fixed it for `_DEFAULT_LOG_PATH`. S42 fixed the same thing for `OUTCOMES_FILE` and `EVOLUTION_LOG`. The remaining `SCANNER_STATUS_FILE`, `ALERTS_FILE`, `TRADING_LOG_FILE`, `REPORT_FILE`, `RETRAIN_TRIGGER` constants in `lab/watchdog.py` and `lab/feedback_loop.py` will eventually need the same treatment. Track as low-priority hardening.
+- **The `:memory:` artifact** is a small but instructive lesson on test isolation: a single overbroad `patch("workflows.masterloop.os.getenv", return_value=":memory:")` caused months of accumulated test pollution at the repo root. Lesson: when patching a generic accessor like `os.getenv`, scope it to the specific key.
+
+**Commits:** 1 (on `loop/session-42`, auto-merged via CI gate of 509 tests).
+
+---
+
+
 
 **Focus: data-integrity cleanup + predictor unblock. Two small, bounded changes; no Vault touches; no Loop-role decision.**
 

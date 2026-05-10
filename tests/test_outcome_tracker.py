@@ -229,6 +229,215 @@ class TestEvaluateOutcomes:
         assert result2["evaluated"] == 0  # Already evaluated
 
 
+class TestCategoryRouting:
+    """Phase 6, S42: per-category EVAL_HORIZONS. The 4h-on-everything default
+    was scoring 6-month political markets against 4h noise (Orbán 13%/sample).
+    Routing horizons by category fixes that."""
+
+    def test_classify_category_crypto(self):
+        from lab.outcome_tracker import classify_category
+        assert classify_category("Will Bitcoin break $200k by Dec?") == "crypto"
+        assert classify_category("ETH ETF approval 2026") == "crypto"
+
+    def test_classify_category_sports(self):
+        from lab.outcome_tracker import classify_category
+        assert classify_category("Super Bowl 2027 winner") == "sports"
+        assert classify_category("NBA Finals MVP") == "sports"
+
+    def test_classify_category_politics(self):
+        from lab.outcome_tracker import classify_category
+        assert classify_category("Hungarian PM by 2027") == "politics"
+        assert classify_category("Will Vance win 2028 presidential election?") == "politics"
+
+    def test_classify_category_default(self):
+        from lab.outcome_tracker import classify_category
+        assert classify_category("Will Apple ship the rumored device?") == "default"
+        assert classify_category("") == "default"
+        assert classify_category(None) == "default"
+
+    def test_horizon_for_category(self):
+        from lab.outcome_tracker import horizon_for_category
+        assert horizon_for_category("crypto") == "4h"
+        assert horizon_for_category("sports") == "24h"
+        assert horizon_for_category("politics") == "7d"
+        assert horizon_for_category("default") == "4h"
+        assert horizon_for_category("unknown_bucket") == "4h"
+        assert horizon_for_category(None) == "4h"
+
+    def test_record_predictions_writes_category_from_observation(
+        self, sample_observations, state_file
+    ):
+        # Tag the observation with politics
+        obs = [{**sample_observations[0], "category": "politics", "title": "X"}]
+        preds = [{"market_id": "0xbtc", "hypothesis": "Bullish", "confidence": 0.7}]
+        record_predictions(preds, obs, cycle_number=1, state_path=state_file)
+        state = OutcomeState.load(state_file)
+        # Find the BTC record (4h-default would also create dual-horizon, but
+        # politics now → 7d → no dual-horizon copy since the dual-horizon
+        # logic only fires for time_horizon == "4h").
+        recs = [p for p in state.predictions if p["market_id"] == "0xbtc"]
+        assert recs, "expected a recorded prediction"
+        assert recs[0]["category"] == "politics"
+        assert recs[0]["time_horizon"] == "7d"
+
+    def test_evaluate_outcomes_uses_category_horizon(self, state_file):
+        """A politics record 1 day old must NOT evaluate (7d horizon).
+        A crypto record 5h old MUST evaluate (4h horizon)."""
+        from lab.outcome_tracker import OutcomeState
+
+        recent_politics = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        recent_crypto = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        state = OutcomeState()
+        state.predictions = [
+            {
+                "market_id": "P_HU", "hypothesis": "Bullish", "confidence": 0.7,
+                "price_at_prediction": 0.50, "timestamp": recent_politics,
+                "time_horizon": "4h",  # legacy field kept for compatibility
+                "category": "politics",
+                "cycle_number": 0, "evaluated": False,
+            },
+            {
+                "market_id": "C_BTC", "hypothesis": "Bullish", "confidence": 0.7,
+                "price_at_prediction": 0.50, "timestamp": recent_crypto,
+                "time_horizon": "4h",
+                "category": "crypto",
+                "cycle_number": 0, "evaluated": False,
+            },
+        ]
+        state.stats["total_predictions"] = 2
+        state.save(state_file)
+
+        obs = [
+            {"market_id": "P_HU", "current_price": 0.40},
+            {"market_id": "C_BTC", "current_price": 0.55},
+        ]
+        result = evaluate_outcomes(obs, state_path=state_file)
+        # Crypto evaluates at 5h > 4h horizon. Politics does NOT evaluate at
+        # 1d < 7d horizon.
+        assert result["evaluated"] == 1
+        assert result["correct"] == 1
+
+
+class TestAtomicWrites:
+    """Phase 2 S42: OutcomeState.save uses tmp + os.replace, so a crash
+    mid-write must leave the previous good file intact."""
+
+    def test_crash_mid_write_preserves_original(self, state_file, monkeypatch):
+        # Seed a known-good file
+        state = OutcomeState()
+        state.predictions = [{"market_id": "M1", "evaluated": False}]
+        state.stats["total_predictions"] = 1
+        state.save(state_file)
+        original = state_file.read_text()
+
+        # Now mutate state and save with json.dump raising mid-write
+        state.predictions.append({"market_id": "M2", "evaluated": False})
+
+        def boom(*a, **kw):
+            raise RuntimeError("simulated crash mid-write")
+
+        monkeypatch.setattr("lab.outcome_tracker.json.dump", boom)
+        with pytest.raises(RuntimeError):
+            state.save(state_file)
+
+        # The original file must still be intact and parseable.
+        assert state_file.read_text() == original
+        loaded = OutcomeState.load(state_file)
+        assert len(loaded.predictions) == 1
+
+
+class TestPathResolutionAtCallTime:
+    """Phase 1 S42: confirm OUTCOMES_FILE is resolved at call time, not at
+    module import. Reproduces the test-isolation failure mode that allowed
+    110 0xfake_btc rows to bleed into the prod outcomes file."""
+
+    def test_setenv_after_import_redirects_writes(self, tmp_path, monkeypatch):
+        """Set OUTCOMES_FILE *after* the module is already imported, then
+        call record_predictions with no explicit state_path. The new path
+        should be honored."""
+        target = tmp_path / "post_import.json"
+        monkeypatch.setenv("OUTCOMES_FILE", str(target))
+        # No explicit state_path — the function must resolve the env var.
+        preds = [{"market_id": "M1", "hypothesis": "Bullish",
+                  "confidence": 0.7, "time_horizon": "4h"}]
+        obs = [{"market_id": "M1", "current_price": 0.5}]
+        record_predictions(preds, obs, cycle_number=1)
+        assert target.exists()
+        # The default prod path must NOT have been written by this call.
+
+    def test_setenv_after_import_redirects_reads(self, tmp_path, monkeypatch):
+        """Same shape, evaluate_outcomes side. Confirms the default-arg
+        capture-at-definition bug is dead."""
+        target = tmp_path / "post_import.json"
+        ts = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        target.write_text(json.dumps({
+            "predictions": [{
+                "market_id": "M1", "hypothesis": "Bullish", "confidence": 0.7,
+                "price_at_prediction": 0.5, "timestamp": ts,
+                "time_horizon": "4h", "cycle_number": 0, "evaluated": False,
+            }],
+            "stats": {},
+            "per_market": {},
+        }))
+        monkeypatch.setenv("OUTCOMES_FILE", str(target))
+        result = evaluate_outcomes([{"market_id": "M1", "current_price": 0.55}])
+        assert result["evaluated"] == 1
+
+
+class TestEvaluateOutcomesPartialStats:
+    """Regression: persisted stats dict missing the 'neutral' key must not
+    KeyError out of evaluate_outcomes. This is the bug that froze the prod
+    eval pipeline at 2026-05-05 06:22 UTC (Phase 0, S42)."""
+
+    def test_load_merges_partial_stats_into_defaults(self, state_file):
+        """OutcomeState.load with a 5-key stats dict (no 'neutral') should
+        return a state whose stats dict has all 6 default keys."""
+        ts = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        partial = {
+            "predictions": [{
+                "market_id": "0xbtc", "hypothesis": "Bullish", "confidence": 0.7,
+                "price_at_prediction": 0.50, "timestamp": ts, "time_horizon": "4h",
+                "cycle_number": 0, "evaluated": False,
+            }],
+            "stats": {
+                "total_predictions": 1, "total_evaluated": 0,
+                "correct": 0, "incorrect": 0, "accuracy": 0.0,
+                # 'neutral' MISSING — mirrors the corrupted prod state
+            },
+            "per_market": {},
+        }
+        state_file.write_text(json.dumps(partial))
+        state = OutcomeState.load(state_file)
+        assert "neutral" in state.stats
+        assert state.stats["neutral"] == 0
+        # Other keys should retain their on-disk values
+        assert state.stats["total_predictions"] == 1
+
+    def test_evaluate_outcomes_does_not_raise_on_partial_stats(self, state_file):
+        """The exact reproduction of the Phase 0 freeze: a partial stats dict
+        on disk plus a pending prediction whose 4h horizon has elapsed.
+        Pre-fix: KeyError('neutral'). Post-fix: clean evaluation."""
+        ts = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        partial = {
+            "predictions": [{
+                "market_id": "0xbtc", "hypothesis": "Bullish", "confidence": 0.7,
+                "price_at_prediction": 0.50, "timestamp": ts, "time_horizon": "4h",
+                "cycle_number": 0, "evaluated": False,
+            }],
+            "stats": {
+                "total_predictions": 1, "total_evaluated": 0,
+                "correct": 0, "incorrect": 0, "accuracy": 0.0,
+                # 'neutral' MISSING
+            },
+            "per_market": {},
+        }
+        state_file.write_text(json.dumps(partial))
+        obs = [{"market_id": "0xbtc", "current_price": 0.55}]
+        result = evaluate_outcomes(obs, state_path=state_file)
+        assert result["evaluated"] == 1
+        assert result["correct"] == 1
+
+
 # ============================================================================
 # STATE PERSISTENCE
 # ============================================================================

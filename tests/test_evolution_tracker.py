@@ -17,8 +17,10 @@ from lab.evolution_tracker import (
 
 @pytest.fixture
 def tmp_log(tmp_path, monkeypatch):
+    """Phase 1 S42: setenv works now that lab.evolution_tracker resolves
+    EVOLUTION_LOG at call time, not import time."""
     path = tmp_path / ".evolution-log.jsonl"
-    monkeypatch.setattr("lab.evolution_tracker.EVOLUTION_LOG", path)
+    monkeypatch.setenv("EVOLUTION_LOG", str(path))
     return path
 
 

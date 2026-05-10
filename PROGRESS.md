@@ -1062,3 +1062,57 @@ XGBoost retrain with clean data → improved model
     ↓
 MoltBook signals publishing → reputation → REVENUE
 ```
+
+---
+
+## Session 32–41 (2026-04-01 → 2026-04-24) — see docs/handoff-log.md
+- **S34 (2026-03-31)**: NemoClaw rebuilt (OpenShell v0.0.19). Host gateway owns Telegram. conditionId fix in bitcoin_signal.py.
+- **S35-36 (2026-04-01)**: Ollama hardened. Trading_log fakes purged. Approval gate wired.
+- **S37 (2026-04-03)**: Eval pipeline overhaul — record cap raised to 5000, time horizon 24h→4h, SQLite WAL+timeout=30. Scanner restarted after 9-day code drift.
+- **S38-39 (2026-04-04→04-13)**: Sonnet heartbeats. Dual-horizon eval. Volatility gate. MIN_MOVE_THRESHOLD 0.3pp→0.05pp. 0 predictions/cycle issue identified.
+- **S40 (2026-04-17→04-20)**: $50 API burn root-caused. Heartbeat Sonnet→Haiku 4.5, 60m→120m. BAN_BEARISH_OUTPUT extended to base rate predictor. META-GATE self-healed.
+- **S41 (2026-04-24)**: e2e test pollution fixed (`isolate_trading_log` fixture). 129 fakes purged from trading_log. Base rate gate 0.55→0.50. Six-seat operator console drafted.
+
+---
+
+## Session 42 (2026-05-07) — Eval Pipeline Honesty Pass
+
+**Mission: address every issue from the deep-dive, bug-hunt, and clock-in. 14 phases planned, 11 executed (Phase 11 deferred 48h, Phase 12 awaiting green-light, Phase 14 advisory).**
+
+### Bug-hunt → Phase 0
+Eval frozen since 2026-05-05 06:22 UTC: persisted stats dict missing `"neutral"` key. `evaluate_outcomes` raised `KeyError('neutral')` swallowed by `perception_node` try/except. Fixed via merge-into-defaults at `lab/outcome_tracker.py:117` and defensive `.get(...)` at line 277.
+
+### Test pollution → Phases 1-4
+110 `0xfake_btc` rows in prod outcomes file. Root cause: `OUTCOMES_FILE` captured at module-import time across 4 modules (same S41 fix class as `_DEFAULT_LOG_PATH`). Fixed via `_resolve_*_file()` helpers + `Optional[Path] = None` defaults. Atomic file writes added to `OutcomeState.save`, `TradingLog.save`, `EvolutionTracker._rewrite_log`. `lab/cleanup_outcomes_pollution.py` removed all fakes.
+
+### Friction model → Phase 5
+ARCHITECTURE.md §1 violation: `evaluate_paper_trades` had no slippage/fees. Lifetime "83.7% win rate" was fiction. Added `slippage_pp`/`fee_pp` defaults (0.005/0.0), env-overridable. `lab/refriction_trading_log.py` re-evaluated 7,327 trades: **83.68% → 1.86% win rate (-81.82pp).**
+
+### Per-category horizons → Phase 6
+S41 P1 landed: `{crypto:4h, sports:24h, politics:7d, default:4h}`. Title-based classifier + `category` field on PredictionRecord. Observation factories tag category. Backfill via `lab/recompute_outcomes_per_category.py`. Old records lack `title` → all default-bucketed (cosmetic; new records categorize correctly).
+
+### Truth board → Phases 7-9
+New `lab/truth_board.py`: reads from `data/test.db`, calls existing eval, writes atomic status file. `polysignal-truth-board.{service,timer}` fires every 15min. Watchdog gained `check_truth_board_health()` alerting >30min stale. **In-line eval in masterloop NOT removed yet** — Phase 11 deferred 48h.
+
+### Feedback loop timer → Phase 10
+`polysignal-feedback.{service,timer}` runs nightly at 03:00 UTC. First run flagged 558936 (38%/386) and 665374 (0/67) for exclusion. Auto-wrote `lab/.retrain-trigger`; `polysignal-retrain.service` is in `failed` state (pre-existing).
+
+### MemorySaver → Phase 12
+Recommended dropping. Awaiting green-light.
+
+### Documentation reconciliation → Phase 13
+`lab/NOW.md` rewritten. `lab/GOALS.md` Tier 1.2 numbers updated (47.8% → 31.0% directional, 83.7% → 1.86% paper win rate). `ARCHITECTURE.md` drift list updated.
+
+### Outcomes
+- **509 tests passing** on Mac (started at 487; +22 regression tests).
+- 4 patched modules + 2 new modules + 4 new systemd unit files synced to DGX.
+- 3 new backup files preserved (cleanup, percat, friction).
+- Live scanner currently un-frozen (cleanup side-effect — old in-memory eval no longer KeyErrors against the cleaned stats). Patched code on disk pending KWW-approved restart.
+
+### Headline numbers post-S42
+| Metric | Pre-S42 (claimed) | Post-S42 (real) |
+|---|---|---|
+| Lifetime directional accuracy | 47.8% (stale) | 31.0% (146/471) |
+| Paper-trade win rate | 83.7% (frictionless) | 1.86% (0.5pp slippage) |
+| Predictions/cycle | 0 (drought 9d) | 0 (un-frozen, awaiting fresh signals) |
+| Tests passing | 487 | 509 |

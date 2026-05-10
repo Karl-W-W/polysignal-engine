@@ -32,7 +32,12 @@ from datetime import datetime, timezone, timedelta
 
 # ── LangGraph ────────────────────────────────────────────────────────────────
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+# MemorySaver dropped S42 Phase 12: per-cycle thread_id (`scan_<timestamp>`)
+# meant the in-RAM checkpointer never resumed anything — every cycle started
+# fresh anyway. Removing it shaves a small amount of RAM/cycle and clarifies
+# that the system has no resume requirement. If a resume mechanic is ever
+# needed, swap to SqliteSaver(data/checkpoints.db) with stable per-market
+# thread_ids.
 
 # ── LangChain ────────────────────────────────────────────────────────────────
 from langchain_openai import ChatOpenAI
@@ -173,9 +178,13 @@ except ImportError:
 
 def _market_to_observation(m: dict) -> dict:
     """Convert raw crypto market dict to LoopState observation format."""
+    # Phase 6, S42: tag observation with category so per-category eval
+    # horizons route correctly downstream.
+    from lab.outcome_tracker import classify_category
+    title = f"{m['title']} — {m['outcome']}"
     return {
         "market_id":  m["id"],
-        "title":      f"{m['title']} — {m['outcome']}",
+        "title":      title,
         "price":      m["price"],
         "volume":     m["volume"],
         "change_24h": 0.0,
@@ -183,14 +192,20 @@ def _market_to_observation(m: dict) -> dict:
         "source":     "polymarket",
         "direction":  "",
         "url":        m["url"],
+        "category":   classify_category(title),
     }
 
 
 def _signal_to_observation(sig: dict) -> dict:
     """Convert detected signal dict to LoopState observation format."""
+    from lab.outcome_tracker import classify_category, horizon_for_category
+    title = f"{sig['title']} — {sig['outcome']}"
+    category = classify_category(title)
+    # Phase 6, S42: a signal-detector's explicit time_horizon overrides the
+    # per-category default. Otherwise we route by category.
     return {
         "market_id":    sig["market_id"],
-        "title":        f"{sig['title']} — {sig['outcome']}",
+        "title":        title,
         "price":        sig["current_price"],
         "volume":       sig["volume"],
         "change_24h":   sig["delta"],
@@ -198,7 +213,8 @@ def _signal_to_observation(sig: dict) -> dict:
         "source":       "polymarket",
         "direction":    sig["direction"],
         "url":          sig["url"],
-        "time_horizon": sig.get("time_horizon", "4h"),
+        "time_horizon": sig.get("time_horizon", horizon_for_category(category)),
+        "category":     category,
     }
 
 
@@ -1062,7 +1078,7 @@ def run_cycle(user_request: str, thread_id: str = "default", on_event=None, cycl
             except Exception: pass
 
     graph = build_masterloop()
-    app   = graph.compile(checkpointer=MemorySaver())
+    app   = graph.compile()  # S42 Phase 12: no checkpointer (no resume use case)
 
     initial: LoopState = {
         "thread_id":             thread_id,

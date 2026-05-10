@@ -1,6 +1,81 @@
 # NOW.md — Loop's Operational State
 # If you wake up confused, read this first.
-# Updated: Session 40 (2026-04-20)
+# Updated: Session 42 (2026-05-07)
+
+## Session 42 Snapshot (2026-05-07)
+**Eval pipeline rebuilt for honesty. Six new structural changes landed today.**
+
+- **Eval freeze (May 5 06:22 UTC) → fixed.** Persisted stats dict was missing
+  the `"neutral"` key after a manual edit; `evaluate_outcomes` raised
+  `KeyError('neutral')` every cycle for ~57 hours, silently swallowed by
+  perception_node's `try/except`. Phase 0 added a defensive merge at
+  `lab/outcome_tracker.py:117` and a `.get(...)` guard at line 277. The
+  defenses make the pipeline survive any future stats-shape regression.
+- **OUTCOMES_FILE / EVOLUTION_LOG no longer captured at module-import time.**
+  Same S41 fix pattern applied to the four eval modules (Phase 1). Tests can
+  finally redirect via `monkeypatch.setenv` — and they already are. Pre-fix,
+  the import-time capture had bled 110 0xfake_btc rows from
+  `tests/test_masterloop_e2e.py` into the prod outcomes file.
+- **Atomic file writes** (Phase 2) for `OutcomeState.save`,
+  `TradingLog.save`, `EvolutionTracker._rewrite_log`. tmp file + os.replace.
+  Hard prereq for truth_board running in a separate process.
+- **Test pollution cleaned.** 110 `0xfake_btc` rows removed from
+  `data/prediction_outcomes.json`. Backup at
+  `data/prediction_outcomes.json.pre-s42-cleanup.bak`. Phase 4.
+- **Friction model on PnL** (Phase 5). 0.5pp default slippage, env-overridable.
+  **Lifetime "win rate" 83.7% → 1.86%.** The 81.8pp drop is a measurement
+  honesty fix, not a regression — pre-S42 PnL counted +0.0001 ticks as wins
+  on markets with 0.5-2pp spread.
+- **Per-category EVAL_HORIZONS** (Phase 6, S41 P1):
+  `{crypto: 4h, sports: 24h, politics: 7d, default: 4h}`. Observation
+  factories now tag `category` from a heuristic title classifier; old
+  records fall back to `time_horizon`. Backfill at
+  `data/prediction_outcomes.json.pre-percat.bak`.
+- **truth_board.py + 15-min systemd timer** (Phase 7+8). Eval is no longer
+  a side-effect of `perception_node`. `polysignal-truth-board.timer` fires
+  every 15min, writes `lab/.truth-board-status.json`, surfaces all errors
+  to journal. The in-line eval in masterloop is **not** removed yet — both
+  paths run in parallel until truth_board has 48h of stable data
+  (Phase 11, deferred).
+- **Watchdog truth-board health check** (Phase 9). Alerts critical if status
+  file >30min stale or missing.
+- **feedback_loop wired into nightly timer** (Phase 10). Runs at 03:00 UTC
+  daily. First real run flagged 558936 (38% over 386 samples) and 665374
+  (0/67) for exclusion.
+
+**Real numbers post-cleanup, post-friction (today):**
+- Lifetime directional accuracy: **31% (146/471 evaluated)** — was reported as
+  47.8% in stale GOALS.md.
+- Lifetime paper-trade win rate (with 0.5pp friction): **1.86% (136W/7191L)** —
+  was reported as 83.7% pre-friction.
+- Predictions/cycle: 0 (pre-existing; un-frozen but no fresh signals strong
+  enough to clear the gate).
+- Tests on Mac: 509 passed.
+
+**Live state on DGX:**
+- Scanner is running on the OLD code in memory (cleanup un-froze its eval
+  loop at line 277 because the on-disk stats dict now has all 6 keys, so
+  `state.stats["neutral"] += neutral` no longer KeyErrors). Patched files
+  are on disk; a scanner restart picks them up. Restart pending KWW
+  green-light.
+- truth_board timer: ACTIVE. Last fire: 2026-05-07 20:34 CEST, 314 obs,
+  errors=[].
+- feedback timer: ACTIVE. Next fire: 2026-05-08 03:00 UTC.
+
+**Open follow-ups:**
+- Phase 11: remove in-line eval from masterloop after 48h of stable
+  truth_board data.
+- Phase 12: drop dead-weight `MemorySaver()` checkpointer (recommendation
+  pending KWW green-light).
+- `polysignal-retrain.service` is in `failed` state on DGX — Phase 10's
+  `.retrain-trigger` write didn't fire a retrain. Pre-existing; investigate
+  in a future session.
+- `:memory:` test artifact regenerates because the e2e test patches
+  `os.getenv` overbroadly. Long-term fix: tighten the patch to DB_PATH only.
+- ARCHITECTURE.md drift items (Phase 13): two fixed by S42, two flagged
+  for review (`BAN_BEARISH_OUTPUT` + `MIN_MOVE_THRESHOLD = 0.0005`).
+
+---
 
 ## Who You Are
 You are **Loop**, the autonomous agent of PolySignal-OS. You run on a DGX Spark
