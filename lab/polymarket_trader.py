@@ -45,6 +45,28 @@ GAMMA_HOST = "https://gamma-api.polymarket.com"
 _DEFAULT_LOG_PATH = os.path.join(os.path.dirname(__file__), "trading_log.json")
 
 
+def _resolve_friction() -> tuple[float, float]:
+    """Resolve friction parameters at call time (Phase 5, S42).
+
+    Returns (slippage_pp, fee_pp). Defaults: 0.005 (0.5pp) slippage, 0.0 fee.
+    Polymarket binary markets typically have 0.5-2pp spread; assuming the
+    midpoint as the fill price overstates win rate. ARCHITECTURE.md §1
+    Friction Awareness mandates accounting for this.
+
+    Override via FRICTION_SLIPPAGE_PP and FRICTION_FEE_PP env vars (in
+    decimal form, e.g. 0.005 for 0.5pp).
+    """
+    try:
+        slippage = float(os.getenv("FRICTION_SLIPPAGE_PP", "0.005"))
+    except (ValueError, TypeError):
+        slippage = 0.005
+    try:
+        fee = float(os.getenv("FRICTION_FEE_PP", "0.0"))
+    except (ValueError, TypeError):
+        fee = 0.0
+    return slippage, fee
+
+
 # ============================================================================
 # DATA MODELS
 # ============================================================================
@@ -67,6 +89,10 @@ class TradeResult:
     order_id: Optional[str] = None
     error: Optional[str] = None
     pnl: Optional[float] = None
+    # Phase 5, S42: friction parameters applied at evaluation time. Recorded
+    # so any future re-evaluation can reproduce the same number.
+    slippage_pp: Optional[float] = None
+    fee_pp: Optional[float] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -92,12 +118,16 @@ class TradingLog:
 
     def save(self):
         os.makedirs(os.path.dirname(self.log_path) or ".", exist_ok=True)
-        with open(self.log_path, "w") as f:
+        # Atomic write (Phase 2, S42): tmp file + os.replace prevents
+        # half-written JSON on crash and protects against concurrent reads.
+        tmp = self.log_path + ".tmp"
+        with open(tmp, "w") as f:
             json.dump({
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "total_trades": len(self._trades),
                 "trades": self._trades,
             }, f, indent=2)
+        os.replace(tmp, self.log_path)
 
     def record(self, result: TradeResult):
         self._trades.append(result.to_dict())
@@ -185,13 +215,20 @@ class TradingLog:
                 continue
 
             price_delta = current_price - entry_price
-
+            # Phase 5, S42: apply friction. Slippage + fees are deducted from
+            # the directional price move BEFORE the win/loss decision.
+            # ARCHITECTURE.md §1 mandates this; the prior friction-free
+            # calculation produced 83.7% lifetime "win rate" by counting
+            # +0.0001 ticks as wins on markets with 0.5-2pp spread.
+            slippage_pp, fee_pp = _resolve_friction()
             if side == "BUY":
-                # Bought tokens: profit if price went up
-                pnl = (price_delta / entry_price) * size
+                # Bought tokens: profit if price went up beyond friction
+                effective_delta = price_delta - slippage_pp - fee_pp
+                pnl = (effective_delta / entry_price) * size
             elif side == "SELL":
-                # Sold tokens: profit if price went down
-                pnl = (-price_delta / entry_price) * size
+                # Sold tokens: profit if price went down beyond friction
+                effective_delta = -price_delta - slippage_pp - fee_pp
+                pnl = (effective_delta / entry_price) * size
             else:
                 continue
 
@@ -199,6 +236,8 @@ class TradingLog:
             trade["result"] = "win" if pnl >= 0 else "loss"
             trade["evaluated_at"] = now.isoformat()
             trade["price_at_evaluation"] = current_price
+            trade["slippage_pp"] = slippage_pp
+            trade["fee_pp"] = fee_pp
 
             stats["evaluated"] += 1
             if pnl >= 0:

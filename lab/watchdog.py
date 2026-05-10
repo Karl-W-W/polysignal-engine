@@ -29,9 +29,13 @@ from typing import List, Optional
 
 
 # ── Configuration ────────────────────────────────────────────────────────────
-OUTCOMES_FILE = Path(os.getenv(
-    "OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"
-))
+def _resolve_outcomes_file() -> Path:
+    """Resolve OUTCOMES_FILE at call time (Phase 1, S42)."""
+    return Path(os.getenv(
+        "OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"
+    ))
+
+
 SCANNER_STATUS_FILE = Path(os.getenv(
     "SCANNER_STATUS_FILE",
     os.path.join(os.path.dirname(__file__), ".scanner-status.json")
@@ -45,12 +49,23 @@ TRADING_LOG_FILE = Path(os.getenv(
     os.path.join(os.path.dirname(__file__), "trading_log.json")
 ))
 
+
+def _resolve_truth_board_status() -> Path:
+    """Phase 9, S42: status file written by lab/truth_board.py every 15min."""
+    return Path(os.getenv(
+        "TRUTH_BOARD_STATUS_FILE",
+        os.path.join(os.path.dirname(__file__), ".truth-board-status.json"),
+    ))
+
+
 # Thresholds
 PREDICTION_DROUGHT_HOURS = 24      # Alert if 0 predictions recorded in this window
 ACCURACY_ALERT_THRESHOLD = 0.40    # Alert if accuracy drops below this
 ACCURACY_MIN_SAMPLES = 20          # Minimum evaluated predictions before alerting on accuracy
 SCANNER_STALE_MINUTES = 15         # Alert if scanner status is older than this
 MAX_CONSECUTIVE_ERRORS = 3         # Alert if scanner has this many consecutive errors
+TRUTH_BOARD_STALE_MINUTES = 30     # Alert if truth_board hasn't ticked in this window
+                                   # (Phase 9: timer fires every 15min, alert at 2x)
 
 
 @dataclass
@@ -65,7 +80,8 @@ class WatchdogAlert:
 
 def check_prediction_drought(hours: int = PREDICTION_DROUGHT_HOURS) -> Optional[WatchdogAlert]:
     """Alert if no predictions have been recorded recently."""
-    if not OUTCOMES_FILE.exists():
+    outcomes_file = _resolve_outcomes_file()
+    if not outcomes_file.exists():
         return WatchdogAlert(
             severity="warning",
             check="prediction_drought",
@@ -74,7 +90,7 @@ def check_prediction_drought(hours: int = PREDICTION_DROUGHT_HOURS) -> Optional[
         )
 
     try:
-        data = json.loads(OUTCOMES_FILE.read_text())
+        data = json.loads(outcomes_file.read_text())
         preds = data.get("predictions", [])
         if not preds:
             return WatchdogAlert(
@@ -119,11 +135,12 @@ def check_prediction_drought(hours: int = PREDICTION_DROUGHT_HOURS) -> Optional[
 
 def check_accuracy_regression() -> Optional[WatchdogAlert]:
     """Alert if recent prediction accuracy has dropped below threshold."""
-    if not OUTCOMES_FILE.exists():
+    outcomes_file = _resolve_outcomes_file()
+    if not outcomes_file.exists():
         return None
 
     try:
-        data = json.loads(OUTCOMES_FILE.read_text())
+        data = json.loads(outcomes_file.read_text())
         preds = data.get("predictions", [])
 
         # Only check recent evaluated predictions (last 7 days)
@@ -232,6 +249,61 @@ def check_paper_trade_quality() -> Optional[WatchdogAlert]:
     return None
 
 
+def check_truth_board_health() -> Optional[WatchdogAlert]:
+    """Phase 9, S42: alert if the truth_board timer hasn't ticked recently.
+
+    The truth_board status file lives at lab/.truth-board-status.json and is
+    rewritten every 15 minutes by polysignal-truth-board.timer. If the file
+    is missing or older than TRUTH_BOARD_STALE_MINUTES (default 30), eval
+    isolation is broken and Pillar 1 is back at risk."""
+    status_path = _resolve_truth_board_status()
+    if not status_path.exists():
+        return WatchdogAlert(
+            severity="critical",
+            check="truth_board_health",
+            message="Truth board status file missing — timer may not be running",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            remediation="systemctl --user status polysignal-truth-board.timer",
+        )
+
+    try:
+        data = json.loads(status_path.read_text())
+        ts = _parse_ts(data.get("timestamp", ""))
+        age_minutes = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+
+        if age_minutes > TRUTH_BOARD_STALE_MINUTES:
+            return WatchdogAlert(
+                severity="critical",
+                check="truth_board_health",
+                message=(
+                    f"Truth board status is {age_minutes:.0f}m old "
+                    f"(threshold: {TRUTH_BOARD_STALE_MINUTES}m)"
+                ),
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                remediation="journalctl --user -u polysignal-truth-board.service",
+            )
+
+        # Surface non-fatal eval errors recorded by truth_board itself
+        errors = data.get("errors") or []
+        if errors:
+            return WatchdogAlert(
+                severity="warning",
+                check="truth_board_health",
+                message=f"Truth board reported errors: {', '.join(errors[:3])}",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                remediation="check lab/.truth-board-status.json for full details",
+            )
+    except Exception as e:
+        return WatchdogAlert(
+            severity="warning",
+            check="truth_board_health",
+            message=f"Failed to read truth board status: {e}",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+
+    return None
+
+
 def run_watchdog_checks() -> List[WatchdogAlert]:
     """Run all watchdog checks and return alerts."""
     alerts = []
@@ -241,6 +313,7 @@ def run_watchdog_checks() -> List[WatchdogAlert]:
         check_accuracy_regression,
         check_scanner_health,
         check_paper_trade_quality,
+        check_truth_board_health,
     ]:
         try:
             alert = check_fn()

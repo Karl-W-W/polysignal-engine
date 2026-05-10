@@ -25,9 +25,20 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 # ── Configuration ────────────────────────────────────────────────────────────
-OUTCOMES_FILE = Path(os.getenv(
-    "OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"
-))
+def _resolve_outcomes_file() -> Path:
+    """Resolve the outcomes-file path at call time, not import time.
+
+    Phase 1, S42: previously the module-level constant
+        OUTCOMES_FILE = Path(os.getenv("OUTCOMES_FILE", default))
+    was captured at import, so any test that did monkeypatch.setenv after
+    import had no effect — function defaults were already locked. That bug
+    let test fixtures bleed 110 0xfake_btc rows into the prod outcomes
+    file. Same pattern as the S41 fix on lab.polymarket_trader._DEFAULT_LOG_PATH.
+    """
+    return Path(os.getenv(
+        "OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"
+    ))
+
 
 # How long to wait before evaluating a prediction (must give market time to move)
 EVAL_HORIZONS = {
@@ -37,6 +48,64 @@ EVAL_HORIZONS = {
     "7d": timedelta(days=7),
 }
 DEFAULT_HORIZON = "4h"
+
+# Phase 6, S42 (S41 P1): per-category evaluation horizons. The 4h horizon
+# default was producing 13% accuracy on 6-month political markets that crash
+# 0.295 -> 0.035 on noise — the eval was scoring against short-horizon noise,
+# not resolution. Routing by category gives each market type a horizon that
+# matches the timescale on which the prediction is meaningful.
+EVAL_HORIZONS_BY_CATEGORY = {
+    "crypto": "4h",
+    "sports": "24h",
+    "politics": "7d",
+    "default": "4h",
+}
+
+# Lightweight title-based classifier — no external API call. Used by
+# observation factories (workflows.masterloop._signal_to_observation /
+# _market_to_observation) and as a fallback when a prediction record lacks
+# an explicit category.
+_CATEGORY_KEYWORDS = {
+    "crypto": (
+        "btc", "bitcoin", "eth", "ethereum", "sol ", "solana", "doge", "ada ",
+        "cardano", "xrp", "ripple", "crypto", "blockchain", "stablecoin",
+    ),
+    "sports": (
+        "nfl", "nba", "mlb", "nhl", "epl", "uefa", "fifa",
+        "super bowl", "world cup", "world series", "playoff", "champions",
+        "champion", "championship", "olympics", "ufc", "boxing", "tennis",
+        "soccer", "football", "basketball", "baseball", "hockey", "fight",
+        "match", " vs ",
+    ),
+    "politics": (
+        "election", "president", "senate", "senator", "house", "congress",
+        "prime minister", " pm ", "vote", "ballot", "governor", "mayor",
+        "democrat", "republican", "trump", "biden", "harris", "vance",
+        "putin", "zelensky", "orban", "magyar", "primary", "midterm",
+        "parliament", "minister", "secretary",
+    ),
+}
+
+
+def classify_category(title: Optional[str]) -> str:
+    """Best-effort category from market title. Returns one of:
+    'crypto', 'sports', 'politics', or 'default'. Not perfect — the cost
+    of a misclassified market is only that it gets the wrong eval horizon
+    (4h default rather than 7d for politics). Phase 6, S42.
+    """
+    if not title:
+        return "default"
+    t = title.lower()
+    for cat, kws in _CATEGORY_KEYWORDS.items():
+        if any(kw in t for kw in kws):
+            return cat
+    return "default"
+
+
+def horizon_for_category(category: Optional[str]) -> str:
+    """Resolve a horizon string ('4h' / '24h' / '7d') from a category."""
+    cat = (category or "default").lower()
+    return EVAL_HORIZONS_BY_CATEGORY.get(cat, EVAL_HORIZONS_BY_CATEGORY["default"])
 
 # Minimum price change to count as a directional move (avoid noise)
 # Session 23: Lowered from 0.02 → 0.01 (78% NEUTRAL at 2pp, only 51 samples)
@@ -64,6 +133,10 @@ class PredictionRecord:
     price_at_evaluation: Optional[float] = None
     evaluated_at: Optional[str] = None
     actual_delta: Optional[float] = None
+    # Phase 6, S42: per-category eval horizons. "category" is the bucket
+    # (crypto/sports/politics/default); time_horizon is then resolved from it.
+    # Older records lack this field — eval falls back to time_horizon.
+    category: Optional[str] = None
 
 
 # ── State Persistence ────────────────────────────────────────────────────────
@@ -84,7 +157,8 @@ class OutcomeState:
         # Per-market accuracy tracking (persists across 500-record cap)
         self.per_market: Dict[str, Dict] = {}  # {market_id: {correct, incorrect, neutral, title}}
 
-    def save(self, path: Path = OUTCOMES_FILE):
+    def save(self, path: Optional[Path] = None):
+        path = path or _resolve_outcomes_file()
         path.parent.mkdir(parents=True, exist_ok=True)
         # Protect unevaluated predictions from rotation — they need time
         # to reach their evaluation horizon (4h/24h). Drop evaluated first
@@ -103,18 +177,28 @@ class OutcomeState:
             "stats": self.stats,
             "per_market": self.per_market,
         }
-        with open(path, "w") as f:
+        # Atomic write: tmp file + os.replace. Prevents half-written JSON if
+        # the process dies mid-write, and prevents readers from seeing a
+        # partial file when truth_board (Phase 7) writes concurrently with
+        # the masterloop (Phase 2, S42).
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "w") as f:
             json.dump(data, f, indent=2)
+        os.replace(tmp, path)
 
     @classmethod
-    def load(cls, path: Path = OUTCOMES_FILE) -> "OutcomeState":
+    def load(cls, path: Optional[Path] = None) -> "OutcomeState":
+        path = path or _resolve_outcomes_file()
         state = cls()
         if path.exists():
             try:
                 with open(path, "r") as f:
                     data = json.load(f)
                 state.predictions = data.get("predictions", [])
-                state.stats = data.get("stats", state.stats)
+                # Merge into defaults so partial on-disk stats (e.g. a 5-key
+                # dict missing "neutral") don't replace the full default schema
+                # and KeyError later in evaluate_outcomes. Phase 0, S42.
+                state.stats = {**state.stats, **data.get("stats", {})}
                 state.per_market = data.get("per_market", {})
             except (json.JSONDecodeError, KeyError):
                 pass
@@ -125,7 +209,7 @@ class OutcomeState:
 
 def record_predictions(predictions: List[Dict], observations: List[Dict],
                        cycle_number: int = 0,
-                       state_path: Path = OUTCOMES_FILE) -> int:
+                       state_path: Optional[Path] = None) -> int:
     """Record predictions from the current cycle for later evaluation.
 
     Args:
@@ -137,15 +221,21 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
     Returns:
         Number of predictions recorded.
     """
+    state_path = state_path or _resolve_outcomes_file()
     state = OutcomeState.load(state_path)
 
-    # Build price lookup from observations
-    prices = {}
+    # Build price + category lookup from observations.
+    # Phase 6, S42: observations carry "category" set by perception; if absent
+    # we classify from title here so old observation factories still work.
+    prices: Dict[str, float] = {}
+    categories: Dict[str, str] = {}
     for obs in observations:
         mid = obs.get("market_id")
         price = obs.get("current_price") or obs.get("price", 0.0)
         if mid and price:
             prices[mid] = price
+            cat = obs.get("category") or classify_category(obs.get("title"))
+            categories[mid] = cat
 
     recorded = 0
     now = datetime.now(timezone.utc).isoformat()
@@ -154,7 +244,16 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
         market_id = pred.get("market_id")
         hypothesis = pred.get("hypothesis", "Neutral")
         confidence = pred.get("confidence", 0.0)
-        time_horizon = pred.get("time_horizon", DEFAULT_HORIZON)
+        # Phase 6, S42: explicit category on the prediction wins; else use
+        # the observation lookup; else classify from title; else "default".
+        category = (
+            pred.get("category")
+            or categories.get(market_id)
+            or classify_category(pred.get("title"))
+            or "default"
+        )
+        # Time horizon: explicit on the prediction wins; else routed by category.
+        time_horizon = pred.get("time_horizon") or horizon_for_category(category)
 
         if not market_id or hypothesis == "Neutral":
             continue  # Don't track neutral predictions — no directional claim
@@ -172,6 +271,7 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
             time_horizon=time_horizon,
             cycle_number=cycle_number,
             xgb_p_correct=pred.get("xgb_p_correct"),
+            category=category,
         ))
         state.predictions.append(record)
         state.stats["total_predictions"] += 1
@@ -190,7 +290,7 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
 
 
 def evaluate_outcomes(current_observations: List[Dict],
-                      state_path: Path = OUTCOMES_FILE) -> Dict:
+                      state_path: Optional[Path] = None) -> Dict:
     """Evaluate past predictions against current prices.
 
     Args:
@@ -200,6 +300,7 @@ def evaluate_outcomes(current_observations: List[Dict],
     Returns:
         Dict with evaluation summary: {evaluated, correct, incorrect, neutral, accuracy}
     """
+    state_path = state_path or _resolve_outcomes_file()
     state = OutcomeState.load(state_path)
     now = datetime.now(timezone.utc)
 
@@ -224,9 +325,15 @@ def evaluate_outcomes(current_observations: List[Dict],
         if market_id not in current_prices:
             continue
 
-        # Check if enough time has passed for this prediction's horizon
+        # Check if enough time has passed for this prediction's horizon.
+        # Phase 6, S42: if the record has a category, route through it.
+        # Otherwise fall back to the explicit time_horizon (legacy records).
         pred_time = datetime.fromisoformat(pred["timestamp"])
-        horizon_key = pred.get("time_horizon", DEFAULT_HORIZON)
+        category = pred.get("category")
+        if category:
+            horizon_key = horizon_for_category(category)
+        else:
+            horizon_key = pred.get("time_horizon", DEFAULT_HORIZON)
         horizon_delta = EVAL_HORIZONS.get(horizon_key, EVAL_HORIZONS[DEFAULT_HORIZON])
 
         if now - pred_time < horizon_delta:
@@ -274,7 +381,9 @@ def evaluate_outcomes(current_observations: List[Dict],
     state.stats["total_evaluated"] += evaluated_this_round
     state.stats["correct"] += correct
     state.stats["incorrect"] += incorrect
-    state.stats["neutral"] += neutral
+    # Defensive: belt-and-suspenders against partial stats dicts that survive
+    # the load-merge above (Phase 0, S42).
+    state.stats["neutral"] = state.stats.get("neutral", 0) + neutral
 
     directional = state.stats["correct"] + state.stats["incorrect"]
     if directional > 0:
@@ -293,8 +402,9 @@ def evaluate_outcomes(current_observations: List[Dict],
     }
 
 
-def get_accuracy_summary(state_path: Path = OUTCOMES_FILE) -> str:
+def get_accuracy_summary(state_path: Optional[Path] = None) -> str:
     """Return a one-line accuracy summary for memory/logging."""
+    state_path = state_path or _resolve_outcomes_file()
     state = OutcomeState.load(state_path)
     s = state.stats
     if s["total_evaluated"] == 0:
@@ -307,12 +417,13 @@ def get_accuracy_summary(state_path: Path = OUTCOMES_FILE) -> str:
     )
 
 
-def get_gated_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
+def get_gated_accuracy(state_path: Optional[Path] = None) -> Dict:
     """Return accuracy split by pre-gate vs post-gate (xgb_p_correct present).
 
     Post-gate predictions have xgb_p_correct field set (Session 15+).
     Pre-gate predictions lack this field (all predictions before gate was wired).
     """
+    state_path = state_path or _resolve_outcomes_file()
     state = OutcomeState.load(state_path)
 
     pre_gate = {"correct": 0, "incorrect": 0, "neutral": 0, "total": 0}
@@ -339,12 +450,13 @@ def get_gated_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
     return {"pre_gate": pre_gate, "post_gate": post_gate}
 
 
-def get_per_market_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
+def get_per_market_accuracy(state_path: Optional[Path] = None) -> Dict:
     """Return accuracy breakdown per market_id.
 
     Uses persistent per_market stats that survive the 500-record cap.
     Falls back to scanning active predictions if per_market is empty.
     """
+    state_path = state_path or _resolve_outcomes_file()
     state = OutcomeState.load(state_path)
 
     # Prefer persistent per_market stats (survives 500-record cap)
@@ -382,12 +494,13 @@ def get_per_market_accuracy(state_path: Path = OUTCOMES_FILE) -> Dict:
     return markets
 
 
-def get_accuracy_by_horizon(state_path: Path = OUTCOMES_FILE) -> Dict:
+def get_accuracy_by_horizon(state_path: Optional[Path] = None) -> Dict:
     """Return accuracy split by time horizon (4h vs 24h).
 
     Session 39: Dual-horizon evaluation — compare which horizon
     produces better accuracy so we can optimize over the next week.
     """
+    state_path = state_path or _resolve_outcomes_file()
     state = OutcomeState.load(state_path)
 
     horizons: Dict[str, Dict] = {}

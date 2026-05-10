@@ -29,7 +29,7 @@
 - [x] **Staleness cooldown** (Session 28) — predictions flowing again (6-cycle cooldown)
 - [x] **Whale tracker** (Session 28) — volume spikes, spread collapses, insider detection
 - [x] **Auto-evaluate hypotheses** (Session 28) — learning loop closed, runs hourly
-- **Current (Session 40, 2026-04-20)**: 7-day directional 50% (2W/2L — tiny sample; scanner still at 0 predictions/cycle). Lifetime 47.8% (307W/335L/4591N). **Blocker:** 4h eval horizon on 6-month political markets — Session 41 P1 addresses. **Target**: 60%+ within 1 week of Session 41 landing, 70%+ within 1 month.
+- **Current (Session 42, 2026-05-07)**: Lifetime directional **31.0% (146/471 evaluated)** — recomputed after S42 Phase 4 cleanup removed 110 0xfake_btc test-pollution rows. Scanner at 0 predictions/cycle (pre-existing; un-frozen as of Phase 4 — eval was stuck behind a `KeyError('neutral')` for ~57h since 2026-05-05 06:22 UTC). **Paper-trade win rate under friction: 1.86% (136W/7191L)** — was reported as 83.7% pre-S42 because PnL had no slippage/fees. **Blockers**: (a) per-category eval horizons (S41 P1) shipped Phase 6 but old records can't be re-classified by title — need 7+ days of fresh data for honest per-category accuracy; (b) base rate predictor's price-level bias on crashing markets (S41 P2) still pending. **Target**: 50%+ directional within 2 weeks of fresh data accumulating under the new horizons; live $1 trade gate stays closed until directional ≥50% AND friction-adjusted win rate ≥45%.
 
 ### 1.3 Signal-as-a-Service (x402)
 - [ ] Research x402 micropayment protocol (agent-to-agent USDC)

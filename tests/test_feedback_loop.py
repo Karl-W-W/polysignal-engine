@@ -18,8 +18,10 @@ from lab.feedback_loop import (
 
 @pytest.fixture
 def tmp_outcomes(tmp_path, monkeypatch):
+    """Phase 1 S42: setenv works now that lab.feedback_loop resolves
+    OUTCOMES_FILE at call time."""
     path = tmp_path / "outcomes.json"
-    monkeypatch.setattr("lab.feedback_loop.OUTCOMES_FILE", path)
+    monkeypatch.setenv("OUTCOMES_FILE", str(path))
     return path
 
 

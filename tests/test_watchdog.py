@@ -20,9 +20,10 @@ from lab.watchdog import (
 
 @pytest.fixture
 def tmp_outcomes(tmp_path, monkeypatch):
-    """Create a temporary outcomes file."""
+    """Create a temporary outcomes file. Phase 1 S42: setenv works now that
+    lab.watchdog resolves OUTCOMES_FILE at call time, not import time."""
     path = tmp_path / "outcomes.json"
-    monkeypatch.setattr("lab.watchdog.OUTCOMES_FILE", path)
+    monkeypatch.setenv("OUTCOMES_FILE", str(path))
     return path
 
 
@@ -39,6 +40,14 @@ def tmp_alerts(tmp_path, monkeypatch):
     """Temporary alerts file."""
     path = tmp_path / ".watchdog-alerts"
     monkeypatch.setattr("lab.watchdog.ALERTS_FILE", path)
+    return path
+
+
+@pytest.fixture
+def tmp_truth_board(tmp_path, monkeypatch):
+    """Phase 9, S42: temporary truth_board status file."""
+    path = tmp_path / ".truth-board-status.json"
+    monkeypatch.setenv("TRUTH_BOARD_STATUS_FILE", str(path))
     return path
 
 
@@ -184,6 +193,51 @@ class TestPaperTradeQuality:
         tmp_trading_log.write_text(json.dumps({"trades": trades}))
         alert = check_paper_trade_quality()
         assert alert is None
+
+
+class TestTruthBoardHealth:
+    """Phase 9, S42: watchdog must surface truth_board timer stalls."""
+
+    def test_alert_when_status_missing(self, tmp_truth_board, tmp_alerts):
+        from lab.watchdog import check_truth_board_health
+        # tmp_truth_board.write_text not called -> file doesn't exist
+        alert = check_truth_board_health()
+        assert alert is not None
+        assert alert.severity == "critical"
+        assert "missing" in alert.message.lower()
+
+    def test_alert_when_stale(self, tmp_truth_board, tmp_alerts):
+        from lab.watchdog import check_truth_board_health
+        old = (datetime.now(timezone.utc) - timedelta(minutes=45)).isoformat()
+        tmp_truth_board.write_text(json.dumps({
+            "timestamp": old, "evaluated_count": 0, "errors": [],
+        }))
+        alert = check_truth_board_health()
+        assert alert is not None
+        assert alert.severity == "critical"
+        assert "old" in alert.message.lower()
+
+    def test_no_alert_when_fresh(self, tmp_truth_board, tmp_alerts):
+        from lab.watchdog import check_truth_board_health
+        fresh = datetime.now(timezone.utc).isoformat()
+        tmp_truth_board.write_text(json.dumps({
+            "timestamp": fresh, "evaluated_count": 1, "errors": [],
+        }))
+        alert = check_truth_board_health()
+        assert alert is None
+
+    def test_warning_when_truth_board_reports_errors(
+        self, tmp_truth_board, tmp_alerts
+    ):
+        from lab.watchdog import check_truth_board_health
+        fresh = datetime.now(timezone.utc).isoformat()
+        tmp_truth_board.write_text(json.dumps({
+            "timestamp": fresh, "evaluated_count": 0,
+            "errors": ["DB read failed: locked"],
+        }))
+        alert = check_truth_board_health()
+        assert alert is not None
+        assert alert.severity == "warning"
 
 
 class TestRunWatchdog:

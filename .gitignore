@@ -21,3 +21,4 @@ lab/.deploy-trigger
 lab/.negotiator-log
 frontend/.next/
 .venv/
+:memory:
