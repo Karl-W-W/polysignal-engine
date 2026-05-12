@@ -86,3 +86,77 @@ the predictor is *worse than a coin flip* on markets where it commits.
 S42 didn't fix this; S42 made it visible. The right next move is
 structural — model, features, signal sources — not parameter-tuning
 the gate. Visibility is the whole point of S42, and that's progress.
+
+### 2026-05-11 — Session 43: Operator Console + Agent Chat Real
+
+Shipped as `f7363bf` on origin/main (rode in via `8a628fb`, the
+auto-merge of loop/brain-s42, after a race condition cancelled
+loop/sonnet-primary's own auto-merge — push got `! [rejected] main
+-> main (fetch first)` because origin/main advanced between fetch
+and push). Seat 6 operator REPL verified `> 7×8 → 56` on Sonnet 4.6
+after gateway restart at 2026-05-11 18:37:41 CEST.
+
+Five lessons that compound:
+
+**1. `tmux new -As <name>` attach-vs-create gotcha.** When `<name>`
+already exists, `-A` attaches and silently skips the inline command —
+no error, no warning. Failure mode caught today:
+`SEATS_FORCE_RECREATE=1 launch-seats polysignal` rebuilds only the
+outer `ops_console` session; inner sessions (loop, brain, truth) from
+prior days persist on the same tmux server. The new seat cmds *look*
+applied (yaml dry-run passes) but the old content keeps showing
+because nothing was re-executed in those panes. Workaround:
+`tmux kill-session -t <name>` for each stale inner session, *then*
+FORCE_RECREATE. Editor buffers are safe to kill — nano keeps its
+inode while the session dies, so any saved file content is preserved.
+
+**2. The OpenClaw runtime-model lever is ONE file, ONE path.**
+`~/.openclaw/openclaw.json` → `.agents.defaults.model.{primary,fallbacks}`.
+Not in `/opt/loop/` (the runtime config lives under `/home/cube/`,
+outside the repo, so to "commit a config change" you commit a spec
+doc that records the diff). Not in `~/.openclaw/agents/main/agent/models.json`
+(that file is a provider catalog — pricing, context windows, model
+IDs — not a router override). Gateway restart is required after any
+edit: `systemctl show openclaw-gateway.service -p ExecReload` is
+empty, and `lab/openclaw_heartbeat_config.md` calls out the restart.
+
+**3. `openclaw agent` returns `"completed"` without `--json`.**
+Without the flag, stdout shows only the run-end token; the agent's
+actual reply text is buried at `result.payloads[*].text` in the
+JSON payload. Extract pattern:
+`--json | jq '..|.text? // empty'`. Recursive descent over `..text`
+works cleanly because Claude content blocks use `{type, text}` shape
+and only the assistant-text variant exposes `text` at any depth —
+tool-use and thinking blocks carry different keys.
+
+**4. IDENTITY.md vs runtime drift is a recurring failure mode.**
+IDENTITY.md is descriptive prose ("the character thinks it's X");
+`openclaw.json` is prescriptive ("X is what actually runs"). Today
+IDENTITY claimed `claude-sonnet-4-6 (primary)` while runtime had
+been routing to Haiku 4.5 since Session 40. Two-step rule for future
+sessions when these disagree: (a) query the runtime via
+`openclaw agents` to see which model actually wins — never trust the
+identity doc alone; (b) pick a direction explicitly and change one
+side, not both, after thinking about which side is the source of
+truth. Today's fix moved runtime to match IDENTITY's claim, not the
+other way around.
+
+**5. mDNS gateway probing loop is cosmetic when chat goes over loopback.**
+Seat 6's top pane shows `[bonjour] watchdog detected non-announced
+service ... state=probing` cycling every 10–15s, never reaching
+`announced`. That means `openclaw.local` won't resolve via Bonjour
+across the LAN. But `openclaw agent` over localhost works fine — the
+gateway is healthy on port 18789 itself, just not advertising its
+name on multicast. Don't chase the probing loop unless something on
+the LAN actually needs Bonjour discovery of the gateway.
+
+Sonnet vs Haiku for the operator chat: Haiku 4.5 read `"Reply with
+exactly: the cube root of 729."` literally and replied with the
+literal string `"the cube root of 729."` instead of computing 9.
+Sonnet 4.6 parses the directive/content split correctly (verified
+on `What is 7 times 8? Respond with just the number.` → `"56"`). For
+the Seat 6 REPL — where every operator message is a directive plus
+its content — Sonnet is worth the 3× input + 3× output cost. For the
+120-min heartbeat, which produces ≤300-char acks (~75 output tokens),
+Haiku stays: output-only delta if heartbeat were also swapped is
+~$0.20/month, against near-zero functional gain on structured acks.
