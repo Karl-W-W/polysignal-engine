@@ -58,6 +58,13 @@ RETRAIN_MIN_SAMPLES = 30             # Minimum evaluated before triggering retra
 EVAL_WINDOW_DAYS = 14                # Look at last N days of data
 EV_MINIMUM = 0.10                    # Minimum EV (10%) to recommend trading
 
+# Session 44 (2026-05-21): auto-retrain is a STOP-LOSS-disabled path. The
+# 4h-drift evaluator scores prediction accuracy on tick noise (~31% — see the
+# resolution backtest); retraining XGBoost on those noise labels corrupts the
+# model and restarts the live scanner unsupervised. Default OFF until the
+# evaluator scores against market resolution. Set AUTO_RETRAIN_ENABLED=true to restore.
+AUTO_RETRAIN_ENABLED = os.getenv("AUTO_RETRAIN_ENABLED", "false").lower() in ("true", "1", "yes")
+
 
 @dataclass
 class MarketReport:
@@ -227,12 +234,18 @@ def run_feedback_cycle(window_days: int = EVAL_WINDOW_DAYS) -> FeedbackReport:
         recommendations.append(
             f"RETRAIN: Overall accuracy {overall_accuracy:.0%} below {RETRAIN_TRIGGER_THRESHOLD:.0%} — retrain recommended"
         )
-        # Auto-trigger retrain
-        try:
-            RETRAIN_TRIGGER.write_text(f"feedback_loop retrain trigger {datetime.now(timezone.utc).isoformat()}\n")
-            actions_taken.append("Wrote .retrain-trigger")
-        except Exception:
-            pass
+        # Auto-trigger retrain — Session 44: gated behind AUTO_RETRAIN_ENABLED
+        # (default false). The retrain pipeline trains XGBoost on the noise-scored
+        # evaluator labels and restarts the live scanner; firing it unsupervised
+        # corrupts the model. Re-enable only once the evaluator scores resolution.
+        if AUTO_RETRAIN_ENABLED:
+            try:
+                RETRAIN_TRIGGER.write_text(f"feedback_loop retrain trigger {datetime.now(timezone.utc).isoformat()}\n")
+                actions_taken.append("Wrote .retrain-trigger")
+            except Exception:
+                pass
+        else:
+            actions_taken.append("auto-retrain SUPPRESSED (S44 stop-loss; AUTO_RETRAIN_ENABLED=false)")
 
     # Build report
     report = FeedbackReport(

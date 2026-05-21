@@ -165,7 +165,10 @@ class TestFeedbackCycle:
         star_recs = [r for r in report.recommendations if "STAR" in r]
         assert len(star_recs) == 1
 
-    def test_retrain_triggered_on_bad_accuracy(self, tmp_outcomes, tmp_report, tmp_retrain):
+    def test_retrain_triggered_on_bad_accuracy(self, tmp_outcomes, tmp_report, tmp_retrain, monkeypatch):
+        # S44: auto-retrain is gated behind AUTO_RETRAIN_ENABLED (default off as a
+        # stop-loss). Enable it here so the trigger-write path stays covered.
+        monkeypatch.setattr("lab.feedback_loop.AUTO_RETRAIN_ENABLED", True)
         preds = _make_predictions("terrible", correct=5, incorrect=30)
         tmp_outcomes.write_text(json.dumps({"predictions": preds, "stats": {}}))
         report = run_feedback_cycle()
