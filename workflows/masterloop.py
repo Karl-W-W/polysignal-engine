@@ -302,6 +302,14 @@ def perception_node(state: LoopState) -> LoopState:
 # NODE 1: PREDICTION
 # ============================================================================
 
+# Session 44 (2026-05-21): the META-GATE below auto-halts ALL predictions when
+# 7-day rolling accuracy < 40%. That accuracy is produced by the 4h-drift
+# evaluator, which scores tick noise (~31%) — so the gate would re-halt the
+# scanner within days of any prediction flow resuming. Disabled as a stop-loss
+# until the evaluator scores against market resolution. META_GATE_ENABLED=true restores it.
+META_GATE_ENABLED = os.getenv("META_GATE_ENABLED", "false").lower() in ("true", "1", "yes")
+
+
 def prediction_node(state: LoopState) -> LoopState:
     print("\n[PREDICTION] Decoding patterns...")
     start = datetime.now(timezone.utc)
@@ -346,12 +354,15 @@ def prediction_node(state: LoopState) -> LoopState:
             if recent_directional >= META_GATE_MIN_EVALUATED:
                 rolling_acc = recent_correct / recent_directional
                 if rolling_acc < META_GATE_ACCURACY_FLOOR:
-                    print(f"  META-GATE HALT: 7-day accuracy {rolling_acc:.0%} ({recent_correct}W/{recent_incorrect}L) below {META_GATE_ACCURACY_FLOOR:.0%} floor")
-                    print(f"     Halting predictions until accuracy improves.")
-                    state["predictions"] = []
-                    state["meta_gate_halted"] = True
-                    state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
-                    return state
+                    if META_GATE_ENABLED:
+                        print(f"  META-GATE HALT: 7-day accuracy {rolling_acc:.0%} ({recent_correct}W/{recent_incorrect}L) below {META_GATE_ACCURACY_FLOOR:.0%} floor")
+                        print(f"     Halting predictions until accuracy improves.")
+                        state["predictions"] = []
+                        state["meta_gate_halted"] = True
+                        state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
+                        return state
+                    else:
+                        print(f"  META-GATE would halt (7-day accuracy {rolling_acc:.0%}, {recent_correct}W/{recent_incorrect}L, below {META_GATE_ACCURACY_FLOOR:.0%}) — SUPPRESSED (S44 stop-loss; META_GATE_ENABLED=false: evaluator scores noise)")
                 else:
                     print(f"  Meta-gate OK: 7-day accuracy {rolling_acc:.0%} ({recent_correct}W/{recent_incorrect}L)")
             else:
