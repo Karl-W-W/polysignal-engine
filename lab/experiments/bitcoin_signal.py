@@ -23,7 +23,7 @@ import requests
 import sqlite3
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from lab.time_horizon import derive_time_horizon
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -35,6 +35,17 @@ SEARCH_KEYWORDS   = ["bitcoin", "btc", "crypto", "ethereum", "eth"]
 MIN_LIQUIDITY     = float(os.getenv("MIN_LIQUIDITY", "50000"))  # $50K
 # Session 28: Scan ALL markets (not just crypto) when enabled.
 SCAN_ALL_MARKETS  = os.getenv("SCAN_ALL_MARKETS", "false").lower() in ("true", "1", "yes")
+
+# Session 44 (2026-05-21): only consider markets that RESOLVE within this many
+# days. The resolution backtest found all 4 historical predictions were on
+# multi-month markets — unscoreable until mid-2026. A short-horizon universe
+# lets a statistically evaluable track record accrue in weeks. `endDate` is the
+# gamma resolution-deadline field.
+MAX_DAYS_TO_RESOLUTION = float(os.getenv("MAX_DAYS_TO_RESOLUTION", "7"))
+# Session 44: also require a MINIMUM remaining horizon — exclude markets that
+# have already resolved (past endDate) or resolve too soon to forecast
+# meaningfully. Default 0.25 days (6h).
+MIN_DAYS_TO_RESOLUTION = float(os.getenv("MIN_DAYS_TO_RESOLUTION", "0.25"))
 
 # Markets excluded from signal detection (still recorded for observation data).
 # Session 16: 824952 "MicroStrategy sells any Bitcoin" — 32% accuracy, 33W/70L
@@ -81,6 +92,29 @@ def init_db(conn):
 
 
 # ── Polymarket Fetch ──────────────────────────────────────────────────────────
+
+def _days_to_resolution(market: dict):
+    """Days until a gamma market resolves, read from its `endDate` field.
+    Returns None if endDate is missing or unparseable. Session 44."""
+    ed = market.get("endDate") or market.get("endDateIso")
+    if not ed:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ed).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (dt - datetime.now(timezone.utc)).total_seconds() / 86400.0
+
+
+def _within_horizon(market: dict) -> bool:
+    """True iff the market resolves within [MIN_DAYS_TO_RESOLUTION,
+    MAX_DAYS_TO_RESOLUTION] days. Markets with no parseable endDate, an
+    already-past endDate, or too little remaining life are excluded. Session 44."""
+    dtr = _days_to_resolution(market)
+    return dtr is not None and MIN_DAYS_TO_RESOLUTION <= dtr <= MAX_DAYS_TO_RESOLUTION
+
 
 def fetch_crypto_markets(limit: int = 50) -> list:
     """Fetch Polymarket markets. Crypto-only by default, ALL liquid markets when SCAN_ALL_MARKETS=true."""
@@ -132,18 +166,29 @@ def fetch_crypto_markets(limit: int = 50) -> list:
 
 
 def fetch_all_liquid_markets(max_markets: int = 300) -> list:
-    """Session 28: Fetch ALL Polymarket markets above MIN_LIQUIDITY threshold.
+    """Session 28: Fetch Polymarket markets above MIN_LIQUIDITY, sorted by volume.
 
-    Scans across all categories (politics, sports, crypto, tech, geopolitics, etc.)
-    instead of just crypto keywords. Returns markets sorted by volume.
+    Session 44 (2026-05-21): restricted to markets that RESOLVE within
+    MAX_DAYS_TO_RESOLUTION days, using gamma's end_date_min/end_date_max window,
+    so a statistically evaluable track record can accrue in weeks rather than by
+    mid-2026 (resolution backtest finding). Pagination fixed: gamma caps a page
+    at 100 items, so the offset steps by 100 — the old limit=500 / break-on-<500
+    only ever read the first page (~100 markets).
     """
+    now = datetime.now(timezone.utc)
+    end_min = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_max = (now + timedelta(days=MAX_DAYS_TO_RESOLUTION)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     all_markets = []
-    # Paginate through the /markets endpoint (500 per page)
-    for offset in range(0, 2000, 500):
+    # Paginate the /markets endpoint (gamma caps a page at 100 items).
+    for offset in range(0, 3000, 100):
         try:
             resp = requests.get(
                 "https://gamma-api.polymarket.com/markets",
-                params={"closed": "false", "limit": 500, "offset": offset},
+                params={
+                    "closed": "false", "limit": 100, "offset": offset,
+                    "end_date_min": end_min, "end_date_max": end_max,
+                },
                 headers={"User-Agent": "PolySignal/1.0"},
                 timeout=15,
             )
@@ -159,6 +204,10 @@ def fetch_all_liquid_markets(max_markets: int = 300) -> list:
         for m in batch:
             liquidity = float(m.get("liquidity", 0) or 0)
             if liquidity < MIN_LIQUIDITY:
+                continue
+            # Session 44: the server-side date window can be loose at the edges
+            # — re-check the resolution horizon client-side from endDate.
+            if not _within_horizon(m):
                 continue
             try:
                 op = m.get("outcomePrices", '["0","0"]')
@@ -176,17 +225,19 @@ def fetch_all_liquid_markets(max_markets: int = 300) -> list:
                 "price":     price,
                 "volume":    float(m.get("volume", 0) or 0),
                 "liquidity": liquidity,
+                "end_date":  m.get("endDate"),
                 "url":       f"https://polymarket.com/event/{event_slug}",
             })
 
-        if len(batch) < 500:
+        if len(batch) < 100:
             break
 
     all_markets.sort(key=lambda x: x["volume"], reverse=True)
     # Cap to avoid overwhelming the scanner
     if len(all_markets) > max_markets:
         all_markets = all_markets[:max_markets]
-    print(f"Found {len(all_markets)} liquid markets on Polymarket (min ${MIN_LIQUIDITY:,.0f} liquidity)")
+    print(f"Found {len(all_markets)} short-horizon liquid markets on Polymarket "
+          f"(min ${MIN_LIQUIDITY:,.0f} liquidity, resolve <={MAX_DAYS_TO_RESOLUTION:.0f}d)")
     return all_markets
 
 
