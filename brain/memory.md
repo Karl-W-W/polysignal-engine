@@ -160,3 +160,50 @@ its content — Sonnet is worth the 3× input + 3× output cost. For the
 120-min heartbeat, which produces ≤300-char acks (~75 output tokens),
 Haiku stays: output-only delta if heartbeat were also swapped is
 ~$0.20/month, against near-zero functional gain on structured acks.
+
+### 2026-05-21 — Session 44: Short-Horizon Universe (built + verified, NOT deployed)
+
+No evaluable track record yet. Three changes built and individually verified
+against the live DGX code, committed to branch `s44-short-horizon-universe`
+(6de6253, 5b131ef, 8fc48f8 on top of 92d5da2). NOT deployed — see lesson 1.
+
+**1. The DGX `/opt/loop` is a read-only mirror of GitHub `origin/main`.**
+Cron runs `*/10 * * * * git fetch origin && git reset --hard origin/main`.
+Any direct edit to a tracked file under `/opt/loop` is wiped within 10 minutes
+— the reflog is wall-to-wall `reset: moving to origin/main`. The ONLY durable
+deploy path is commit → push to GitHub `origin/main` → the cron pulls it.
+Editing files on the DGX and restarting does NOT persist. `brain/memory.md`
+is itself caught in this: the scanner appends to it every cycle and the cron
+wipes it every 10 min — it cannot be durably hand-edited on the DGX.
+
+**2. The three changes** (verified in isolation on the live code, in the
+windows between cron resets):
+- Change A (`lab/experiments/bitcoin_signal.py`): `fetch_all_liquid_markets()`
+  restricted to markets resolving in 0.25–7 days via gamma's
+  end_date_min/end_date_max window plus a client-side endDate re-check;
+  pagination fixed (100/page). Pairs with MIN_LIQUIDITY 500000→1000 (drop-in).
+  Verified: returns 300 markets, all 0.25–7d, 0 long-horizon.
+- Change B (`lab/feedback_loop.py`): `.retrain-trigger` auto-write gated behind
+  AUTO_RETRAIN_ENABLED (default false). Verified: feedback_loop tests 13/13.
+  The stale trigger from this morning was deleted.
+- META-GATE (`workflows/masterloop.py`): the sub-40%-accuracy auto-halt in
+  prediction_node gated behind META_GATE_ENABLED (default false). Verified:
+  flag on → halts, flag off → no halt.
+
+**3. State.** The resolution backtest (2026-05-21) found the 598-record
+history is 4 distinct predictions, all long-horizon, only 1 resolved (0/1).
+Once the three changes deploy, a short-horizon universe should yield ~2–3
+predictions/day; N≥30 resolved — the first real edge measurement — is
+reachable ~2nd week of June 2026.
+
+**4. Live scanner is on the original known-good state.** The DGX edits were
+reverted by the cron; the MIN_LIQUIDITY drop-in was restored to 500000 and the
+scanner restarted clean ("66 liquid markets, min $500,000"). Nothing
+half-applied is running.
+
+**5. Next dominoes (named, not actioned).** (a) The Bearish ban
+(`base_rate_predictor.py:64` + `masterloop.py:606`) — the track record will be
+Bullish-only / favorite-skewed until it is lifted; lift after N≥30 exists.
+(b) The 4h-drift evaluator (`outcome_tracker.py:343-357`, MIN_MOVE_THRESHOLD
+0.0005) — the real fix is scoring against resolution; until then META_GATE and
+AUTO_RETRAIN must stay off.
