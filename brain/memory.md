@@ -423,3 +423,5 @@ real edge measurement.**
    `AUTO_RETRAIN_ENABLED` must stay false.
 
 Architecture map (Karl's Job 2) is the next thing on the table.
+
+> **Next session START HERE:** make the live evaluator score market resolution (port `eval/resolution_backtest.py` logic into `outcome_tracker`). This is the keystone — it unblocks the Bearish ban, XGBoost retrain, and META-GATE.
