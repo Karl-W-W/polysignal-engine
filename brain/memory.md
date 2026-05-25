@@ -330,3 +330,96 @@ units active, all three crons active. Pre-S45 known-good state, exactly.
 
 **Next session — single line:** *Fix the staleness detector on a branch, verify,
 then merge it together with `s44-short-horizon-universe`.*
+
+### 2026-05-25 (evening) — Session 45 continued: Staleness Fix Shipped + Merged
+
+The "next session" became "later this session." Staleness fix landed on
+`s44-short-horizon-universe`, merged to `main` via direct fast-forward push.
+The whole S44+S45 set is now live on `main` at `69a4760`.
+
+**The fix** (`workflows/masterloop.py`). Replaced `predictions[-10:]`
+(position-based) with `predictions where timestamp >= now − 30 minutes`
+(time-based). Extracted into module-level `_check_staleness(stored, current,
+cycle_number, …)` so it's unit-testable. Module-level constants:
+`STALE_LOOKBACK_MINUTES=30` (env-overridable), `STALE_MIN_RECENT=5` (skip
+the check on thin batches — prevents cold-start false-positive),
+`STALE_COOLDOWN=6` (unchanged). Old-universe records now age out
+automatically after any universe change — robust to ANY change, not just
+the S44 one.
+
+**Tests** (`tests/test_staleness_detector.py`). 7 unit tests; two
+(`test_old_stale_records_do_not_block_fresh_universe`,
+`test_s44_psg_us_iran_history_does_not_block_new_universe`) FAIL on the
+old position-based logic and PASS on the time-based one — the fix is
+verified, not asserted. The other five pin behavior: recent stuck loop still
+caught, cooldown still works every N cycles, diverse-current override
+unchanged, thin window allowed silently, diverse history allowed silently.
+
+**Deploy + verification (2026-05-25 16:55–17:12 CEST, scanner PID 3264991).**
+- Full pytest on branch code: **517 passed, 4 deselected** in 8:07, HEAD-
+  stable both ends (510 baseline + 7 new tests).
+- Restart on the new code, `MIN_LIQUIDITY=1000` confirmed in `/proc/environ`.
+- 3 cycles watched. **No STALE messages in any cycle.** Cycle 2's cold-start
+  block from earlier today is gone — `_check_staleness` returned the
+  "insufficient recent data" path on all three cycles (`len(recent) <
+  STALE_MIN_RECENT`).
+
+**The honest twist: 0 predictions in cycles 1–3 today, from a DIFFERENT
+cause.** Perception entered signal-mode (2 / 2 / 7 signals detected on
+Iran/oil/crypto markets that recently moved ≥5pp). Signal-observations
+reached the predictors and produced candidates (1+1, 1+1, 4+2). All were
+suppressed downstream:
+- Base-rate gate suppressed **0/4 in Cycle 3** — likely 4 low-priced
+  longshots → `from_price_levels` Bearish → `BAN_BEARISH_OUTPUT` →
+  Neutral conf=0.0 → gate `if Neutral: continue`.
+- Momentum gate suppressed **0/2 in Cycle 3** — two already-Bullish
+  `predict_market_moves` outputs at 0.80, killed by the **XGBoost gate**
+  because the Apr-15 model (trained on noise-labelled
+  `prediction_outcomes.json`) returned `p_correct < 0.5`.
+
+This is NOT a staleness failure and does not block the merge per Karl's
+rule. It's the **Bearish ban + XGBoost-trained-on-noise** dominoes already
+on the post-N≥30 list, made visible by a signal-mode cold start (yesterday
+was a no-signal-mode cold start, where the same dominoes were dormant).
+
+**Throughput / N≥30 — revised.** Yesterday's no-signal mode (2026-05-25
+15:13–15:55) produced 35–60 predictions/day steady-state from Cycle 5
+onwards. Today's signal-mode (post-fix, 16:55–17:12) produced **0** in
+17 minutes. The honest read: throughput is **highly mode-dependent**;
+N≥30 resolved is still reachable on the order of 1–3 weeks, but the
+spread is wider than the static census suggested. Mid-June is still
+plausible; late-June is now in the realistic envelope.
+
+**Final state on `main` (`origin/main` at `69a4760`).**
+- 7 commits ahead of the pre-S44 baseline `92d5da2`: Change A (short-horizon
+  filter + pagination fix), Change B (auto-retrain stop-loss), META-GATE
+  (default-off auto-halt), S44 brain entry, `:memory:` known-issue note,
+  S45 in-progress brain entry, S45 staleness fix + tests.
+- DGX on `main` at `69a4760`. Scanner active PID 3264991 with
+  `MIN_LIQUIDITY=1000` in `/proc/environ`. ActiveEnterTimestamp 16:55:31.
+- All six previously-paused units re-enabled in safe order: four `.path`
+  units → truth-board timer → both crons (restored verbatim from
+  `/home/cube/crontab.bak-s45-redeploy-2026-05-25.txt`) →
+  `openclaw-gateway` (Loop) LAST. No trigger files were lingering.
+- The `*/10 git reset --hard origin/main` cron is back; from now on, any
+  push to `main` propagates to the DGX within 10 minutes.
+
+**Next dominoes — named, not actioned, in order of priority for the next
+real edge measurement.**
+1. **Bearish ban** (`lab/base_rate_predictor.py:64` `BAN_BEARISH_OUTPUT` +
+   `workflows/masterloop.py:606` momentum bearish skip). Until lifted, the
+   track record is Bullish-only / favorite-skewed and the system can't
+   predict any of the low-priced longshots that signal-mode finds. Lift
+   only AFTER N≥30 exists AND the evaluator is fixed.
+2. **XGBoost gate trained on noise** (`workflows/masterloop.py:582+` calling
+   `lab.xgboost_baseline.load_model()`; model at
+   `/opt/loop/data/models/xgboost_baseline.pkl` dated 2026-04-15). Currently
+   rejects 100% of momentum Bullish predictions because the training labels
+   are from the broken 4h-drift evaluator. Do NOT retrain it until the
+   evaluator is fixed — otherwise we'd just lock in the noise.
+3. **The 4h-drift evaluator itself** (`lab/outcome_tracker.py:343-357`,
+   `MIN_MOVE_THRESHOLD = 0.0005`). The real fix scores resolution rather
+   than 4h price drift. Until that lands, `META_GATE_ENABLED` and
+   `AUTO_RETRAIN_ENABLED` must stay false.
+
+Architecture map (Karl's Job 2) is the next thing on the table.
