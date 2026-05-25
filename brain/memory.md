@@ -207,3 +207,26 @@ Bullish-only / favorite-skewed until it is lifted; lift after N≥30 exists.
 (b) The 4h-drift evaluator (`outcome_tracker.py:343-357`, MIN_MOVE_THRESHOLD
 0.0005) — the real fix is scoring against resolution; until then META_GATE and
 AUTO_RETRAIN must stay off.
+
+**6. Known issue surfaced during S45 prep (2026-05-25) — `:memory:` test pollution.**
+`tests/test_masterloop_e2e.py` lines 271, 300, 383 do
+`patch("workflows.masterloop.os.getenv", return_value=":memory:")` — patching
+**every** `os.getenv` call in `workflows.masterloop` to return the literal
+string `:memory:`. The intent was an in-memory sqlite handle for
+`OUTCOMES_FILE`; the actual effect is that `record_predictions` does
+`Path(":memory:")` → `open(":memory:", "w")` and writes to a real file at
+`/opt/loop/:memory:`. The file is untracked but is listed in `.gitignore:24`
+(so the pattern was known and silently tolerated). It accumulates across runs
+— from 3083 bytes at S44 (2026-05-21) to 5051 bytes by S45 (2026-05-25). Once
+≥10 identical `0xfake_btc Bullish@0.82` records accumulate, the masterloop
+staleness detector (`masterloop.py:505-548`, S27/S31 code, untouched by S44)
+fires on the test's "current cycle" and returns empty predictions —
+silently failing any test that asserts `len(final["predictions"]) > 0` on a
+non-cycle-6 final cycle (e.g. `test_xgboost_gate_passes_high_confidence`).
+Confirmed 2026-05-25 by a clean experiment: delete `/opt/loop/:memory:`, run
+the single test → PASS (0.66s); delete again, run the full suite → 510 passed
+in 279s. Proper fix is to patch `OUTCOMES_FILE` specifically (the S42 path
+helper resolves it lazily — `monkeypatch.setenv("OUTCOMES_FILE", str(tmp_path))`
+is what `tests/test_feedback_loop.py` already uses correctly). Workaround
+until then: `rm -f /opt/loop/:memory:` before any pytest run. NOT FIXED in S44
+— out of scope.
