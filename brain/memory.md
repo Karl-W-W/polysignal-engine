@@ -230,3 +230,103 @@ helper resolves it lazily — `monkeypatch.setenv("OUTCOMES_FILE", str(tmp_path)
 is what `tests/test_feedback_loop.py` already uses correctly). Workaround
 until then: `rm -f /opt/loop/:memory:` before any pytest run. NOT FIXED in S44
 — out of scope.
+
+### 2026-05-25 — Session 45: S44 Deployment — Verified Live, Not Merged
+
+S44's three changes deployed to the DGX in a verified-quiet window. The pipeline
+produced real predictions on real short-horizon markets — Alphabet and Apple at
+$0.83, Bullish, conf 0.833. **S44 works end-to-end.** Branch pushed to origin at
+`0334e38`, **not merged** — the staleness detector tripped the first two cycles
+and is the next domino to address before a clean merge.
+
+**1. The full deploy-vector map (the headline finding).** The DGX `/opt/loop` is
+a read-only mirror of `origin/main` via a `*/10` cron `git reset --hard`. But
+that cron is NOT the only thing that resets the tree or restarts the scanner —
+there is a second autonomous vector: `polysignal-deploy.path` watches
+`lab/.deploy-trigger`, fires `deploy-handler.sh`, which does
+`git fetch origin && git reset --hard origin/main` then
+`systemctl restart polysignal-scanner.service`. **Loop itself writes that
+trigger** from inside the sandbox per `AUTONOMY_SPEC.md:52` ("Deploy: writing to
+.deploy-trigger, pushing to CI branches, merging PRs") and
+`LOOP_TASKS.md:46`. Loop fired the trigger at 14:14:53 mid-S45, wiping a
+mid-flight checkout. Loop runs continuously on `openclaw-gateway.service` — not
+just on its 120-min heartbeat. Pausing the gateway is the upstream control over
+every trigger file (`.deploy-trigger`, `.restart-scanner`, `.git-push-request`,
+`.retrain-trigger`).
+
+**2. The full pause set for a deploy window (verified safe — held a clean 10-min
+pytest + a 22-min live-cycle window):**
+- cron `*/10 cd /opt/loop && git fetch origin && git reset --hard origin/main`
+- cron `*/5 /opt/loop/scripts/watchdog-host.sh` (crash-only, but pause for total quiet)
+- `polysignal-deploy.path` + `polysignal-deploy.service`
+- `polysignal-truth-board.timer` (writes `prediction_outcomes.json` every 15 min)
+- `polysignal-scanner-restart.path`
+- `polysignal-git-push.path`
+- `polysignal-retrain.path`
+- `openclaw-gateway.service` — **LAST**, since it's the source of every trigger
+Re-enable in reverse safe order: delete any trigger files Loop dropped during
+the pause → start the four `.path` units → start truth-board timer → restore
+crontab from backup → start openclaw-gateway LAST.
+
+**3. Live cycle evidence — what S44's code actually did** (PID 3070362,
+2026-05-25 15:13:39 → 15:55:16 CEST):
+- Cycle 1 (47s): 300 short-horizon markets observed, 0 predictions. Volatility
+  gate filtered 35/35 candidates — the new short-horizon universe has cold-start
+  observation history.
+- Cycle 2 (51s): 0 predictions. 2 candidates reached the predictor (1 base-rate +
+  1 momentum-Neutral on a Trump market). **Staleness check** (`masterloop.py:505-548`)
+  blocked them — the last-10 records in `prediction_outcomes.json` were the S44-era
+  PSG/US-Iran pattern (2 unique signatures), `current_sigs ≤ 2` failed the
+  diverse-batch override, cooldown branch fired (`cycle % 6 != 0`).
+- **Cycle 3 (51s): 2 predictions recorded.** The volatility gate started letting
+  more markets through; `current_sigs > 2` triggered the staleness override.
+- Cycle 4: 2 / Cycle 5: 3 / Cycle 6: 3 / Cycle 7: 4 / Cycle 8: 5. Steady-state
+  throughput from Cycle 5 onwards ≈ 3–5 predictions per 5-min cycle ≈
+  **35–60 predictions/day**. Far above the static-census ~2–3/day estimate.
+- Cycle 6 detail: 300 → 265 near-decided filtered → 35 → 14 frozen → 21 to
+  predictor → 14 base-rate + 7 momentum. `🔍 Base rate gate (>=0.5): 3 passed,
+  11 suppressed`. Momentum gate: 0/7 passed. 3 hypotheses → 3 records → 2 paper
+  trades to `trading_log.json` (Alphabet $0.83, Apple $0.83).
+- All 28 new records in `prediction_outcomes.json` over 25 min were **Bullish**
+  (Bearish ban active end-to-end). Markets: `569343, 1999690, 1999660, 1972137,
+  2118910` — entirely new short-horizon markets, none of the S44-era stale 4.
+
+**4. The staleness detector is the next real domino** (`masterloop.py:505-548`,
+S27/S31 code, untouched by S44). It works correctly in steady state — the
+override `current_sigs > 2 → "current batch diverse — allowing through"` handles
+the common case. But it cold-start-blocks for ~10 minutes after any universe
+change, because immediately after a fresh start the volatility gate has no 7-day
+swing history for the new markets, the candidate pool collapses to ≤2 unique,
+and the cooldown reasoning fires: "history says stuck, current confirms stuck,
+wait until cycle % 6 == 0." But if the universe has just CHANGED, the "stuck"
+history is meaningless — those records are about the OLD universe's stale
+markets. Two viable fixes for next session:
+- **Time-recency over position-recency**: replace `predictions[-10:]` with
+  `predictions where timestamp >= now - N_minutes`. New-universe records dominate
+  the recent window quickly; old stale markets age out of consideration.
+- **Universe-size-aware threshold**: scale the "≤2 unique" trigger by the
+  current candidate pool. With 1–2 candidates, "all same signature" is normal;
+  only flag stale if ≥5 candidates all coincide.
+Either decouples staleness detection from "small batch on a fresh universe."
+
+**5. The `:memory:` known-issue cleanup is also blocked on the same merge.**
+The S44 entry's point 6 documented the `tests/test_masterloop_e2e.py` global
+`os.getenv` patch that creates `/opt/loop/:memory:` test pollution. That fix
+should ride along with the staleness fix on the merged branch.
+
+**6. Branch state at session end.** `s44-short-horizon-universe` at `0334e38`
+on `origin`, **5 commits ahead of `main`**:
+- `6de6253` — Change A (short-horizon market filter)
+- `5b131ef` — Change B (auto-retrain stop-loss)
+- `8fc48f8` — META-GATE (default-off auto-halt)
+- `fb32a02` — S44 brain entry (built, verified, not deployed)
+- `0334e38` — `:memory:` known-issue note
+**NOT merged to `main`**. Awaits the staleness fix to land beside it.
+
+**7. Live system at session end.** DGX reverted to `main` (`92d5da2`), scanner
+restarted on old code (PID 3156536, MIN_LIQUIDITY=500000), all paused mechanisms
+re-enabled in safe order, no trigger files lingering, all six previously-paused
+units active, all three crons active. Pre-S45 known-good state, exactly.
+
+**Next session — single line:** *Fix the staleness detector on a branch, verify,
+then merge it together with `s44-short-horizon-universe`.*
