@@ -309,6 +309,89 @@ def perception_node(state: LoopState) -> LoopState:
 # until the evaluator scores against market resolution. META_GATE_ENABLED=true restores it.
 META_GATE_ENABLED = os.getenv("META_GATE_ENABLED", "false").lower() in ("true", "1", "yes")
 
+# Session 45 (2026-05-25): the staleness detector below blocks the scanner if
+# the predictor appears stuck. The S25/S27/S31 version read predictions[-10:]
+# (position-based), which cold-start-blocked the scanner for ~10 min after
+# every universe change because the previous universe's ten last records
+# dominated the trailing-position window indefinitely until cycle_number %
+# cooldown == 0. S45 fix: filter by TIMESTAMP instead — old-universe records
+# age out automatically. Logic extracted into _check_staleness for unit tests.
+STALE_LOOKBACK_MINUTES = float(os.getenv("STALE_LOOKBACK_MINUTES", "30"))
+STALE_MIN_RECENT = int(os.getenv("STALE_MIN_RECENT", "5"))
+STALE_COOLDOWN = int(os.getenv("STALE_COOLDOWN", "6"))
+
+
+def _check_staleness(
+    stored_predictions,
+    current_predictions,
+    cycle_number,
+    *,
+    lookback_minutes=None,
+    min_recent=None,
+    cooldown_cycles=None,
+    now=None,
+):
+    """Decide whether the predictor is stuck and the current cycle should skip.
+
+    Returns (should_skip_cycle: bool, log_message: str). Empty log_message means
+    nothing notable to report.
+
+    S45 fix: filters `stored_predictions` to only those whose ``timestamp`` is
+    within the last ``lookback_minutes``. The earlier version used
+    ``predictions[-10:]`` (position-based), which cold-start-blocked the
+    scanner for ~10 minutes after every universe change because the previous
+    universe's ten last records dominated the trailing-position window
+    indefinitely until ``cycle_number % cooldown_cycles == 0``.
+    """
+    if lookback_minutes is None:
+        lookback_minutes = STALE_LOOKBACK_MINUTES
+    if min_recent is None:
+        min_recent = STALE_MIN_RECENT
+    if cooldown_cycles is None:
+        cooldown_cycles = STALE_COOLDOWN
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    cutoff = (now - timedelta(minutes=lookback_minutes)).isoformat()
+    recent = [p for p in stored_predictions if (p.get("timestamp") or "") >= cutoff]
+
+    # Too thin a window to make a stale-loop determination: silently allow.
+    if len(recent) < min_recent:
+        return False, ""
+
+    signatures = {
+        (p.get("market_id"), p.get("hypothesis"), round(p.get("confidence", 0), 2))
+        for p in recent
+    }
+    # History diverse — no staleness condition. Silently allow.
+    if len(signatures) > 2:
+        return False, ""
+
+    current_sigs = {
+        (p.get("market_id"), p.get("hypothesis"), round(p.get("confidence", 0), 2))
+        for p in current_predictions
+    }
+    # Current batch diverse — assume the predictor is unsticking. Allow with note.
+    if len(current_sigs) > 2:
+        return False, (
+            f"⚠ History stale ({len(signatures)} unique in last "
+            f"{lookback_minutes:.0f}m) but current batch diverse "
+            f"({len(current_sigs)} unique) — allowing through."
+        )
+
+    stale_desc = ", ".join(f"{s[0]} {s[1]}@{s[2]}" for s in sorted(signatures, key=str))
+    if cycle_number % cooldown_cycles != 0:
+        next_allowed = cycle_number + cooldown_cycles - cycle_number % cooldown_cycles
+        return True, (
+            f"⚠ STALE: only {len(signatures)} unique signature(s) in last "
+            f"{lookback_minutes:.0f}m: {stale_desc}. "
+            f"Skipping (cooldown: next allowed at cycle {next_allowed})."
+        )
+    return False, (
+        f"⚠ STALE ({len(signatures)} unique) but cooldown expired "
+        f"(cycle {cycle_number}): allowing prediction through."
+    )
+
 
 def prediction_node(state: LoopState) -> LoopState:
     print("\n[PREDICTION] Decoding patterns...")
@@ -513,48 +596,29 @@ def prediction_node(state: LoopState) -> LoopState:
 
         predictions = base_rate_preds + momentum_preds
 
-        # ── Staleness detection (Session 27) ─────────────────────────────────
-        # If the last N recorded predictions are identical (same market, same
-        # hypothesis, same rounded confidence), the predictor is stuck in a loop.
-        # Skip this cycle to avoid accumulating stale predictions.
-        STALE_LOOKBACK = 10
-        STALE_COOLDOWN = 6  # Allow 1 prediction every N stale cycles
+        # ── Staleness detection (Session 27, S45 time-recency fix) ───────────
+        # Logic extracted into module-level _check_staleness for testability.
+        # S45 fix: time-windowed lookback (STALE_LOOKBACK_MINUTES) replaces the
+        # last-10-by-position lookback — old-universe records age out
+        # automatically after a universe change instead of dominating the
+        # trailing-position window until cycle_number % cooldown == 0.
         try:
             from lab.outcome_tracker import OutcomeState
             outcomes_path = Path(os.getenv("OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json"))
             if outcomes_path.exists():
                 outcome_state = OutcomeState.load(outcomes_path)
-                recent = outcome_state.predictions[-STALE_LOOKBACK:] if len(outcome_state.predictions) >= STALE_LOOKBACK else []
-                if recent:
-                    signatures = set()
-                    for p in recent:
-                        sig = (p.get("market_id"), p.get("hypothesis"), round(p.get("confidence", 0), 2))
-                        signatures.add(sig)
-                    # Session 31: trigger if ≤2 unique signatures (catches
-                    # alternating markets like 559660/561229 repeating forever)
-                    if len(signatures) <= 2:
-                        # Before blocking: check if CURRENT predictions are diverse.
-                        # If we're about to record diverse predictions (>2 unique),
-                        # history staleness is being resolved — let them through.
-                        current_sigs = set()
-                        for p in predictions:
-                            csig = (p.get("market_id"), p.get("hypothesis"), round(p.get("confidence", 0), 2))
-                            current_sigs.add(csig)
-                        if len(current_sigs) > 2:
-                            print(f"  ⚠ History stale ({len(signatures)} unique) but current batch diverse ({len(current_sigs)} unique) — allowing through.")
-                        else:
-                            stale_desc = ", ".join(f"{s[0]} {s[1]}@{s[2]}" for s in signatures)
-                            # Cooldown: allow 1 prediction through every N cycles
-                            cycle_num = state.get("cycle_number", 0)
-                            if cycle_num % STALE_COOLDOWN != 0:
-                                print(f"  ⚠ STALE: Last {STALE_LOOKBACK} predictions only {len(signatures)} unique: {stale_desc}")
-                                print(f"     Skipping (cooldown: next allowed at cycle {cycle_num + STALE_COOLDOWN - cycle_num % STALE_COOLDOWN}).")
-                                state["predictions"] = []
-                                state["stale_detected"] = True
-                                state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
-                                return state
-                            else:
-                                print(f"  ⚠ STALE ({len(signatures)} unique) but cooldown expired (cycle {cycle_num}): allowing prediction through.")
+                should_skip, log_msg = _check_staleness(
+                    outcome_state.predictions,
+                    predictions,
+                    cycle_number=state.get("cycle_number", 0),
+                )
+                if log_msg:
+                    print(f"  {log_msg}")
+                if should_skip:
+                    state["predictions"] = []
+                    state["stale_detected"] = True
+                    state["stage_timings"]["prediction"] = (datetime.now(timezone.utc) - start).total_seconds()
+                    return state
         except Exception as e:
             print(f"  ⊘ Staleness check skipped: {e}")
 
