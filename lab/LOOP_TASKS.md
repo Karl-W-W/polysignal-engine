@@ -1,5 +1,5 @@
 # Loop Task Queue
-# Updated: 2026-04-17 (Session 40 — Claude Code)
+# Updated: 2026-05-26 (Session 46 — Claude Code, stand-down block at top)
 #
 # WHY THIS FILE EXISTS:
 # TASKS.md and PROGRESS.md are mounted as individual file bind mounts in Docker.
@@ -8,6 +8,51 @@
 #
 # Loop: READ THIS FILE instead of /mnt/polysignal/TASKS.md for current tasks.
 # After completing a task, mark it [x] here AND report on Telegram.
+
+---
+
+## 🛑 P0 — SESSION 46 STAND-DOWN (2026-05-26 19:10 CEST, set by Claude Code)
+
+**You are correct that the live accuracy (36%) is bad. You are wrong about the fix.**
+Your 11:21 / 13:21 / 13:32 CET heartbeats recommended: (a) retrain XGBoost; (b) kill 24h
+predictions; (c) cap confidence at 65%; (d) lift the Bearish ban. **All of those are
+treating symptoms.** The single root cause is the **evaluator** — `lab/outcome_tracker.py`
+scores predictions against 4h/24h price drift vs `MIN_MOVE_THRESHOLD = 0.0005`, which is
+sub-tick noise, not market resolution. Proven by `eval/resolution_backtest.py` (S44).
+The "36% accuracy" is the broken instrument reading itself.
+
+**Until Claude Code finishes porting `eval/resolution_backtest.py` into the live
+evaluator (THIS session), the following are HARD STOPS:**
+
+1. **DO NOT** call `lab.xgboost_baseline.train_model()`. The training labels in
+   `prediction_outcomes.json` come from the broken evaluator — retraining now would
+   permanently bake noise into the model.
+2. **DO NOT** write `lab/.retrain-trigger`. `AUTO_RETRAIN_ENABLED=false` is gated in
+   `lab/feedback_loop.py:66`; that gate is the stop-loss — do not bypass it.
+3. **DO NOT** edit `lab/outcome_tracker.py`, `lab/feedback_loop.py`,
+   `workflows/masterloop.py` (META-GATE or staleness or Bearish ban),
+   `lab/base_rate_predictor.py` (BAN_BEARISH_OUTPUT), or `lab/xgboost_baseline.py`.
+   Claude Code is on a branch right now; concurrent edits cause conflicts.
+4. **DO NOT** write `lab/.deploy-trigger` or `lab/.restart-scanner` — the
+   evaluator branch needs the full S44/S45-style controlled deploy window.
+5. **DO NOT** change `MIN_MOVE_THRESHOLD`, `EVAL_HORIZONS`, or the 24h dual-horizon
+   recording. They are part of the broken instrument and will be replaced wholesale.
+
+**What you CAN do this cycle (and following heartbeats until further notice):**
+- Read-only diagnostics on `prediction_outcomes.json`, `data/polysignal.db`,
+  `lab/trading_log.json`, scanner journal.
+- Status reporting on Telegram (thermals, scanner cycles, pred counts).
+- MoltBook scan + engagement (unrelated to the evaluator chain).
+- ANSWER if Karl asks. Do not act unilaterally.
+
+**Ack format (next heartbeat):** reply on Telegram with the literal string
+`S46-STAND-DOWN ACK` plus one line confirming you will not retrain or touch the
+evaluator-chain files until Claude Code clears the stand-down.
+
+**Why this matters (one line):** if you retrain XGBoost on the current labels, the
+broken instrument's noise becomes the model's ground truth. We then have to throw away
+the model AND the labels, not just the labels. The cost of a single `train_model()` call
+right now is the next 2 weeks of work.
 
 ---
 
