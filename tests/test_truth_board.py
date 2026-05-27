@@ -104,6 +104,14 @@ def test_run_once_evaluates_and_writes_status(
     pending prediction, writes lab/.truth-board-status.json."""
     # Point TradingLog at a tmp dir to avoid touching prod paths if defaults leak.
     monkeypatch.setenv("TRADING_LOG_FILE", str(tmp_path / "trading_log.json"))
+    # S46: evaluate_outcomes now scores against Polymarket resolution. Mock
+    # the gamma lookup so M_BTC (Bullish) resolves YES — the same CORRECT
+    # outcome this test asserted before, just sourced from resolution
+    # instead of 4h price drift.
+    monkeypatch.setattr(
+        "lab.outcome_tracker.lookup_resolution",
+        lambda mid: ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+    )
 
     status = truth_board.run_once()
 

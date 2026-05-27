@@ -61,9 +61,9 @@ class TestRecordPredictions:
         assert count == 2
 
         state = OutcomeState.load(state_file)
-        # Session 39: 4h predictions also create a 24h copy (BTC is 4h, ETH is 1h)
-        assert len(state.predictions) == 3  # 2 primary + 1 dual-horizon (BTC 24h)
-        assert state.stats["total_predictions"] == 3
+        # S46 dropped the S39 dual-horizon — one record per prediction.
+        assert len(state.predictions) == 2
+        assert state.stats["total_predictions"] == 2
 
     def test_skips_neutral_predictions(self, sample_observations, state_file):
         preds = [{"market_id": "0xbtc", "hypothesis": "Neutral", "confidence": 0.5}]
@@ -114,9 +114,9 @@ class TestRecordPredictions:
         record_predictions(sample_predictions, sample_observations,
                           cycle_number=2, state_path=state_file)
         state = OutcomeState.load(state_file)
-        # Session 39: each cycle has 2 primary + 1 dual-horizon = 3 records
-        assert len(state.predictions) == 6
-        assert state.stats["total_predictions"] == 6
+        # S46: 2 records per cycle (no dual-horizon sibling).
+        assert len(state.predictions) == 4
+        assert state.stats["total_predictions"] == 4
 
 
 # ============================================================================
@@ -124,8 +124,11 @@ class TestRecordPredictions:
 # ============================================================================
 
 class TestEvaluateOutcomes:
+    """Resolution-scoring (S46). Tests pre-S46 pinned the drift scorer and
+    its MIN_MOVE_THRESHOLD / horizon-elapsed gate; both are gone."""
+
     def _seed_predictions(self, state_file, hours_ago=5):
-        """Seed state with predictions from N hours ago."""
+        """Seed state with two pending predictions (BTC Bullish, ETH Bearish)."""
         state = OutcomeState()
         ts = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat()
         state.predictions = [
@@ -161,72 +164,88 @@ class TestEvaluateOutcomes:
         state.stats["total_predictions"] = 2
         state.save(state_file)
 
-    def test_correct_bullish(self, state_file):
+    @staticmethod
+    def _patch_lookup(monkeypatch, mapping):
+        """Patch lookup_resolution so it returns one of:
+            mapping[mid] = ("resolved_yes" | "resolved_no" | "unresolved" | ...,
+                            {"outcome0_price_now": float, "closed": bool})
+        """
+        def fake(mid):
+            return mapping.get(mid, ("unresolved", {"closed": False}))
+        monkeypatch.setattr("lab.outcome_tracker.lookup_resolution", fake)
+
+    def test_correct_when_resolution_matches_hypothesis(
+        self, state_file, monkeypatch
+    ):
         self._seed_predictions(state_file)
-        obs = [
-            {"market_id": "0xbtc", "current_price": 0.70},  # +0.10, bullish correct
-            {"market_id": "0xeth", "current_price": 0.40},  # -0.10, bearish correct
-        ]
-        result = evaluate_outcomes(obs, state_path=state_file)
+        self._patch_lookup(monkeypatch, {
+            "0xbtc": ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+            "0xeth": ("resolved_no", {"outcome0_price_now": 0.0, "closed": True}),
+        })
+        # Current obs would push drift scoring to mark these CORRECT too, but
+        # the new scorer ignores drift and only consults the mocked gamma.
+        result = evaluate_outcomes([], state_path=state_file)
         assert result["correct"] == 2
         assert result["incorrect"] == 0
 
-    def test_incorrect_prediction(self, state_file):
+    def test_incorrect_when_resolution_opposes_hypothesis(
+        self, state_file, monkeypatch
+    ):
         self._seed_predictions(state_file)
-        obs = [
-            {"market_id": "0xbtc", "current_price": 0.50},  # -0.10, bullish WRONG
-            {"market_id": "0xeth", "current_price": 0.60},  # +0.10, bearish WRONG
-        ]
-        result = evaluate_outcomes(obs, state_path=state_file)
+        self._patch_lookup(monkeypatch, {
+            "0xbtc": ("resolved_no", {"outcome0_price_now": 0.0, "closed": True}),
+            "0xeth": ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+        })
+        result = evaluate_outcomes([], state_path=state_file)
         assert result["incorrect"] == 2
         assert result["correct"] == 0
 
-    def test_neutral_if_small_move(self, state_file):
-        self._seed_predictions(state_file)
-        # Session 39: threshold lowered to 0.0005 (0.05pp)
-        obs = [
-            {"market_id": "0xbtc", "current_price": 0.60025},  # +0.00025, below 0.05pp
-            {"market_id": "0xeth", "current_price": 0.49975},  # -0.00025, below 0.05pp
-        ]
-        result = evaluate_outcomes(obs, state_path=state_file)
-        assert result["neutral"] == 2
-        assert result["correct"] == 0
-
-    def test_directional_at_new_threshold(self, state_file):
-        """Session 39: 0.05pp (0.0005) moves should now be directional, not NEUTRAL."""
-        self._seed_predictions(state_file)
-        obs = [
-            {"market_id": "0xbtc", "current_price": 0.601},   # +0.001 (0.1pp), bullish correct
-            {"market_id": "0xeth", "current_price": 0.499},   # -0.001 (0.1pp), bearish correct
-        ]
-        result = evaluate_outcomes(obs, state_path=state_file)
-        assert result["correct"] == 2
-        assert result["neutral"] == 0
-
-    def test_skips_if_horizon_not_reached(self, state_file):
-        self._seed_predictions(state_file, hours_ago=1)  # Only 1h ago, need 4h
-        obs = [{"market_id": "0xbtc", "current_price": 0.90}]
-        result = evaluate_outcomes(obs, state_path=state_file)
+    def test_unresolved_market_stays_pending_regardless_of_horizon(
+        self, state_file, monkeypatch
+    ):
+        """Pre-S46 would evaluate at 4h+ on drift. S46 only evaluates on
+        actual resolution; unresolved markets stay pending forever."""
+        self._seed_predictions(state_file, hours_ago=240)  # 10 days
+        self._patch_lookup(monkeypatch, {
+            "0xbtc": ("unresolved", {"closed": False}),
+            "0xeth": ("unresolved", {"closed": False}),
+        })
+        result = evaluate_outcomes([], state_path=state_file)
         assert result["evaluated"] == 0
 
-    def test_accuracy_calculation(self, state_file):
+    def test_evaluates_immediately_on_resolution_without_horizon_wait(
+        self, state_file, monkeypatch
+    ):
+        """Pre-S46 would refuse to evaluate a 1h-old 4h-horizon record.
+        S46 evaluates as soon as the market resolves."""
+        self._seed_predictions(state_file, hours_ago=1)
+        self._patch_lookup(monkeypatch, {
+            "0xbtc": ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+            "0xeth": ("resolved_no", {"outcome0_price_now": 0.0, "closed": True}),
+        })
+        result = evaluate_outcomes([], state_path=state_file)
+        assert result["evaluated"] == 2
+        assert result["correct"] == 2
+
+    def test_accuracy_calculation(self, state_file, monkeypatch):
         self._seed_predictions(state_file)
-        obs = [
-            {"market_id": "0xbtc", "current_price": 0.70},  # correct
-            {"market_id": "0xeth", "current_price": 0.60},  # incorrect (predicted bearish)
-        ]
-        result = evaluate_outcomes(obs, state_path=state_file)
+        self._patch_lookup(monkeypatch, {
+            "0xbtc": ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+            # Bearish on a resolved_yes = INCORRECT
+            "0xeth": ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+        })
+        result = evaluate_outcomes([], state_path=state_file)
         assert result["accuracy"] == 0.5  # 1 right / 2 directional
 
-    def test_does_not_re_evaluate(self, state_file):
+    def test_does_not_re_evaluate(self, state_file, monkeypatch):
         self._seed_predictions(state_file)
-        obs = [
-            {"market_id": "0xbtc", "current_price": 0.70},
-            {"market_id": "0xeth", "current_price": 0.40},
-        ]
-        evaluate_outcomes(obs, state_path=state_file)
-        result2 = evaluate_outcomes(obs, state_path=state_file)
-        assert result2["evaluated"] == 0  # Already evaluated
+        self._patch_lookup(monkeypatch, {
+            "0xbtc": ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+            "0xeth": ("resolved_no", {"outcome0_price_now": 0.0, "closed": True}),
+        })
+        evaluate_outcomes([], state_path=state_file)
+        result2 = evaluate_outcomes([], state_path=state_file)
+        assert result2["evaluated"] == 0
 
 
 class TestCategoryRouting:
@@ -280,9 +299,14 @@ class TestCategoryRouting:
         assert recs[0]["category"] == "politics"
         assert recs[0]["time_horizon"] == "7d"
 
-    def test_evaluate_outcomes_uses_category_horizon(self, state_file):
-        """A politics record 1 day old must NOT evaluate (7d horizon).
-        A crypto record 5h old MUST evaluate (4h horizon)."""
+    def test_category_routing_does_not_gate_evaluation_post_s46(
+        self, state_file, monkeypatch
+    ):
+        """S42's per-category EVAL_HORIZONS gated evaluate_outcomes — a
+        politics market would refuse to evaluate before 7d elapsed. S46
+        decouples evaluation from horizon entirely (resolution is the
+        gate). The category field is still recorded for future use, but
+        it no longer controls when a prediction is scored."""
         from lab.outcome_tracker import OutcomeState
 
         recent_politics = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
@@ -292,30 +316,30 @@ class TestCategoryRouting:
             {
                 "market_id": "P_HU", "hypothesis": "Bullish", "confidence": 0.7,
                 "price_at_prediction": 0.50, "timestamp": recent_politics,
-                "time_horizon": "4h",  # legacy field kept for compatibility
-                "category": "politics",
+                "time_horizon": "4h", "category": "politics",
                 "cycle_number": 0, "evaluated": False,
             },
             {
                 "market_id": "C_BTC", "hypothesis": "Bullish", "confidence": 0.7,
                 "price_at_prediction": 0.50, "timestamp": recent_crypto,
-                "time_horizon": "4h",
-                "category": "crypto",
+                "time_horizon": "4h", "category": "crypto",
                 "cycle_number": 0, "evaluated": False,
             },
         ]
         state.stats["total_predictions"] = 2
         state.save(state_file)
 
-        obs = [
-            {"market_id": "P_HU", "current_price": 0.40},
-            {"market_id": "C_BTC", "current_price": 0.55},
-        ]
-        result = evaluate_outcomes(obs, state_path=state_file)
-        # Crypto evaluates at 5h > 4h horizon. Politics does NOT evaluate at
-        # 1d < 7d horizon.
-        assert result["evaluated"] == 1
-        assert result["correct"] == 1
+        def fake(mid):
+            return {
+                "P_HU": ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+                "C_BTC": ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+            }[mid]
+        monkeypatch.setattr("lab.outcome_tracker.lookup_resolution", fake)
+
+        result = evaluate_outcomes([], state_path=state_file)
+        # Both evaluate immediately once resolved — politics no longer waits 7d.
+        assert result["evaluated"] == 2
+        assert result["correct"] == 2
 
 
 class TestAtomicWrites:
@@ -380,6 +404,10 @@ class TestPathResolutionAtCallTime:
             "per_market": {},
         }))
         monkeypatch.setenv("OUTCOMES_FILE", str(target))
+        monkeypatch.setattr(
+            "lab.outcome_tracker.lookup_resolution",
+            lambda mid: ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+        )
         result = evaluate_outcomes([{"market_id": "M1", "current_price": 0.55}])
         assert result["evaluated"] == 1
 
@@ -413,9 +441,11 @@ class TestEvaluateOutcomesPartialStats:
         # Other keys should retain their on-disk values
         assert state.stats["total_predictions"] == 1
 
-    def test_evaluate_outcomes_does_not_raise_on_partial_stats(self, state_file):
+    def test_evaluate_outcomes_does_not_raise_on_partial_stats(
+        self, state_file, monkeypatch
+    ):
         """The exact reproduction of the Phase 0 freeze: a partial stats dict
-        on disk plus a pending prediction whose 4h horizon has elapsed.
+        on disk plus a pending prediction the evaluator wants to score.
         Pre-fix: KeyError('neutral'). Post-fix: clean evaluation."""
         ts = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
         partial = {
@@ -432,6 +462,10 @@ class TestEvaluateOutcomesPartialStats:
             "per_market": {},
         }
         state_file.write_text(json.dumps(partial))
+        monkeypatch.setattr(
+            "lab.outcome_tracker.lookup_resolution",
+            lambda mid: ("resolved_yes", {"outcome0_price_now": 1.0, "closed": True}),
+        )
         obs = [{"market_id": "0xbtc", "current_price": 0.55}]
         result = evaluate_outcomes(obs, state_path=state_file)
         assert result["evaluated"] == 1
@@ -588,29 +622,27 @@ class TestPerMarketAccuracy:
 
 
 # ============================================================================
-# DUAL-HORIZON (Session 39)
+# NO DUAL-HORIZON (S46 dropped the S39 sibling write)
 # ============================================================================
 
-class TestDualHorizon:
-    def test_4h_prediction_creates_24h_copy(self, state_file):
-        """Recording a 4h prediction should also create a 24h evaluation copy."""
+class TestNoDualHorizon:
+    """S39's dual-horizon (4h + 24h) sibling write is gone in S46 — resolution
+    is a single event per market, so the per-horizon doubling is meaningless."""
+
+    def test_4h_prediction_does_not_create_24h_copy(self, state_file):
         preds = [{"market_id": "0xbtc", "hypothesis": "Bullish",
                   "confidence": 0.82, "time_horizon": "4h"}]
         obs = [{"market_id": "0xbtc", "current_price": 0.65}]
         count = record_predictions(preds, obs, state_path=state_file)
-        assert count == 1  # Only the primary counts as "recorded"
+        assert count == 1
 
         state = OutcomeState.load(state_file)
-        assert len(state.predictions) == 2  # 4h + 24h
-        horizons = [p["time_horizon"] for p in state.predictions]
-        assert "4h" in horizons
-        assert "24h" in horizons
-        # Both should have same prediction data
-        assert state.predictions[0]["market_id"] == state.predictions[1]["market_id"]
-        assert state.predictions[0]["hypothesis"] == state.predictions[1]["hypothesis"]
+        assert len(state.predictions) == 1
+        assert state.predictions[0]["time_horizon"] == "4h"
 
     def test_non_4h_prediction_no_duplicate(self, state_file):
-        """1h predictions should NOT get a 24h copy."""
+        """1h predictions should not get a sibling either (was true pre-S46;
+        kept as a sanity assertion now that there is no dual-horizon at all)."""
         preds = [{"market_id": "0xeth", "hypothesis": "Bearish",
                   "confidence": 0.75, "time_horizon": "1h"}]
         obs = [{"market_id": "0xeth", "current_price": 0.40}]
@@ -619,35 +651,6 @@ class TestDualHorizon:
         state = OutcomeState.load(state_file)
         assert len(state.predictions) == 1
         assert state.predictions[0]["time_horizon"] == "1h"
-
-    def test_dual_horizon_evaluated_independently(self, state_file):
-        """4h copy should evaluate at 4h, 24h copy should wait until 24h."""
-        state = OutcomeState()
-        ts_5h_ago = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
-        base = {
-            "market_id": "0xbtc", "hypothesis": "Bullish", "confidence": 0.8,
-            "price_at_prediction": 0.60, "timestamp": ts_5h_ago,
-            "cycle_number": 1, "evaluated": False, "outcome": None,
-            "price_at_evaluation": None, "evaluated_at": None, "actual_delta": None,
-            "xgb_p_correct": None,
-        }
-        state.predictions = [
-            {**base, "time_horizon": "4h"},   # 5h ago, past 4h horizon
-            {**base, "time_horizon": "24h"},  # 5h ago, NOT past 24h horizon
-        ]
-        state.stats["total_predictions"] = 2
-        state.save(state_file)
-
-        obs = [{"market_id": "0xbtc", "current_price": 0.70}]
-        result = evaluate_outcomes(obs, state_path=state_file)
-        assert result["evaluated"] == 1  # Only the 4h one
-        assert result["correct"] == 1
-
-        state = OutcomeState.load(state_file)
-        p4h = [p for p in state.predictions if p["time_horizon"] == "4h"][0]
-        p24h = [p for p in state.predictions if p["time_horizon"] == "24h"][0]
-        assert p4h["evaluated"] is True
-        assert p24h["evaluated"] is False
 
 
 # ============================================================================
