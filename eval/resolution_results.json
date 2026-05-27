@@ -1,0 +1,113 @@
+{
+  "generated_at": "2026-05-21T15:57:57.012341+00:00",
+  "method": "directional call scored vs actual Polymarket resolution (YES/NO)",
+  "scoring_rule": "Bullish CORRECT iff resolved YES; Bearish CORRECT iff resolved NO",
+  "source_file": "/opt/loop/data/prediction_outcomes.json",
+  "resolution_source": "https://gamma-api.polymarket.com",
+  "raw_records": 598,
+  "unique_verdicts": 4,
+  "dedup_factor": 149.5,
+  "resolution_status_counts": {
+    "unresolved": 3,
+    "resolved_no": 1
+  },
+  "resolved": {
+    "n": 1,
+    "correct": 0,
+    "incorrect": 1,
+    "accuracy": 0.0,
+    "ci95_wilson": [
+      0.0,
+      0.7935
+    ],
+    "resolved_yes": 0,
+    "resolved_no": 1,
+    "yes_resolution_rate": 0.0,
+    "avg_entry_price": 0.565,
+    "edge_vs_coinflip": -0.5,
+    "edge_vs_price_implied": -0.565
+  },
+  "unresolved_n": 3,
+  "contrast_raw_weighted_accuracy": 0.0,
+  "underpowered": true,
+  "edge": false,
+  "verdict": "UNDERPOWERED (N=1 < 30) — NO EDGE: 95% CI spans 0.50 / the price-implied base rate — indistinguishable from chance.",
+  "markets": [
+    {
+      "market_id": "566188",
+      "hypothesis": "Bullish",
+      "raw_count": 18,
+      "first_ts": "2026-04-24T15:04:29.335785+00:00",
+      "last_ts": "2026-04-24T15:47:06.493402+00:00",
+      "entry_price": 0.565,
+      "resolution_status": "resolved_no",
+      "market_question": "Will Manchester City win the 2025–26 English Premier League?",
+      "outcomes": [
+        "Yes",
+        "No"
+      ],
+      "outcome0_price_now": 0.0,
+      "uma_status": "resolved",
+      "resolved": true,
+      "resolved_outcome": "NO",
+      "scored_correct": false
+    },
+    {
+      "market_id": "558936",
+      "hypothesis": "Bullish",
+      "raw_count": 508,
+      "first_ts": "2026-04-24T14:48:30.076924+00:00",
+      "last_ts": "2026-04-25T20:11:40.312745+00:00",
+      "entry_price": 0.1655,
+      "resolution_status": "unresolved",
+      "market_question": "Will France win the 2026 FIFA World Cup?",
+      "outcomes": [
+        "Yes",
+        "No"
+      ],
+      "outcome0_price_now": 0.1795,
+      "uma_status": null,
+      "resolved": false,
+      "resolved_outcome": null,
+      "scored_correct": null
+    },
+    {
+      "market_id": "566136",
+      "hypothesis": "Bullish",
+      "raw_count": 5,
+      "first_ts": "2026-05-14T06:01:21.685867+00:00",
+      "last_ts": "2026-05-14T06:23:00.048142+00:00",
+      "entry_price": 0.585,
+      "resolution_status": "unresolved",
+      "market_question": "Will PSG win the 2025–26 Champions League?",
+      "outcomes": [
+        "Yes",
+        "No"
+      ],
+      "outcome0_price_now": 0.585,
+      "uma_status": null,
+      "resolved": false,
+      "resolved_outcome": null,
+      "scored_correct": null
+    },
+    {
+      "market_id": "665374",
+      "hypothesis": "Bullish",
+      "raw_count": 67,
+      "first_ts": "2026-05-04T06:01:20.405628+00:00",
+      "last_ts": "2026-05-05T06:22:46.047011+00:00",
+      "entry_price": 0.305,
+      "resolution_status": "unresolved",
+      "market_question": "Will the U.S. invade Iran before 2027?",
+      "outcomes": [
+        "Yes",
+        "No"
+      ],
+      "outcome0_price_now": 0.265,
+      "uma_status": null,
+      "resolved": false,
+      "resolved_outcome": null,
+      "scored_correct": null
+    }
+  ]
+}

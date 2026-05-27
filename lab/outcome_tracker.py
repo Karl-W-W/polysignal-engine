@@ -24,6 +24,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional
 
+from lab._resolution_lookup import lookup_resolution
+
 # ── Configuration ────────────────────────────────────────────────────────────
 def _resolve_outcomes_file() -> Path:
     """Resolve the outcomes-file path at call time, not import time.
@@ -276,14 +278,10 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
         state.predictions.append(record)
         state.stats["total_predictions"] += 1
         recorded += 1
-
-        # Session 39: Dual-horizon — also record a 24h evaluation for every
-        # 4h prediction so we can compare which horizon produces better accuracy.
-        if time_horizon == "4h":
-            record_24h = dict(record)
-            record_24h["time_horizon"] = "24h"
-            state.predictions.append(record_24h)
-            state.stats["total_predictions"] += 1
+        # S46 dropped the S39 dual-horizon (4h + 24h) sibling write. Resolution
+        # is a single event per market, so the per-horizon doubling produced
+        # redundant rows that the eval/resolution_backtest.py dedup already had
+        # to collapse (149.5x at the May-21 snapshot).
 
     state.save(state_path)
     return recorded
@@ -291,21 +289,38 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
 
 def evaluate_outcomes(current_observations: List[Dict],
                       state_path: Optional[Path] = None) -> Dict:
-    """Evaluate past predictions against current prices.
+    """Evaluate past predictions against ACTUAL Polymarket resolution (S46).
+
+    Each unevaluated prediction is scored by querying gamma for the market's
+    closed/outcomePrices state. Unresolved markets stay pending; the truth-
+    board re-checks every 15 min. Replaces the pre-S46 4h/24h price-drift
+    scoring (lab/outcome_tracker.py:343-357 in dd70650), which was scoring
+    sub-tick noise against MIN_MOVE_THRESHOLD=0.0005 and producing the
+    36% lifetime "accuracy" that is actually the broken instrument reading
+    itself (proven by eval/resolution_backtest.py at S44).
+
+    Scoring rule (matches eval/resolution_backtest.py):
+        Bullish CORRECT iff market resolved YES
+        Bearish CORRECT iff market resolved NO
 
     Args:
-        current_observations: Latest observation dicts with current prices
-        state_path: Path to outcomes JSON file
+        current_observations: Latest observation dicts. Used only to capture
+            an entry-price-at-evaluation field for the audit trail; the
+            scoring no longer depends on the live price.
+        state_path: Path to outcomes JSON file.
 
     Returns:
-        Dict with evaluation summary: {evaluated, correct, incorrect, neutral, accuracy}
+        {evaluated, correct, incorrect, neutral, accuracy, total_evaluated,
+         total_predictions}.  `neutral` counts AMBIGUOUS (closed but not at
+         1/0 — refund / void / multi-outcome).
     """
     state_path = state_path or _resolve_outcomes_file()
     state = OutcomeState.load(state_path)
     now = datetime.now(timezone.utc)
 
-    # Build current price lookup
-    current_prices = {}
+    # Audit-trail price lookup (optional — many resolved markets won't
+    # appear in current observations any more).
+    current_prices: Dict[str, float] = {}
     for obs in current_observations:
         mid = obs.get("market_id")
         price = obs.get("current_price") or obs.get("price", 0.0)
@@ -317,53 +332,68 @@ def evaluate_outcomes(current_observations: List[Dict],
     incorrect = 0
     neutral = 0
 
+    # Cache resolution lookups within this round — the same market_id can
+    # appear on multiple unevaluated rows (one per cycle the prediction was
+    # repeated). Avoid hitting gamma N times for the same market.
+    cache: Dict[str, tuple] = {}
+
     for pred in state.predictions:
         if pred.get("evaluated"):
             continue
 
         market_id = pred.get("market_id")
-        if market_id not in current_prices:
+        if not market_id:
             continue
 
-        # Check if enough time has passed for this prediction's horizon.
-        # Phase 6, S42: if the record has a category, route through it.
-        # Otherwise fall back to the explicit time_horizon (legacy records).
-        pred_time = datetime.fromisoformat(pred["timestamp"])
-        category = pred.get("category")
-        if category:
-            horizon_key = horizon_for_category(category)
+        # Pollution guard: skip fake/test market IDs that historically
+        # bled into the prod file (0xfake_btc, :memory:, etc.). These
+        # have no gamma counterpart and would waste 3 retries each.
+        mid_l = str(market_id).lower()
+        if "fake" in mid_l or mid_l.startswith(":") or mid_l == "none":
+            continue
+
+        if market_id in cache:
+            status, info = cache[market_id]
         else:
-            horizon_key = pred.get("time_horizon", DEFAULT_HORIZON)
-        horizon_delta = EVAL_HORIZONS.get(horizon_key, EVAL_HORIZONS[DEFAULT_HORIZON])
+            status, info = lookup_resolution(market_id)
+            cache[market_id] = (status, info)
 
-        if now - pred_time < horizon_delta:
-            continue  # Not yet time to evaluate
+        # Unresolved / not_found → leave pending. Truth-board re-runs every
+        # ~15 min so the row will be re-checked.
+        if status in ("unresolved", "not_found"):
+            continue
 
-        # Evaluate
-        price_then = pred["price_at_prediction"]
-        price_now = current_prices[market_id]
-        delta = price_now - price_then
         hypothesis = pred["hypothesis"]
+        outcome0_price = info.get("outcome0_price_now")
 
-        if abs(delta) < MIN_MOVE_THRESHOLD:
-            outcome = "NEUTRAL"
+        if status == "ambiguous":
+            outcome = "AMBIGUOUS"
+            resolved_outcome = None
             neutral += 1
-        elif (hypothesis == "Bullish" and delta > 0) or \
-             (hypothesis == "Bearish" and delta < 0):
-            outcome = "CORRECT"
-            correct += 1
         else:
-            outcome = "INCORRECT"
-            incorrect += 1
+            resolved_outcome = "YES" if status == "resolved_yes" else "NO"
+            is_correct = (
+                (hypothesis == "Bullish" and resolved_outcome == "YES")
+                or (hypothesis == "Bearish" and resolved_outcome == "NO")
+            )
+            outcome = "CORRECT" if is_correct else "INCORRECT"
+            if is_correct:
+                correct += 1
+            else:
+                incorrect += 1
 
         pred["evaluated"] = True
         pred["outcome"] = outcome
-        pred["price_at_evaluation"] = price_now
+        pred["resolution_status"] = status
+        pred["resolved_outcome"] = resolved_outcome
+        pred["outcome0_price_at_resolution"] = outcome0_price
+        pred["price_at_evaluation"] = current_prices.get(market_id)
         pred["evaluated_at"] = now.isoformat()
-        pred["actual_delta"] = round(delta, 4)
+        # actual_delta is intentionally not written by S46 — it's a relic of
+        # drift scoring. Existing legacy values on old records are left intact.
         evaluated_this_round += 1
 
-        # Track per-market accuracy (persists across 500-record cap)
+        # Per-market accuracy (persists across the 5000-record rotation).
         if market_id not in state.per_market:
             state.per_market[market_id] = {
                 "correct": 0, "incorrect": 0, "neutral": 0,
