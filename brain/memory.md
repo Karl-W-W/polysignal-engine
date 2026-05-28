@@ -621,3 +621,14 @@ downstream dominoes in order: (1) Bearish ban, (2) XGBoost retrain on real
 labels, (3) `META_GATE_ENABLED`. Until then the system runs honestly and
 accrues data; the correct action is patience, not code.
 
+**Closing confirmation (S46b clock-out).** The truth-board TIMER (not a manual
+fire) ran unattended on its 15-min cadence — 17:26:13 and 17:41:45 CEST, both
+`evaluated=0 errors=[none]`, each querying gamma (~4s) — proving `lab/truth_board.py`
+is the live sole evaluator and fires on schedule with nothing to do yet (the 33
+pending markets haven't resolved). The "B" proof (timer alive) is locked. The "A"
+proof (an autonomously-written resolution label) happens on its own the next time
+a pending market resolves — it'll be in the truth-board journal and
+`prediction_outcomes.json` whenever next checked; no one needs to fire it.
+
+> **Next session START HERE:** nothing to build. System is live and accruing toward N≥30 resolved markets (~1–3 weeks). When N≥30: re-run `eval/resolution_backtest.py` for the first real edge verdict, THEN open the dominoes in order — Bearish ban, XGBoost retrain, META_GATE. Until then: glance at the resolved count, leave the box alone.
+
