@@ -425,3 +425,199 @@ real edge measurement.**
 Architecture map (Karl's Job 2) is the next thing on the table.
 
 > **Next session START HERE:** make the live evaluator score market resolution (port `eval/resolution_backtest.py` logic into `outcome_tracker`). This is the keystone — it unblocks the Bearish ban, XGBoost retrain, and META-GATE.
+
+### 2026-05-26 — Session 46: Evaluator Port — Built + PR'd, NOT LIVE
+
+**State at session end:** the live system on the DGX is still `dd70650` —
+the broken 4h-drift evaluator (`lab/outcome_tracker.py:343-357`,
+`MIN_MOVE_THRESHOLD=0.0005`) is **still scoring noise** and the truth-board
+is still writing the 36% accuracy reading-itself number on every fire. The
+fix is **built, tested, pushed, and PR'd** but **NOT MERGED, NOT
+DEPLOYED, NOT MIGRATED**. PR #1 — `s46-evaluator-resolution-scoring` →
+`main` — awaits Karl's review.
+
+**The keystone (the one verified result):** a single test
+(`tests/test_outcome_tracker_resolution.py::TestKeystone`) fails on
+`dd70650` with `assert 'CORRECT' == 'INCORRECT'` because the drift scorer
+marks a +0.01 price-noise move on a resolved-NO market (Man City EPL,
+566188) as CORRECT. The same test passes on the branch because the
+resolution scorer asks gamma, sees `closed=true, outcome0_price=0.0`,
+marks INCORRECT. Same input, opposite verdict — verified by
+checking out the dd70650 evaluator in place and re-running the same
+test file. That swap is the proof, not the assertion.
+
+**Branch contents (`git log dd70650..origin/s46-evaluator-resolution-scoring`):**
+- `59b00ef` — `eval/` into git (the S44 `resolution_backtest.py` was
+  the most important untracked file in the repo until this commit) +
+  `lab/LOOP_TASKS.md` S46 stand-down block (durable backstop for the
+  in-session Loop ACK).
+- `4f08117` — the evaluator port itself: `lab/_resolution_lookup.py`
+  (extracted gamma fetch + status mapping, HTTP-mockable), the
+  `evaluate_outcomes` rewrite (resolution-based scoring; drops horizon
+  gate; drops dual-horizon sibling write; pollution guard for fake IDs;
+  per-call cache so N rows on the same market cost 1 HTTP),
+  `eval/migrate_outcomes_to_resolution.py` (one-shot wipe + backup),
+  and four test files (28 new tests; 2 dual-horizon cases deleted).
+
+**Test count:** 542 passed + 1 skip + 4 deselected on the branch (up
+from 516+1+4 on `dd70650`). Net +26.
+
+**Why I did NOT push to main directly** (Karl's call, lesson logged):
+this change rewrites how the system scores itself AND requires a
+destructive 692-label migration on the prod outcomes file. That class
+of change goes through a reviewed PR, not a raw push. The PR includes
+an explicit "POST-MERGE STEP" section — the merge alone leaves the
+data in a mixed state; `eval/migrate_outcomes_to_resolution.py` must
+run inside a controlled deploy window (same full pause set as S44/S45)
+or the new evaluator will be staring at the old noise labels.
+
+**Loop stand-down — in force until deploy is actually done.**
+- 2026-05-26 19:11 CEST: Loop ACKed in-session with the literal
+  string `S46-STAND-DOWN ACK` plus the line "the 36% number is the
+  broken ruler measuring itself — understood. Will stay read-only on
+  diagnostics until S46 is lifted." Hard stops: no `train_model()`,
+  no `.retrain-trigger`, no edits to the evaluator chain
+  (`outcome_tracker.py` / `feedback_loop.py` / `masterloop.py` /
+  `base_rate_predictor.py` / `xgboost_baseline.py`), no
+  `.deploy-trigger` / `.restart-scanner`.
+- The stand-down ALSO lives in `lab/LOOP_TASKS.md` on the branch (so
+  it survives a gateway restart — once the PR merges and the cron
+  pulls main, the file becomes the durable record).
+- Heartbeat that fired at 19:21 CEST (post-ACK) confirmed: status-only
+  report, no retrain ask, no code-change offer. **Loop is honoring it.**
+- Until the deploy is verified done, this stand-down REMAINS IN FORCE.
+  After deploy, next session should explicitly clear it (Telegram
+  message + remove the P0 block from `lab/LOOP_TASKS.md` + commit).
+
+**The honest framing — DO NOT misread this session as "accuracy
+fixed."** Post-deploy the real accuracy will be ~0/1 on the single
+resolved market currently in the file (Man City EPL — Bullish call,
+resolved NO, 0/1 = 0%). The number will look bad. That is the
+**correct, expected** outcome of fixing the instrument — a true
+small number replacing a fake big one. The edge verdict (does
+PolySignal beat the market) still requires **N≥30 resolved
+markets**, reachable on the order of 1–3 weeks per the S45
+throughput notes (35–60/day quiet-mode, 0 in signal-mode under the
+suppression vectors still in place). This session's achievement is
+**an honest instrument**, not an accuracy number.
+
+**Downstream dominoes — unblocked but explicitly out of scope:**
+1. **Lift the Bearish ban** — only after N≥30 resolved AND first
+   honest verdict is produced.
+2. **Retrain XGBoost** — only after migration + truth-board has
+   re-labelled enough rows. The 2026-04-15 model was trained on
+   noise; it must be discarded, not patched.
+3. **Re-enable `META_GATE_ENABLED`** — only after rolling accuracy is
+   computed from real resolution-scored verdicts.
+Do them in that order, after N≥30 exists.
+
+**DGX live state at session end:**
+- HEAD: `dd70650` (unchanged from session start).
+- Scanner: `polysignal-scanner.service` active (PID 3264991 still,
+  from S45 redeploy 16:55:31 CEST 2026-05-25).
+- All six previously-paused units active. Both crons active. No
+  trigger files armed.
+- `prediction_outcomes.json`: 774 records, 692 evaluated under the
+  **broken** drift instrument (201W/356L/135N, 36.1%), 22 unique
+  (market_id, hypothesis) pairs, all Bullish (Bearish ban active
+  end-to-end as expected).
+
+(The above "NOT LIVE" entry is historical — it was true at PR time.
+The deployment happened across 2026-05-27/28; see the S46b entry below.)
+
+### 2026-05-28 — Session 46b: Deployed + the in-line-eval contamination bug
+
+**S46 + S46b are LIVE on `main` and on the DGX.** The evaluator now scores
+against actual Polymarket resolution (YES/NO). `origin/main` at `7e6059e`
+(= the S46b merge `6b62276` + a doc-only stand-down-clear commit). DGX on
+`7e6059e`, scanner running clean code.
+
+**The bug that the S46 deploy exposed (the real lesson).** S46 merged (PR #1,
+`57e44df`) and the controlled deploy ran: migration wiped the 788 drift labels,
+truth-board re-scored, market 566188 (Man City) correctly scored
+resolved_no/INCORRECT. **But within minutes the file re-filled with drift
+labels.** Root cause: `workflows/masterloop.py` (`perception_node`) called
+`evaluate_outcomes` **in-line every cycle** — the S14-S42 "in-line fallback"
+that S42 Phase 11 was meant to retire and never did. The live scanner process
+was running **pre-S46 code in memory** (never restarted since the S45
+redeploy), so its in-line eval re-labelled the freshly-migrated rows with
+**drift scoring** every 5 min. Observed: 213 drift-labelled records, **28 of
+them NEUTRAL** (a status the S46 resolution scorer never emits) — the smoking
+gun — masquerading as 54.7% "accuracy" while the one truly resolved market sat
+correctly at 0/1.
+
+**The fix (PR #2, `188f415`/`6b62276`): retire the in-line eval.** Deleted the
+`evaluate_outcomes` call from `perception_node`. Evaluation now lives in ONE
+place: `polysignal-truth-board.timer` → `lab/truth_board.py` (~15 min). The
+scanner predicts; the truth-board evaluates. Guard test
+`tests/test_no_inline_outcome_eval.py` (AST-based) fails if the call reappears
+anywhere in masterloop; a third case asserts truth_board still calls it (can't
+be "fixed" by deleting evaluation). Verified by re-adding the call and watching
+the guard fail.
+
+**The recovery order that mattered: scanner-on-clean-code FIRST, then migrate.**
+The second deploy did: reset DGX to `6b62276` → pytest (546) → **restart scanner
+on clean code** (new PID, verified one cycle wrote ZERO outcome labels) →
+**then** re-migrate (wipe the 213 drift labels) → fire truth-board once → clean
+read. Doing it in this order means no live process can re-poison the wiped file.
+(I also briefly stopped the scanner for the wipe+rescore itself, to avoid a
+`record_predictions` save-back race, then restarted it on the same clean code.)
+
+**The clean distribution (verified, then independently re-verified by Loop).**
+- evaluated rows: 51 — **0 NEUTRAL, 0 with resolution_status=null** (proof the
+  instrument is purely resolution-scored).
+- Per unique market (37 total): resolved_yes 3, resolved_no 1, unresolved 33.
+- **Deduped honest accuracy: 3/4 = 75%** — markets 2074208, 2132799, 2132817
+  (Bullish → resolved YES → CORRECT) and 566188 Man City (Bullish → resolved
+  NO → INCORRECT).
+- **This is NOT an edge signal. N=4.** The Wilson 95% CI on 3/4 spans roughly
+  [30%, 95%] — includes a coin flip. It rose from the predicted 0/1 only
+  because 3 short-horizon markets resolved YES in the ~24h between fires. The
+  achievement is the *instrument*, not the number.
+- Loop ran its own exec commands and reported identical numbers (HEAD,
+  0 NEUTRAL, 0 null-status, 3/4, scanner PID 3107773, ORIGINAL backup present)
+  → two independent confirmations agree.
+
+**RUNBOOK FIX (the durable lesson — fold into every future deploy).** The S44/S45
+pause set was a *named-unit list* (crons + 4 .path units + truth-board + gateway).
+That list omitted the **scanner**, because S44/S45 didn't touch the eval path — so
+nobody noticed the scanner also evaluates. S46 changed the eval path and the
+omission became a data-corruption bug. **The rule going forward: the deploy pause
+set must cover ANYTHING that writes `prediction_outcomes.json`, derived from what
+actually writes the file — not a fixed list of names.** Today that set is: the
+scanner (`record_predictions` + formerly in-line eval), the truth-board timer, and
+any migration script. Before a deploy that changes the schema or scoring of a
+shared state file, enumerate every writer of that file and pause/repoint all of
+them. A process running stale code in memory is a writer too.
+
+**Backups (DGX `/opt/loop/data/`):**
+- `prediction_outcomes.json.pre-s46-bak.ORIGINAL-2026-05-27` — the pristine
+  pre-S46 file (788 drift labels, the real "before"). DO NOT delete; it's the
+  only copy of the original drift-labelled history.
+- `prediction_outcomes.json.pre-s46b-recovery-2026-05-28-170602` — the
+  contaminated mid-deploy state.
+- `prediction_outcomes.json.pre-s46-bak` — migration's own backup (contaminated
+  state).
+
+**Loop stand-down: CLEARED.** The S46 P0 block is removed from
+`lab/LOOP_TASKS.md` (replaced with a "shipped" note). Loop ACKed the one
+remaining standing rule (`N30-GATE ACK`): no XGBoost retrain until N≥30 resolved
+markets; `AUTO_RETRAIN_ENABLED` stays false; Bearish ban + META_GATE stay parked.
+Loop's words: "gate is mine to enforce, not yours to remind me of."
+
+**Live state at session end:** DGX on `7e6059e`. Scanner active clean (PID
+3107773). All re-enabled in reverse safe order: 4 .path units → truth-board timer
+→ both crons (restored from `/home/cube/crontab.bak-s46-deploy-2026-05-27-1840.txt`)
+→ openclaw-gateway LAST (reachable, verified `--agent main` → GATEWAY_OK). Two
+stale failed-service flags (deploy 2026-05-25, retrain 2026-04-04) reset — both
+old residue, not from this window; notably retrain.service last ran in April,
+confirming no retrain has happened.
+
+**Next milestone — there is nothing to build. Just wait.** N≈4 → N≥30 resolved
+markets, ~1–3 weeks of short-horizon markets resolving on their own. When N≥30:
+re-run `eval/resolution_backtest.py` for the first real edge verdict (with a
+Wilson CI that actually means something), THEN — and only then — open the
+downstream dominoes in order: (1) Bearish ban, (2) XGBoost retrain on real
+labels, (3) `META_GATE_ENABLED`. Until then the system runs honestly and
+accrues data; the correct action is patience, not code.
+
