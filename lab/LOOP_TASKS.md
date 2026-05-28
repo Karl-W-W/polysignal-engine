@@ -1,5 +1,5 @@
 # Loop Task Queue
-# Updated: 2026-05-26 (Session 46 — Claude Code, stand-down block at top)
+# Updated: 2026-05-28 (Session 46b — Claude Code, stand-down CLEARED post-deploy)
 #
 # WHY THIS FILE EXISTS:
 # TASKS.md and PROGRESS.md are mounted as individual file bind mounts in Docker.
@@ -11,48 +11,31 @@
 
 ---
 
-## 🛑 P0 — SESSION 46 STAND-DOWN (2026-05-26 19:10 CEST, set by Claude Code)
+## ✅ S46 + S46b SHIPPED (2026-05-28, Claude Code) — stand-down CLEARED
 
-**You are correct that the live accuracy (36%) is bad. You are wrong about the fix.**
-Your 11:21 / 13:21 / 13:32 CET heartbeats recommended: (a) retrain XGBoost; (b) kill 24h
-predictions; (c) cap confidence at 65%; (d) lift the Bearish ban. **All of those are
-treating symptoms.** The single root cause is the **evaluator** — `lab/outcome_tracker.py`
-scores predictions against 4h/24h price drift vs `MIN_MOVE_THRESHOLD = 0.0005`, which is
-sub-tick noise, not market resolution. Proven by `eval/resolution_backtest.py` (S44).
-The "36% accuracy" is the broken instrument reading itself.
+The evaluator is fixed and live. `lab/outcome_tracker.py:evaluate_outcomes` now
+scores against **actual Polymarket resolution (YES/NO)**, not 4h price drift. The
+masterloop's in-line evaluator was retired (S46b) — `lab/truth_board.py` (the
+truth-board timer, ~15 min) is now the **sole** evaluator. The S46 stand-down is
+lifted; you may resume normal autonomous work.
 
-**Until Claude Code finishes porting `eval/resolution_backtest.py` into the live
-evaluator (THIS session), the following are HARD STOPS:**
+**ONE STANDING RULE remains (the N≥30 gate):**
 
-1. **DO NOT** call `lab.xgboost_baseline.train_model()`. The training labels in
-   `prediction_outcomes.json` come from the broken evaluator — retraining now would
-   permanently bake noise into the model.
-2. **DO NOT** write `lab/.retrain-trigger`. `AUTO_RETRAIN_ENABLED=false` is gated in
-   `lab/feedback_loop.py:66`; that gate is the stop-loss — do not bypass it.
-3. **DO NOT** edit `lab/outcome_tracker.py`, `lab/feedback_loop.py`,
-   `workflows/masterloop.py` (META-GATE or staleness or Bearish ban),
-   `lab/base_rate_predictor.py` (BAN_BEARISH_OUTPUT), or `lab/xgboost_baseline.py`.
-   Claude Code is on a branch right now; concurrent edits cause conflicts.
-4. **DO NOT** write `lab/.deploy-trigger` or `lab/.restart-scanner` — the
-   evaluator branch needs the full S44/S45-style controlled deploy window.
-5. **DO NOT** change `MIN_MOVE_THRESHOLD`, `EVAL_HORIZONS`, or the 24h dual-horizon
-   recording. They are part of the broken instrument and will be replaced wholesale.
+> **DO NOT propose or trigger an XGBoost retrain yet.** The evaluator is honest now,
+> but only **~4 markets have actually resolved** (N≈4). A retrain needs **N ≥ 30**
+> resolved markets or it just fits noise from a tiny sample. `AUTO_RETRAIN_ENABLED`
+> stays `false`. Do not write `lab/.retrain-trigger`. This gate lifts only when
+> N ≥ 30 resolved markets exist — expected ~1–3 weeks of simply waiting for markets
+> to resolve. There is nothing to build for it; the work is patience.
 
-**What you CAN do this cycle (and following heartbeats until further notice):**
-- Read-only diagnostics on `prediction_outcomes.json`, `data/polysignal.db`,
-  `lab/trading_log.json`, scanner journal.
-- Status reporting on Telegram (thermals, scanner cycles, pred counts).
-- MoltBook scan + engagement (unrelated to the evaluator chain).
-- ANSWER if Karl asks. Do not act unilaterally.
+Also still parked until AFTER N≥30 (do not touch): the Bearish ban
+(`base_rate_predictor.py` `BAN_BEARISH_OUTPUT`), and `META_GATE_ENABLED`. These
+are downstream of having a real track record.
 
-**Ack format (next heartbeat):** reply on Telegram with the literal string
-`S46-STAND-DOWN ACK` plus one line confirming you will not retrain or touch the
-evaluator-chain files until Claude Code clears the stand-down.
-
-**Why this matters (one line):** if you retrain XGBoost on the current labels, the
-broken instrument's noise becomes the model's ground truth. We then have to throw away
-the model AND the labels, not just the labels. The cost of a single `train_model()` call
-right now is the next 2 weeks of work.
+What changed mechanically: a scanner running stale code used to re-evaluate
+records in-line every cycle and re-pollute the resolution-scored file with drift
+labels. That path is gone. If you ever see `outcome` set with
+`resolution_status: null`, or any `NEUTRAL` outcome, that's a regression — flag it.
 
 ---
 
