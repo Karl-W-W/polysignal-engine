@@ -262,18 +262,19 @@ def perception_node(state: LoopState) -> LoopState:
     except Exception:
         pass  # CLOB fetch optional — features stay at cached values
 
-    # ── Evaluate past predictions against fresh prices (non-blocking) ─────────
-    # NOTE: Must run AFTER market fetch so state["observations"] has current prices.
-    # Bug fix Session 14: was called before fetch → empty observations → 0 evaluations.
-    try:
-        from lab.outcome_tracker import evaluate_outcomes, get_accuracy_summary
-        eval_result = evaluate_outcomes(state.get("observations", []))
-        if eval_result["evaluated"] > 0:
-            print(f"  📊 Outcomes: {eval_result['correct']} correct, "
-                  f"{eval_result['incorrect']} wrong, {eval_result['neutral']} neutral")
-            print(f"     {get_accuracy_summary()}")
-    except Exception as e:
-        print(f"  ⚠ evaluate_outcomes failed: {e}")
+    # ── Outcome evaluation is NOT done here (S46b: in-line eval retired) ──────
+    # The masterloop used to call lab.outcome_tracker.evaluate_outcomes in-line
+    # every cycle (S14-S42 "in-line fallback during cutover"; S42 Phase 11 was
+    # supposed to retire it after 48h of stable truth_board data and never did).
+    # S46 changed evaluate_outcomes to score against Polymarket *resolution*
+    # rather than 4h price drift. A scanner process running pre-S46 code in
+    # memory therefore kept re-labelling migrated records with drift scoring
+    # every 5 minutes — re-polluting the file the S46 migration had just
+    # cleaned (observed live during the S46 deploy: 213 drift-labelled records,
+    # 28 of them NEUTRAL, a status S46 never emits). Evaluation now lives in
+    # ONE place: polysignal-truth-board.timer → lab/truth_board.py (every
+    # ~15 min). The scanner predicts; the truth-board evaluates. Do NOT
+    # re-add an evaluate_outcomes call here — see test_no_inline_outcome_eval.
 
     # ── Evaluate paper trades against fresh prices (non-blocking) ─────────
     try:
