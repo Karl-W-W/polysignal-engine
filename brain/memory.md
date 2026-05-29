@@ -632,3 +632,13 @@ a pending market resolves — it'll be in the truth-board journal and
 
 > **Next session START HERE:** nothing to build. System is live and accruing toward N≥30 resolved markets (~1–3 weeks). When N≥30: re-run `eval/resolution_backtest.py` for the first real edge verdict, THEN open the dominoes in order — Bearish ban, XGBoost retrain, META_GATE. Until then: glance at the resolved count, leave the box alone.
 
+**"A" proof CONFIRMED (2026-05-28 18:43 CEST, post-clock-out).** A *scheduled*
+truth-board fire — no manual trigger — autonomously detected market `2074253`
+resolved YES and wrote 6 `resolution_status=resolved_yes → CORRECT` labels
+(`evaluated=6 errors=[none]`). Integrity held: 0 NEUTRAL, 0 null-status. Deduped
+resolved count went 4 → 5 markets (4 CORRECT, still the lone Man City INCORRECT) =
+4/5, still N=5 and meaningless as an edge signal — but the unattended evaluator is
+now *proven*, not just argued. S46b is fully validated end-to-end: scanner predicts,
+truth-board alone evaluates against resolution, on schedule, with no hand. Resolved
+count just ticks toward N≥30 from here.
+
