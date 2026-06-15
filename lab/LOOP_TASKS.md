@@ -11,26 +11,33 @@
 
 ---
 
-## ✅ S46 + S46b SHIPPED (2026-05-28, Claude Code) — stand-down CLEARED
+## ✅ S46/S46b/S47 — evaluator honest, N≥30 cleared, verdict = **NO EDGE**
 
 The evaluator is fixed and live. `lab/outcome_tracker.py:evaluate_outcomes` now
 scores against **actual Polymarket resolution (YES/NO)**, not 4h price drift. The
 masterloop's in-line evaluator was retired (S46b) — `lab/truth_board.py` (the
-truth-board timer, ~15 min) is now the **sole** evaluator. The S46 stand-down is
-lifted; you may resume normal autonomous work.
+truth-board timer, ~15 min) is now the **sole** evaluator.
 
-**ONE STANDING RULE remains (the N≥30 gate):**
+**THE N≥30 GATE IS CLEARED — and the verdict is NO EDGE (S47, 2026-06-09):**
 
-> **DO NOT propose or trigger an XGBoost retrain yet.** The evaluator is honest now,
-> but only **~4 markets have actually resolved** (N≈4). A retrain needs **N ≥ 30**
-> resolved markets or it just fits noise from a tiny sample. `AUTO_RETRAIN_ENABLED`
-> stays `false`. Do not write `lab/.retrain-trigger`. This gate lifts only when
-> N ≥ 30 resolved markets exist — expected ~1–3 weeks of simply waiting for markets
-> to resolve. There is nothing to build for it; the work is patience.
-
-Also still parked until AFTER N≥30 (do not touch): the Bearish ban
-(`base_rate_predictor.py` `BAN_BEARISH_OUTPUT`), and `META_GATE_ENABLED`. These
-are downstream of having a real track record.
+> The gate lifted at **N=108 resolved markets**. `eval/resolution_backtest.py`
+> scored the directional calls against real resolution: **63.9% (95% CI 54.5–72.3%)**
+> — but the average entry price was **0.636**, so **edge vs the price-implied base
+> rate is just +0.3 pp**. VERDICT: **NO EDGE** — the model recovers Polymarket's
+> prior, it does not beat it (all calls Bullish on already-high-priced markets).
+>
+> **The dominoes stay CLOSED.** Do NOT lift the Bearish ban
+> (`base_rate_predictor.py` `BAN_BEARISH_OUTPUT`), do NOT retrain XGBoost
+> (`AUTO_RETRAIN_ENABLED` stays `false`; never write `lab/.retrain-trigger`), and do
+> NOT enable `META_GATE_ENABLED`. There is no edge to amplify — retraining on labels
+> that only echo market price just fits the prior. These were "downstream of a real
+> track record"; the record now exists and says no edge.
+>
+> **The new bar: a price-orthogonal signal.** The only work that moves this forward
+> is a genuinely new signal source (news features / whale-volume microstructure /
+> cross-market structure) that can clear **>+0.3pp edge-vs-price** on the backtest.
+> Re-run `eval/resolution_backtest.py` to measure any candidate against that baseline.
+> Until something beats it, the system correctly stays in paper/observe mode.
 
 What changed mechanically: a scanner running stale code used to re-evaluate
 records in-line every cycle and re-pollute the resolution-scored file with drift

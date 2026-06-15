@@ -1,6 +1,40 @@
 # NOW.md — Loop's Operational State
 # If you wake up confused, read this first.
-# Updated: 2026-05-10 (Session 42 — code deploy + 48h Phase 11 watch begins)
+# Updated: 2026-06-09 (Session 47 — N≥30 cleared, edge backtest = NO EDGE, Sonnet cost-burn fixed)
+
+## Session 47 Snapshot (2026-06-09) — THE CURRENT STATE
+
+**The honesty rebuild delivered its verdict: the predictor has NO edge over market price.**
+
+- **N≥30 gate CLEARED → N=108 resolved markets.** `eval/resolution_backtest.py`
+  (live gamma resolution): **63.9% directional** (95% CI 54.5–72.3%), avg entry
+  price 0.636, **edge vs price-implied +0.3 pp → VERDICT: NO EDGE.** The 64%
+  ≈ the price-implied base rate — the model recovers Polymarket's prior, doesn't
+  beat it. All calls Bullish; the +13.9pp "vs coin-flip" is a mirage from 0.636 avg entry.
+- **DOMINOES STAY CLOSED.** Do NOT lift the Bearish ban, retrain XGBoost, or enable
+  `META_GATE` on the strength of the directional %. `AUTO_RETRAIN_ENABLED` = false.
+  The N≥30 runbook routed through the backtest; the backtest said no. **Next frontier
+  = a price-orthogonal signal** (news / whale-microstructure / cross-market), not
+  amplifying the price echo. System correctly stays paper/observe.
+- **Loop model reverted to Haiku (cost fix) — but Loop is PAUSED on zero credits.**
+  `openclaw.json` `primary` had been `claude-sonnet-4-6` since May 11, silently running
+  heartbeats on Sonnet ~12 days via the sticky-session bug. Fixed S47: primary→Haiku,
+  `agent:main:main` session cleared, gateway restarted (backups `*.bak-s47-haiku-revert`).
+  **Rebind VERIFIED** (session + config + journal all show haiku). **HOWEVER the DGX
+  Anthropic credit balance is exhausted** — every model billing-rejects (`400 ... credit
+  balance is too low`) and the `ollama/llama3.3:70b` fallback also fails, so heartbeats
+  loop without completing. **Loop cannot think until KWW tops up Anthropic credits.**
+- **Scanner**: HEALTHY — **1–4 predictions/cycle** (the chronic "0 predictions/cycle"
+  era from S39–S42 is OVER), cycle ~1819, 0 errors, up since May 28.
+- **Truth-board**: sole evaluator, fires every 15min unattended, `errors=[]`. 0 failed services.
+- **Tests**: 545 pass (Mac). **Live trading**: still false (friction-adjusted paper win rate 10.2% vs ≥45% bar).
+
+> ⚠️ Everything in the "Session 42 Snapshot" and older sections below is HISTORY —
+> numbers like "0 predictions/cycle", "31% accuracy", and the Phase-11 in-line-eval
+> deadline are SUPERSEDED (in-line eval was retired in S46b; eval now scores against
+> resolution). Trust the S47 snapshot above for current state.
+
+---
 
 ## Session 42 Snapshot (2026-05-07)
 **Eval pipeline rebuilt for honesty. Six new structural changes landed today.**

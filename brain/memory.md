@@ -642,3 +642,84 @@ now *proven*, not just argued. S46b is fully validated end-to-end: scanner predi
 truth-board alone evaluates against resolution, on schedule, with no hand. Resolved
 count just ticks toward N≥30 from here.
 
+---
+
+### 2026-06-09 — Session 47: N≥30 cleared → backtest → **NO EDGE**; Sonnet cost-burn fixed
+
+**The wait paid out a hard answer.** S46b left the system to accrue resolved
+markets toward an N≥30 gate (~1–3 weeks) before running the real edge verdict.
+12 days later (clock-in recon, read-only) the gate is not just met but blown
+past: **N=108 resolved markets**, 0 NEUTRAL / 0 null-status (instrument clean).
+Ran `eval/resolution_backtest.py` against live gamma at N=108:
+
+- **REAL ACCURACY 63.9%** (95% CI [54.5%, 72.3%]) — no longer underpowered.
+- avg entry price (price-implied base rate) **0.636**.
+- **edge vs price-implied: +0.3 pp.** edge vs coin-flip: +13.9 pp.
+- **VERDICT: NO EDGE — 95% CI spans the price-implied base rate; indistinguishable from market price.**
+
+**The 64% was a mirage and the honest instrument said so.** All 108 calls are
+Bullish (Bearish still banned), and the +13.9pp "vs coin-flip" is created
+*entirely* by entry prices averaging 0.636 — the model bets "high-priced markets
+resolve YES," which is true ~64% of the time but is exactly what the price already
+said. The directional accuracy ≈ the price-implied base rate to within 0.3pp. The
+predictor recovers Polymarket's prior; it does not beat it. Per-category (deduped,
+small): crypto 10/13, default 52/81, politics 4/8, sports 3/6. This is the RenTec
+test working: the S42→S46 honesty rebuild paid off by returning an honest *no*
+instead of a flattering 64%. **Baseline locked: any future change must clear
+>+0.3pp edge-vs-price to count.**
+
+**Decision — HOLD the dominoes.** Bearish ban, XGBoost retrain, and `META_GATE_ENABLED`
+stay parked. The N≥30 runbook said "at N≥30, run the backtest, THEN open the dominoes
+in order." The backtest *was* the gate, and it says no edge. Retraining on labels that
+echo market price cannot manufacture alpha — it fits the prior. `AUTO_RETRAIN_ENABLED`
+stays false. The live-trade gate stays shut (friction-adjusted paper win rate 10.2%,
+vs the ≥45% bar). **Next frontier is a price-orthogonal signal** (news features —
+GOALS Tier 5.3; whale/volume microstructure; cross-market structure). Until one exists,
+the system correctly stays in paper/observe mode and the resolved count keeps growing.
+
+**Cost regression found + fixed (the S40 burn, reintroduced).** Live `openclaw.json`
+had `agents.defaults.model.primary = anthropic/claude-sonnet-4-6` — a *deliberate*
+switch on **May 11** (backup `openclaw.json.bak-pre-sonnet-20260511-183732`), which
+silently overrode the S40 Haiku cost fix. Because of the OpenClaw sticky-session bug,
+the `agent:main:main` session bound to Sonnet, and every 120m heartbeat logged
+`requested=haiku → "live session model switch detected: haiku→sonnet" → candidate_succeeded=sonnet`.
+Heartbeats had been completing on **Sonnet** (billed) for ~12 days since the May-28
+gateway restart — the exact S40 pattern. **Fixed:** stopped gateway → backed up both
+files (`*.bak-s47-haiku-revert`) → flipped `primary`→Haiku → **cleared the `agent:main:main`
+session** → restarted gateway (active). Config + empty session verified. Rebind to Haiku
+is staged for the next heartbeat (~21:15 CEST — the gateway restart reset the 120m timer);
+confirm via the next `candidate_succeeded=...haiku` journal line or by pinging Loop.
+**Lesson re-confirmed (S40 #4): config change alone ≠ rebind — you MUST clear the session.**
+
+**Rebind VERIFIED + a bigger finding (2026-06-10 close-out).** The session rebound
+cleanly: `agent:main:main → claude-haiku-4-5-20251001`, config `primary` = haiku,
+journal switches now resolve *to* haiku. **BUT heartbeats are not completing on any
+model** — since the restart there is **zero `candidate_succeeded`**. Root cause: the
+**DGX Anthropic API credit balance is exhausted** (`400 invalid_request_error: "Your
+credit balance is too low to access the Anthropic API"`, `reason=billing` on every
+haiku/sonnet/opus attempt). The Sonnet heartbeats (May 11 → Jun 9) drained it to zero
+around Jun 9 evening (last `candidate_succeeded=sonnet` at 17:26, just before the 19:15
+fix). The local `ollama/llama3.3:70b` fallback ALSO fails (`reason=unknown`), so the
+chain loops haiku→llama→opus→haiku every ~2s (the S41-P3 failover-loop pathology) and
+**Loop cannot complete a heartbeat**. The Haiku revert remains correct (cheap once
+credits return), but **Loop is effectively paused until KWW tops up Anthropic credits**
+(human billing task). Follow-up worth doing later: fix the ollama fallback so a
+zero-balance state degrades gracefully to free local inference instead of a dead loop.
+
+**Other state (healthy).** Chronic "0 predictions/cycle" era is over — scanner now
+1–4 predictions/cycle (cycle 1819, 0 errors, up since May 28). Truth-board timer fires
+every 15min unattended, `errors=[]`. 0 failed services. Tests 545 pass (Mac).
+`eval/resolution_results.json` on DGX is git-tracked and gets reverted to its committed
+N=1 version by a periodic git-sync — the backtest's fresh write doesn't persist; read
+the console output, not the file.
+
+> **Next session START HERE:** the dominoes stay CLOSED — N≥30 is cleared but the
+> backtest verdict is **NO EDGE** (63.9% ≈ 63.6% price-implied, +0.3pp). Do not lift the
+> Bearish ban, retrain, or enable META_GATE on the strength of the directional %. The
+> work now is *finding a price-orthogonal signal*, not amplifying the price echo.
+> **Loop is PAUSED: the DGX Anthropic credit balance is exhausted** (all models
+> billing-reject; ollama fallback also failing → failover loop). Primary is correctly
+> Haiku and the session rebound to Haiku, but no heartbeat can complete until KWW tops
+> up Anthropic credits. First thing next session: check whether credits were added
+> (`journalctl --user -u openclaw-gateway.service | grep candidate_succeeded`).
+
