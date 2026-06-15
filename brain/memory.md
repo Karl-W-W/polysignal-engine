@@ -723,3 +723,36 @@ the console output, not the file.
 > up Anthropic credits. First thing next session: check whether credits were added
 > (`journalctl --user -u openclaw-gateway.service | grep candidate_succeeded`).
 
+---
+
+### 2026-06-15 — Session 48: Loop wake-orientation fixed (stale workspace memory → canonical files)
+
+**Problem.** After the credit top-up Loop revived on Haiku but woke STALE. OpenClaw
+auto-loads *workspace* files: per `~/.openclaw/workspace/AGENTS.md`, a **heartbeat** reads
+`~/.openclaw/workspace/HEARTBEAT.md` and a **main session** (direct chat) reads
+`~/.openclaw/workspace/MEMORY.md`. Both were frozen — HEARTBEAT.md at S14/15 (pointed at the
+stale `TASKS.md` and carried an "alert at 50 evaluated → XGBoost training trigger" directive
+that now directly contradicts the NO-EDGE close), MEMORY.md at S40 (Apr 17). The read tool
+resolves relative paths against the workspace, so Loop never reached
+`/opt/loop/{lab/NOW.md, lab/LOOP_TASKS.md, brain/memory.md}` and fell back to the stale MEMORY.md.
+
+**Fix (S48).** Rewrote `~/.openclaw/workspace/HEARTBEAT.md` (lean, 36 lines) so every wake
+FIRST reads the three canonical files by ABSOLUTE path (`/opt/loop/...` — whitelisted for the
+read tool; `cat` via host exec as fallback) and carries the S47 invariants (Haiku not Sonnet;
+NO EDGE → dominoes CLOSED; work = price-orthogonal signal >+0.3pp). Removed the stale TASKS.md
+pointer and the XGBoost-at-50 trigger. Made `~/.openclaw/workspace/MEMORY.md` a thin pointer to
+`/opt/loop/brain/memory.md` (one source of truth) instead of a stale duplicate. Backups:
+`*.bak-s48-2026-06-15` in the workspace.
+
+**Durability map (fold into future edits).** `/opt/loop` is `git fetch && git reset --hard
+origin/main` **every 10 min** (cron) — edits there are wiped unless committed to origin/main
+(this note went via Mac→commit→push). The workspace `~/.openclaw/workspace/` is NOT under that
+reset, and `sync-to-sandbox.sh` (every 5 min) only uploads `/opt/loop/{brain,lab/*}` into the
+nemoclaw sandbox `/sandbox/` — it does NOT touch the workspace MEMORY.md/HEARTBEAT.md — so
+workspace edits persist. Other crons: `watchdog-host.sh` (5 min), `nightly-dream.sh` (03:15).
+
+> **Next session START HERE:** Loop now self-orients from canonical files on wake (S48 fix).
+> Dominoes stay CLOSED (NO EDGE at N=108). The only forward work is a price-orthogonal signal
+> beating +0.3pp edge-vs-price. If Loop ever again reports "files not present," its read tool
+> lost the /opt/loop whitelist — fall back to `cat`/exec and re-check the SDK patch.
+
