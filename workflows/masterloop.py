@@ -90,6 +90,10 @@ except ImportError:
             return "commit"
         return END
 
+# ── Observability (ADR L2: OTel data plane → Phoenix; inert unless OTEL_ENABLED=1) ──
+from core.otel import cycle_span, setup_tracing
+setup_tracing()
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 OLLAMA_HOST  = os.getenv("OLLAMA_HOST",  "http://172.17.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.3:70b")
@@ -1194,21 +1198,29 @@ def run_cycle(user_request: str, thread_id: str = "default", on_event=None, cycl
         "configurable": {"thread_id": thread_id},
     }
 
-    for output in app.stream(initial, config=graph_config):
-        for node, update in output.items():
-            print(f"🔄 {node} complete")
-            final.update(update)
+    with cycle_span(
+        "loop.run_cycle", thread_id=thread_id, cycle_number=cycle_number
+    ) as _cycle:
+        for output in app.stream(initial, config=graph_config):
+            for node, update in output.items():
+                print(f"🔄 {node} complete")
+                final.update(update)
 
-            events = {
-                "perception": ("PERCEPTION_COMPLETE", lambda u: f"{len(u.get('observations',[]))} signals"),
-                "prediction":  ("PREDICTION_COMPLETE", lambda u: f"{len(u.get('predictions',[]))} hypotheses"),
-                "draft":       ("DRAFT_COMPLETE",      lambda u: u.get("draft_action", {}).get("command", "")),
-                "review":      ("REVIEW_COMPLETE",     lambda u: u.get("audit_verdict", {}).get("verdict", "")),
-                "commit":      ("EXECUTION_COMPLETE",  lambda u: u.get("execution_status", "")),
-            }
-            if node in events:
-                ev_type, msg_fn = events[node]
-                emit(ev_type, msg_fn(update), update)
+                events = {
+                    "perception": ("PERCEPTION_COMPLETE", lambda u: f"{len(u.get('observations',[]))} signals"),
+                    "prediction":  ("PREDICTION_COMPLETE", lambda u: f"{len(u.get('predictions',[]))} hypotheses"),
+                    "draft":       ("DRAFT_COMPLETE",      lambda u: u.get("draft_action", {}).get("command", "")),
+                    "review":      ("REVIEW_COMPLETE",     lambda u: u.get("audit_verdict", {}).get("verdict", "")),
+                    "commit":      ("EXECUTION_COMPLETE",  lambda u: u.get("execution_status", "")),
+                }
+                if node in events:
+                    ev_type, msg_fn = events[node]
+                    emit(ev_type, msg_fn(update), update)
+        if _cycle is not None:
+            _cycle.set_attribute("loop.execution_status", str(final.get("execution_status")))
+            _cycle.set_attribute("loop.observations", len(final.get("observations", [])))
+            _cycle.set_attribute("loop.predictions", len(final.get("predictions", [])))
+            _cycle.set_attribute("loop.errors", len(final.get("errors", [])))
 
     print("\n" + "="*60)
     print("MASTERLOOP CYCLE COMPLETE")

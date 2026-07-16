@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from workflows.masterloop import run_cycle
+from core.otel import cycle_span, setup_tracing
 
 # ── Configuration ────────────────────────────────────────────────────────────
 SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL_SECONDS", "300"))  # 5 minutes
@@ -149,6 +150,10 @@ def run_scanner():
     """Main scanner loop."""
     cycle_count = 0
 
+    if setup_tracing("polysignal-scanner"):
+        log.info("OTel tracing active → %s",
+                 os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:6006"))
+
     log.info("=" * 60)
     log.info("PolySignal Scanner starting")
     log.info(f"  Scan interval: {SCAN_INTERVAL}s ({SCAN_INTERVAL // 60}m)")
@@ -173,18 +178,26 @@ def run_scanner():
         start = time.time()
 
         try:
-            result = run_cycle(
-                user_request="Scan Polymarket for crypto signals",
-                thread_id=thread_id,
-                cycle_number=cycle_count,
-            )
+            with cycle_span(
+                "scanner.cycle", cycle=cycle_count, thread_id=thread_id
+            ) as span:
+                result = run_cycle(
+                    user_request="Scan Polymarket for crypto signals",
+                    thread_id=thread_id,
+                    cycle_number=cycle_count,
+                )
 
-            elapsed = time.time() - start
-            status = result.get("execution_status", "UNKNOWN")
-            n_obs = len(result.get("observations", []))
-            n_errors = len(result.get("errors", []))
+                elapsed = time.time() - start
+                status = result.get("execution_status", "UNKNOWN")
+                n_obs = len(result.get("observations", []))
+                n_errors = len(result.get("errors", []))
 
-            n_preds = len(result.get("predictions", []))
+                n_preds = len(result.get("predictions", []))
+                if span is not None:
+                    span.set_attribute("scanner.observations", n_obs)
+                    span.set_attribute("scanner.predictions", n_preds)
+                    span.set_attribute("scanner.errors", n_errors)
+                    span.set_attribute("scanner.status", str(status))
             log.info(f"--- Cycle {cycle_count} complete: {status} "
                      f"({n_obs} observations, {n_preds} predictions, {n_errors} errors, {elapsed:.1f}s) ---")
 
