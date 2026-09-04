@@ -63,6 +63,58 @@ COUNTER_SIGNAL_MULTIPLIER = 2.0
 # Until then, suppress Bearish output. Set to False to restore original behavior.
 BAN_BEARISH_OUTPUT = True
 
+# 2026-09-04 lever: no Bullish calls on markets priced below 0.50.
+# Audit of the live stores (~/brain/dashboards/polysignal-accuracy-2026-09-04.md):
+# 1,253 of 4,221 resolved Bullish predictions were on markets priced 0.2-0.4 and
+# were right 13-21% of the time; every Bullish call scores ~= the market price.
+# A Bullish hypothesis below 0.50 is a bet that the market is wrong by >50pp,
+# which this predictor has no evidence for. Guard is a single condition in
+# predict(), env-configurable, default ON. Set SUPPRESS_BULLISH_BELOW_PRICE=0
+# to restore the previous behavior; BULLISH_MIN_PRICE overrides the threshold.
+def _env_flag(name: str, default: str = "1") -> bool:
+    return os.getenv(name, default).strip().lower() not in ("0", "false", "no", "off", "")
+
+
+SUPPRESS_BULLISH_BELOW_PRICE = _env_flag("SUPPRESS_BULLISH_BELOW_PRICE", "1")
+try:
+    BULLISH_MIN_PRICE = float(os.getenv("BULLISH_MIN_PRICE", "0.50"))
+except ValueError:
+    BULLISH_MIN_PRICE = 0.50
+
+# Persisted suppression counter so the truth board (lab/truth_board.py) can
+# report how many Bullish calls the guard has swallowed. One JSON file,
+# atomic write, cumulative total + last-write timestamp.
+SUPPRESSION_COUNTER_FILE = Path(os.getenv(
+    "BASE_RATE_SUPPRESSION_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), ".base-rate-suppressions.json"),
+))
+
+
+def read_suppression_counter(path: Optional[Path] = None) -> Dict[str, object]:
+    """Return the persisted suppression counter (empty dict if absent/corrupt)."""
+    path = Path(path or SUPPRESSION_COUNTER_FILE)
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _bump_suppression_counter(key: str, path: Optional[Path] = None) -> None:
+    """Increment counter[key] on disk. Never raises — a counter must not
+    break a prediction cycle."""
+    from datetime import datetime, timezone
+    path = Path(path or SUPPRESSION_COUNTER_FILE)
+    try:
+        data = read_suppression_counter(path)
+        data[key] = int(data.get(key, 0)) + 1
+        data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2))
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
 
 @dataclass
 class MarketBias:
@@ -92,8 +144,15 @@ class PredictionResult:
 class BaseRatePredictor:
     """Predicts market direction from historical base rates."""
 
-    def __init__(self, biases: Dict[str, MarketBias]):
+    def __init__(self, biases: Dict[str, MarketBias],
+                 prices: Optional[Dict[str, float]] = None):
         self.biases = biases
+        # Latest known price per market (from the observations handed to
+        # from_price_levels / from_all_sources). Used by the Bullish-below-
+        # price guard in predict(); an explicit current_price argument wins.
+        self.prices: Dict[str, float] = dict(prices or {})
+        # In-process count of Bullish calls suppressed by the price guard.
+        self.suppressed_bullish_below_price = 0
 
     @classmethod
     def from_outcomes(cls, outcomes_path: Path = OUTCOMES_FILE) -> "BaseRatePredictor":
@@ -223,11 +282,13 @@ class BaseRatePredictor:
         Markets outside this range are essentially decided.
         """
         biases = {}
+        prices: Dict[str, float] = {}
         for obs in observations:
             mid = obs.get("market_id")
             price = obs.get("current_price", obs.get("price", 0.5))
             if not mid or price is None:
                 continue
+            prices[mid] = float(price)
 
             # Skip essentially-decided markets (no trading opportunity)
             if price < 0.05 or price > 0.95:
@@ -262,7 +323,7 @@ class BaseRatePredictor:
                 confident=True,
             )
 
-        return cls(biases)
+        return cls(biases, prices=prices)
 
     @classmethod
     def from_all_sources(cls, outcomes_path: Path = OUTCOMES_FILE,
@@ -280,9 +341,11 @@ class BaseRatePredictor:
         obs_predictor = cls.from_observations(db_path)
 
         # Start with price-level biases (lowest priority)
+        prices: Dict[str, float] = {}
         if observations:
             price_predictor = cls.from_price_levels(observations)
             merged = dict(price_predictor.biases)
+            prices = price_predictor.prices
         else:
             merged = {}
 
@@ -291,14 +354,18 @@ class BaseRatePredictor:
         # Outcome biases override everything
         merged.update(outcome_predictor.biases)
 
-        return cls(merged)
+        return cls(merged, prices=prices)
 
-    def predict(self, market_id: str, signal_delta: float = 0.0) -> PredictionResult:
+    def predict(self, market_id: str, signal_delta: float = 0.0,
+                current_price: Optional[float] = None) -> PredictionResult:
         """Predict direction for a market.
         
         Args:
             market_id: Market to predict
             signal_delta: Current perception signal delta (for counter-trend override)
+            current_price: Latest market price; falls back to the price captured
+                from observations at construction. Drives the Bullish-below-
+                price guard. If neither is known the guard cannot fire.
         
         Returns:
             PredictionResult with direction, confidence, reasoning
@@ -356,6 +423,25 @@ class BaseRatePredictor:
                 direction="Neutral",
                 confidence=0.0,
                 reasoning=f"Bearish banned (Session 40, 5.6% base rate acc). Suppressed: {reasoning}",
+                samples=bias.total,
+                bias=bias.bias_strength,
+            )
+
+        # ── Bullish-below-price guard (2026-09-04 lever) ──────────────
+        # A Bullish call on a market priced below BULLISH_MIN_PRICE resolved
+        # YES 13-21% of the time in the live stores. Single guarded condition;
+        # counted in-process and on disk so the truth board can report it.
+        price = current_price if current_price is not None else self.prices.get(market_id)
+        if (SUPPRESS_BULLISH_BELOW_PRICE and direction == "Bullish"
+                and price is not None and price < BULLISH_MIN_PRICE):
+            self.suppressed_bullish_below_price += 1
+            _bump_suppression_counter("bullish_below_price")
+            return PredictionResult(
+                market_id=market_id,
+                direction="Neutral",
+                confidence=0.0,
+                reasoning=(f"Bullish suppressed: price {price:.2f} < {BULLISH_MIN_PRICE:.2f} "
+                           f"(2026-09-04 lever, 13-21% acc below 0.5). Suppressed: {reasoning}"),
                 samples=bias.total,
                 bias=bias.bias_strength,
             )

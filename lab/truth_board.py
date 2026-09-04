@@ -40,6 +40,7 @@ from typing import Any, Dict, List, Optional
 # Ensure project root is on sys.path when run as a module from anywhere
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from lab.base_rate_predictor import read_suppression_counter  # noqa: E402
 from lab.outcome_tracker import evaluate_outcomes, get_accuracy_summary  # noqa: E402
 from lab.polymarket_trader import TradingLog  # noqa: E402
 
@@ -146,6 +147,11 @@ def run_once() -> Dict[str, Any]:
         "neutral": eval_result.get("neutral", 0),
         "accuracy_lifetime": eval_result.get("accuracy", 0.0),
         "trade_eval": trade_eval,
+        # 2026-09-04 lever: cumulative Bullish calls swallowed by the
+        # price<0.50 guard in lab/base_rate_predictor.py (0 if never fired).
+        "bullish_below_price_suppressed": int(
+            read_suppression_counter().get("bullish_below_price", 0) or 0
+        ),
         "summary": get_accuracy_summary() if not errors else "",
         "errors": errors,
         "last_eval_age_minutes": 0,  # this run IS the last eval
@@ -163,6 +169,7 @@ def main() -> int:
         f"correct={status['correct']} incorrect={status['incorrect']} "
         f"neutral={status['neutral']} "
         f"trade_eval={status['trade_eval']} "
+        f"bullish_below_price_suppressed={status['bullish_below_price_suppressed']} "
         f"errors=[{err_str}] "
         f"elapsed={status['elapsed_ms']}ms"
     )

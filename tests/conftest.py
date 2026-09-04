@@ -57,3 +57,14 @@ def env_override(monkeypatch):
         for k, v in kwargs.items():
             monkeypatch.setenv(k, v)
     return _set
+
+
+@pytest.fixture(autouse=True)
+def _isolate_suppression_counter(tmp_path, monkeypatch):
+    """Keep the base-rate suppression counter (2026-09-04 lever) out of the
+    repo's lab/ dir during tests. Module-level path is read at call time."""
+    try:
+        import lab.base_rate_predictor as brp
+    except Exception:  # pragma: no cover - module import failures surface elsewhere
+        return
+    monkeypatch.setattr(brp, "SUPPRESSION_COUNTER_FILE", tmp_path / ".base-rate-suppressions.json")
