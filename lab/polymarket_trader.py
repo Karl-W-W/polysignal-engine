@@ -93,9 +93,42 @@ class TradeResult:
     # so any future re-evaluation can reproduce the same number.
     slippage_pp: Optional[float] = None
     fee_pp: Optional[float] = None
+    # Rung 1 (2026-09-05): the quote the trade was priced on. fill_price is
+    # the ask for BUY / (1 - bid) for the No token; None when no book was
+    # attached (pre-rung records, or gamma returned no quote).
+    fill_price: Optional[float] = None
+    fill_source: Optional[str] = None
+    best_bid: Optional[float] = None
+    best_ask: Optional[float] = None
+    spread: Optional[float] = None
+    quote_timestamp: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def _quote_from_signal(signal: Union["Signal", Dict[str, Any]], side: str,
+                       current_price: float) -> Dict[str, Any]:
+    """Rung 1: derive fill/quote fields for a TradeResult from the signal
+    dict the masterloop hands over (see masterloop._attach_quotes)."""
+    def _pos(v):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if f > 0 else None
+    bid = _pos(_get_field(signal, "best_bid"))
+    ask = _pos(_get_field(signal, "best_ask"))
+    spread = _pos(_get_field(signal, "spread"))
+    if spread is None and bid is not None and ask is not None and ask >= bid:
+        spread = round(ask - bid, 6)
+    if side == "SELL":
+        fill, source = ((round(1 - bid, 6), "one_minus_best_bid") if bid is not None and bid < 1
+                        else (None, None))
+    else:
+        fill, source = (ask, "best_ask") if ask is not None and ask < 1 else (None, None)
+    return {"fill_price": fill, "fill_source": source, "best_bid": bid, "best_ask": ask,
+            "spread": spread, "quote_timestamp": _get_field(signal, "quote_timestamp")}
 
 
 # ============================================================================
@@ -205,8 +238,10 @@ class TradingLog:
                 stats["too_young"] += 1
                 continue
 
-            # Evaluate: compare entry price to current price
-            entry_price = trade.get("price_at_entry", 0.0)
+            # Evaluate: compare entry price to current price.
+            # Rung 1: when the trade logged a fill price (ask for BUY), the
+            # drift is measured from that fill, not the mid.
+            entry_price = trade.get("fill_price") or trade.get("price_at_entry", 0.0)
             current_price = current_prices[market_id]
             size = trade.get("size_usdc", 0.0)
             side = trade.get("side", "")
@@ -376,6 +411,8 @@ class PolymarketTrader:
             price_at_entry=proposal.current_price,
             confidence=proposal.confidence, timestamp=now,
             risk_verdict="APPROVED",
+            fee_pp=_resolve_friction()[1],
+            **_quote_from_signal(signal, proposal.side, proposal.current_price),
         )
         self.log.record(result)
         return result

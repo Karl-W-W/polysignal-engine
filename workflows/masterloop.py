@@ -180,6 +180,38 @@ except ImportError:
         def detect_signals(m): return []
 
 
+QUOTE_KEYS = ("best_bid", "best_ask", "spread", "last_trade_price", "quote_timestamp")
+
+
+def _quote_passthrough(src: dict) -> dict:
+    """Rung 1 (2026-09-05): copy order-book quote fields if present."""
+    return {k: src.get(k) for k in QUOTE_KEYS}
+
+
+def _attach_quotes(predictions: list, observations: list) -> int:
+    """Rung 1: make every gated prediction carry the quote of the observation
+    it was made on (best_bid/best_ask/spread/last_trade_price/quote_timestamp
+    plus current_price), so outcome_tracker.record_predictions and
+    PolymarketTrader.paper_trade can log a fill price. Returns count enriched."""
+    by_id = {}
+    for obs in observations or []:
+        mid = obs.get("market_id")
+        if mid:
+            by_id[mid] = obs
+    n = 0
+    for pred in predictions or []:
+        obs = by_id.get(pred.get("market_id"))
+        if not obs:
+            continue
+        for k in QUOTE_KEYS:
+            if pred.get(k) is None and obs.get(k) is not None:
+                pred[k] = obs[k]
+        if pred.get("current_price") in (None, 0, 0.0):
+            pred["current_price"] = obs.get("current_price", obs.get("price"))
+        n += 1
+    return n
+
+
 def _market_to_observation(m: dict) -> dict:
     """Convert raw crypto market dict to LoopState observation format."""
     # Phase 6, S42: tag observation with category so per-category eval
@@ -197,6 +229,7 @@ def _market_to_observation(m: dict) -> dict:
         "direction":  "",
         "url":        m["url"],
         "category":   classify_category(title),
+        **_quote_passthrough(m),
     }
 
 
@@ -219,6 +252,7 @@ def _signal_to_observation(sig: dict) -> dict:
         "url":          sig["url"],
         "time_horizon": sig.get("time_horizon", horizon_for_category(category)),
         "category":     category,
+        **_quote_passthrough(sig),
     }
 
 
@@ -707,6 +741,12 @@ def prediction_node(state: LoopState) -> LoopState:
         suppressed = br_suppressed + mom_suppressed
         predictions = br_gated + mom_gated
         gate_ran = True
+        # Rung 1 (2026-09-05): attach the observation's quote to each prediction
+        # so both stores log fill price / spread / fee alongside the call.
+        try:
+            _attach_quotes(predictions, observations)
+        except Exception as _qe:
+            print(f"  ⚠ Quote attach skipped: {_qe}")
 
         state["predictions"] = predictions
         br_label = f"{len(br_gated)} base-rate" if br_gated else ""

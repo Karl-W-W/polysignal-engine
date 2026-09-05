@@ -139,6 +139,98 @@ class PredictionRecord:
     # (crypto/sports/politics/default); time_horizon is then resolved from it.
     # Older records lack this field — eval falls back to time_horizon.
     category: Optional[str] = None
+    # Rung 1 (2026-09-05, lab/AUTONOMY.md): what a trade on this call would
+    # have cost. Makes the friction-adjusted win rate computable from this
+    # store alone. All None on records written before the rung shipped.
+    side: Optional[str] = None            # "BUY" (Yes token) / "SELL" (No token)
+    outcome_token: Optional[str] = None   # "Yes" / "No"
+    fill_price: Optional[float] = None    # price paid per token (ask for BUY)
+    fill_source: Optional[str] = None     # "best_ask" | "one_minus_best_bid" | "mid_no_book"
+    best_bid: Optional[float] = None
+    best_ask: Optional[float] = None
+    spread: Optional[float] = None        # best_ask - best_bid at prediction time
+    mid_price: Optional[float] = None
+    fee_pp: Optional[float] = None        # per-token fee assumed (FRICTION_FEE_PP)
+    size_usdc: Optional[float] = None     # stake the scanner would place (MAX_POSITION_USDC)
+    quote_timestamp: Optional[str] = None
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _pos_float(v) -> Optional[float]:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f > 0 else None
+
+
+def build_fill_fields(hypothesis: str, quote: Dict, price: float) -> Dict:
+    """Rung 1: derive side / token / fill price / spread / fee / size from the
+    quote that came with the observation. Bullish buys the Yes token at the
+    best ask; Bearish buys the No token at (1 - best bid). With no book the
+    fill falls back to the mid/last price and is labelled so downstream
+    analysis can exclude it. Fee and size mirror the scanner's env config
+    (FRICTION_FEE_PP, MAX_POSITION_USDC) so a replay reproduces the number."""
+    bid = _pos_float((quote or {}).get("best_bid"))
+    ask = _pos_float((quote or {}).get("best_ask"))
+    spread = _pos_float((quote or {}).get("spread"))
+    if spread is None and bid is not None and ask is not None and ask >= bid:
+        spread = round(ask - bid, 6)
+    if bid is not None and ask is not None:
+        mid = round((bid + ask) / 2, 6)
+    else:
+        mid = price
+    if hypothesis == "Bearish":
+        side, token = "SELL", "No"
+        if bid is not None and bid < 1:
+            fill, source = round(1 - bid, 6), "one_minus_best_bid"
+        else:
+            fill, source = round(1 - price, 6), "mid_no_book"
+    else:
+        side, token = "BUY", "Yes"
+        if ask is not None and ask < 1:
+            fill, source = ask, "best_ask"
+        else:
+            fill, source = price, "mid_no_book"
+    return {
+        "side": side,
+        "outcome_token": token,
+        "fill_price": fill,
+        "fill_source": source,
+        "best_bid": bid,
+        "best_ask": ask,
+        "spread": spread,
+        "mid_price": mid,
+        "fee_pp": _env_float("FRICTION_FEE_PP", 0.0),
+        "size_usdc": _env_float("MAX_POSITION_USDC", 2.0),
+        "quote_timestamp": (quote or {}).get("quote_timestamp"),
+    }
+
+
+def apply_friction_pnl(pred: Dict, resolved_outcome: Optional[str]) -> None:
+    """Rung 1: resolution-based, friction-adjusted PnL for one evaluated
+    record. Per token: win pays 1 - fill - fee, loss costs fill + fee.
+    Per USD staked: divide by fill. Records without a fill price (pre-rung)
+    get friction_result=None so they are excluded, never counted as wins."""
+    fill = _pos_float(pred.get("fill_price"))
+    if resolved_outcome not in ("YES", "NO") or fill is None or fill >= 1:
+        pred["friction_result"] = None
+        return
+    fee = _env_float("FRICTION_FEE_PP", 0.0) if pred.get("fee_pp") is None else float(pred["fee_pp"])
+    token = pred.get("outcome_token") or ("No" if pred.get("side") == "SELL" else "Yes")
+    win = (token == "Yes" and resolved_outcome == "YES") or (token == "No" and resolved_outcome == "NO")
+    pnl_token = (1.0 - fill - fee) if win else (-fill - fee)
+    per_usd = pnl_token / fill
+    size = float(pred.get("size_usdc") or 0.0)
+    pred["friction_pnl_per_usd"] = round(per_usd, 6)
+    pred["friction_pnl_usd"] = round(per_usd * size, 6)
+    pred["friction_result"] = "win" if per_usd > 0 else "loss"
 
 
 # ── State Persistence ────────────────────────────────────────────────────────
@@ -231,6 +323,7 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
     # we classify from title here so old observation factories still work.
     prices: Dict[str, float] = {}
     categories: Dict[str, str] = {}
+    quotes: Dict[str, Dict] = {}
     for obs in observations:
         mid = obs.get("market_id")
         price = obs.get("current_price") or obs.get("price", 0.0)
@@ -238,6 +331,7 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
             prices[mid] = price
             cat = obs.get("category") or classify_category(obs.get("title"))
             categories[mid] = cat
+            quotes[mid] = obs
 
     recorded = 0
     now = datetime.now(timezone.utc).isoformat()
@@ -264,6 +358,11 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
         if price <= 0:
             continue
 
+        # Rung 1: quote on the prediction wins (masterloop._attach_quotes),
+        # else the observation's quote, else no book.
+        quote = {k: pred.get(k) for k in ("best_bid", "best_ask", "spread", "quote_timestamp")}
+        if all(v is None for v in quote.values()):
+            quote = quotes.get(market_id, {})
         record = asdict(PredictionRecord(
             market_id=market_id,
             hypothesis=hypothesis,
@@ -274,6 +373,7 @@ def record_predictions(predictions: List[Dict], observations: List[Dict],
             cycle_number=cycle_number,
             xgb_p_correct=pred.get("xgb_p_correct"),
             category=category,
+            **build_fill_fields(hypothesis, quote, price),
         ))
         state.predictions.append(record)
         state.stats["total_predictions"] += 1
@@ -389,6 +489,8 @@ def evaluate_outcomes(current_observations: List[Dict],
         pred["outcome0_price_at_resolution"] = outcome0_price
         pred["price_at_evaluation"] = current_prices.get(market_id)
         pred["evaluated_at"] = now.isoformat()
+        # Rung 1: friction-adjusted PnL at resolution (None if no fill logged).
+        apply_friction_pnl(pred, resolved_outcome)
         # actual_delta is intentionally not written by S46 — it's a relic of
         # drift scoring. Existing legacy values on old records are left intact.
         evaluated_this_round += 1
@@ -430,6 +532,40 @@ def evaluate_outcomes(current_observations: List[Dict],
         "total_evaluated": state.stats["total_evaluated"],
         "total_predictions": state.stats["total_predictions"],
     }
+
+
+def get_friction_win_rate(state_path: Optional[Path] = None,
+                          now: Optional[datetime] = None) -> Dict:
+    """Rung 1: friction-adjusted win rate and edge per USD from this store,
+    for lifetime / 30d / 7d by prediction timestamp. Only evaluated records
+    that carry a fill price count; pre-rung records are reported under
+    `without_fill` so the truth board shows how much history is unscorable."""
+    state = OutcomeState.load(state_path)
+    now = now or datetime.now(timezone.utc)
+    scorable = [p for p in state.predictions if p.get("friction_result") in ("win", "loss")]
+    without_fill = sum(1 for p in state.predictions
+                       if p.get("outcome") in ("CORRECT", "INCORRECT") and p.get("friction_result") is None)
+
+    def _window(days: Optional[int]) -> Dict:
+        rows = scorable
+        if days is not None:
+            cutoff = now - timedelta(days=days)
+            rows = [p for p in rows if datetime.fromisoformat(p["timestamp"]) >= cutoff]
+        n = len(rows)
+        wins = sum(1 for p in rows if p["friction_result"] == "win")
+        out = {"evaluated": n, "wins": wins, "losses": n - wins,
+               "win_rate": round(wins / n, 4) if n else None,
+               "edge_per_usd": round(sum(p["friction_pnl_per_usd"] for p in rows) / n, 4) if n else None,
+               "mean_fill": round(sum(p["fill_price"] for p in rows) / n, 4) if n else None,
+               "mean_spread": None,
+               "unique_markets": len({p["market_id"] for p in rows})}
+        sp = [p["spread"] for p in rows if p.get("spread") is not None]
+        if sp:
+            out["mean_spread"] = round(sum(sp) / len(sp), 4)
+        return out
+
+    return {"lifetime": _window(None), "30d": _window(30), "7d": _window(7),
+            "without_fill": without_fill}
 
 
 def get_accuracy_summary(state_path: Optional[Path] = None) -> str:

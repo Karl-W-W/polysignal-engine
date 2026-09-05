@@ -40,7 +40,9 @@ from typing import Any, Dict, List, Optional
 # Ensure project root is on sys.path when run as a module from anywhere
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lab.outcome_tracker import evaluate_outcomes, get_accuracy_summary  # noqa: E402
+from lab.outcome_tracker import (  # noqa: E402
+    evaluate_outcomes, get_accuracy_summary, get_friction_win_rate,
+)
 from lab.polymarket_trader import TradingLog  # noqa: E402
 
 
@@ -135,6 +137,13 @@ def run_once() -> Dict[str, Any]:
     except Exception as e:
         errors.append(f"evaluate_paper_trades: {e!r}")
 
+    # Rung 1 (2026-09-05): friction-adjusted win rate from the outcomes store.
+    friction_resolution: Dict[str, Any] = {}
+    try:
+        friction_resolution = get_friction_win_rate()
+    except Exception as e:
+        errors.append(f"get_friction_win_rate: {e!r}")
+
     elapsed_ms = int((time.time() - started) * 1000)
     status = {
         "timestamp": started_at,
@@ -146,6 +155,7 @@ def run_once() -> Dict[str, Any]:
         "neutral": eval_result.get("neutral", 0),
         "accuracy_lifetime": eval_result.get("accuracy", 0.0),
         "trade_eval": trade_eval,
+        "friction_resolution": friction_resolution,
         "summary": get_accuracy_summary() if not errors else "",
         "errors": errors,
         "last_eval_age_minutes": 0,  # this run IS the last eval
@@ -163,6 +173,7 @@ def main() -> int:
         f"correct={status['correct']} incorrect={status['incorrect']} "
         f"neutral={status['neutral']} "
         f"trade_eval={status['trade_eval']} "
+        f"friction_7d={status['friction_resolution'].get('7d', {})} "
         f"errors=[{err_str}] "
         f"elapsed={status['elapsed_ms']}ms"
     )

@@ -116,6 +116,32 @@ def _within_horizon(market: dict) -> bool:
     return dtr is not None and MIN_DAYS_TO_RESOLUTION <= dtr <= MAX_DAYS_TO_RESOLUTION
 
 
+def quote_fields(m: dict) -> dict:
+    """Rung 1 (2026-09-05, lab/AUTONOMY.md): keep the order-book quote that
+    gamma-api already returns on every market object, so a fill price, spread
+    and fee can be logged with each prediction / paper trade. Without these
+    the friction-adjusted win rate is not computable from the stores.
+    Missing or zero quotes are recorded as None, never invented."""
+    def _f(key):
+        try:
+            v = m.get(key)
+            v = float(v) if v is not None and v != "" else None
+        except (TypeError, ValueError):
+            return None
+        return v if v is not None and v > 0 else None
+    bid, ask = _f("bestBid"), _f("bestAsk")
+    spread = _f("spread")
+    if spread is None and bid is not None and ask is not None and ask >= bid:
+        spread = round(ask - bid, 6)
+    return {
+        "best_bid": bid,
+        "best_ask": ask,
+        "spread": spread,
+        "last_trade_price": _f("lastTradePrice"),
+        "quote_timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def fetch_crypto_markets(limit: int = 50) -> list:
     """Fetch Polymarket markets. Crypto-only by default, ALL liquid markets when SCAN_ALL_MARKETS=true."""
     if SCAN_ALL_MARKETS:
@@ -158,6 +184,7 @@ def fetch_crypto_markets(limit: int = 50) -> list:
                 "price":   price,
                 "volume":  float(m.get("volume", 0)),
                 "url":     f"https://polymarket.com/event/{slug}",
+                **quote_fields(m),
             })
 
     crypto_markets.sort(key=lambda x: x["volume"], reverse=True)
@@ -227,6 +254,7 @@ def fetch_all_liquid_markets(max_markets: int = 300) -> list:
                 "liquidity": liquidity,
                 "end_date":  m.get("endDate"),
                 "url":       f"https://polymarket.com/event/{event_slug}",
+                **quote_fields(m),
             })
 
         if len(batch) < 100:
@@ -331,6 +359,12 @@ def detect_signals(markets: list) -> list:
                 "last_seen":     best_ref_ts,
                 "time_horizon":  time_horizon,
                 "window":        best_window,
+                # Rung 1: carry the quote through to the observation.
+                "best_bid":        m.get("best_bid"),
+                "best_ask":        m.get("best_ask"),
+                "spread":          m.get("spread"),
+                "last_trade_price": m.get("last_trade_price"),
+                "quote_timestamp": m.get("quote_timestamp"),
             })
             print(f"  🔔 SIGNAL: {m['title'][:50]} {best_delta:+.3f} ({best_window}) [{time_horizon}]")
 
