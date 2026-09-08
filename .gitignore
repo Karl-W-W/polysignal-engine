@@ -9,6 +9,7 @@ core/secrets/
 *.json.bak*
 lab/trading_log.json
 lab/.scanner-status.json
+lab/.base-rate-suppressions.json
 lab/.events.jsonl
 lab/.whale-signals.jsonl
 lab/.watchdog-alerts
