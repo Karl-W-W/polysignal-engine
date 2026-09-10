@@ -16,6 +16,14 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
+# Marked @network on 2026-09-10 (Karl's word: marker). In a FULL run on the loop host the
+# handler's pytest hung twice at TestMasterLoopE2EKillSwitchOn::test_short_circuit_skips_draft_review_risk
+# with an ESTABLISHED socket to an external API host; SIGINT did not interrupt it (a native call), only
+# SIGKILL after 20 min. Every earlier test file had passed (147 PASSED, 0 FAILED before the hang) and
+# this module passes ALONE, so something in the graph reaches the network in the full-run order despite
+# the mocks below. The deploy handler deselects the marker; CI still runs the module.
+pytestmark = pytest.mark.network
+
 import core.risk as risk_module
 
 # Force-import workflows.masterloop so patch() can resolve it.
