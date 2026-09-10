@@ -8,6 +8,11 @@
 # The test run deselects @network tests: the full suite hung twice on 2026-09-08 on an external socket
 # (tests/test_masterloop_e2e.py, see its pytestmark), so the handler never restarted the scanner and every
 # deploy needed a hand. Karl's word 2026-09-10: marker, not a timeout. CI still runs those tests.
+#
+# TRAP (seen 2026-09-10): the run that PULLS a change to this file still executes the OLD script —
+# bash reads the file it opened, and `git reset --hard` replaces the inode under it. After changing
+# this file, trigger a deploy TWICE, or stop the first run and trigger again; the second run is the
+# one that proves the change.
 
 set -e
 cd /opt/loop
