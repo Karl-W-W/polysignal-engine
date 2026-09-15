@@ -19,6 +19,9 @@ Environment:
     SCAN_INTERVAL_SECONDS: Scan frequency (default 300)
     SCAN_ACTIVE_START_HOUR: UTC hour to start scanning (default 6 = 07:00 CET)
     SCAN_ACTIVE_END_HOUR: UTC hour to stop scanning (default 0 = 01:00 CET)
+    SCAN_SLEEP_BEAT_SECONDS: while sleeping outside active hours, rewrite the
+        status file this often so its mtime stays a live heartbeat (default 1500
+        = 25 min; the registry's cadence is 1800 s, stale at 2x)
 """
 
 import os
@@ -26,7 +29,7 @@ import sys
 import time
 import signal
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # Ensure project root is on path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,6 +41,10 @@ from core.otel import cycle_span, setup_tracing
 SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL_SECONDS", "300"))  # 5 minutes
 ACTIVE_START_UTC = int(os.getenv("SCAN_ACTIVE_START_HOUR", "6"))  # 07:00 CET
 ACTIVE_END_UTC = int(os.getenv("SCAN_ACTIVE_END_HOUR", "0"))     # 01:00 CET
+# Sleeping heartbeat (2026-09-15): the status file was not rewritten while the
+# scanner slept 00:28Z-06:00Z, so the heartbeat registry (cadence 1800 s) called
+# a healthy, sleeping process stale every night at ~01:00Z. 25 min leaves margin.
+SLEEP_BEAT_SECONDS = int(os.getenv("SCAN_SLEEP_BEAT_SECONDS", "1500"))
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -111,11 +118,70 @@ def _write_scanner_status(cycle, n_obs, n_preds, n_errors, elapsed, result):
             "elapsed_seconds": round(elapsed, 1),
             "gate_stats": result.get("stage_timings", {}).get("prediction", 0),
             "closest_signal": getattr(_ds, "closest_miss", None),
+            "state": "active",
+            "until": None,
         }
         with open(SCANNER_STATUS_PATH, "w") as f:
             json.dump(status, f, indent=2)
     except Exception as e:
         log.warning(f"Failed to write scanner status: {e}")
+
+
+def _write_sleeping_status(until_iso: str) -> None:
+    """Rewrite the status file while sleeping outside active hours.
+
+    Keeps every field of the last cycle's status (readers use cycle,
+    observations, predictions, errors, closest_signal) and adds
+    state="sleeping", until=<iso of next active window>, with a fresh
+    timestamp. The file's mtime is the heartbeat the registry watches;
+    the timestamp is what lab/watchdog.py checks. Both now say "alive".
+    """
+    try:
+        import json
+        status = {}
+        try:
+            with open(SCANNER_STATUS_PATH) as f:
+                status = json.load(f)
+            if not isinstance(status, dict):
+                status = {}
+        except (OSError, ValueError):
+            status = {}
+        status.setdefault("cycle", 0)
+        status.setdefault("observations", 0)
+        status.setdefault("predictions", 0)
+        status.setdefault("errors", 0)
+        status["timestamp"] = datetime.now(timezone.utc).isoformat()
+        status["state"] = "sleeping"
+        status["until"] = until_iso
+        with open(SCANNER_STATUS_PATH, "w") as f:
+            json.dump(status, f, indent=2)
+    except Exception as e:
+        log.warning(f"Failed to write sleeping status: {e}")
+
+
+def _sleep_until_active(wait: int, sleep_fn=time.sleep, beat_every=None,
+                        clock=time.monotonic) -> int:
+    """Sleep `wait` seconds in <=10 s chunks (so SIGTERM is honoured), writing
+    the sleeping heartbeat immediately and then every `beat_every` seconds.
+    `sleep_fn` and `clock` are injectable so tests run without waiting.
+    Returns the number of heartbeats written."""
+    beat_every = SLEEP_BEAT_SECONDS if beat_every is None else beat_every
+    until_iso = (datetime.now(timezone.utc) + timedelta(seconds=wait)).isoformat()
+    beats = 0
+    _write_sleeping_status(until_iso)
+    beats += 1
+    start = clock()
+    last_beat = start
+    while _running:
+        elapsed = clock() - start
+        if elapsed >= wait:
+            break
+        sleep_fn(min(10, wait - elapsed))
+        if clock() - last_beat >= beat_every:
+            _write_sleeping_status(until_iso)
+            beats += 1
+            last_beat = clock()
+    return beats
 
 
 def _emit_event(event_type: str, data: dict = None):
@@ -163,12 +229,11 @@ def run_scanner():
     while _running:
         if not is_active_hours():
             wait = seconds_until_active()
-            log.info(f"Outside active hours. Sleeping {wait // 3600}h {(wait % 3600) // 60}m until {ACTIVE_START_UTC:02d}:00 UTC")
-            # Sleep in chunks so we can respond to SIGTERM
-            for _ in range(wait // 10):
-                if not _running:
-                    break
-                time.sleep(10)
+            log.info(f"Outside active hours. Sleeping {wait // 3600}h {(wait % 3600) // 60}m until {ACTIVE_START_UTC:02d}:00 UTC "
+                     f"(heartbeat every {SLEEP_BEAT_SECONDS // 60}m)")
+            # Sleep in chunks so we can respond to SIGTERM; keep the
+            # status file's mtime fresh so the heartbeat means "alive".
+            _sleep_until_active(wait)
             continue
 
         cycle_count += 1
