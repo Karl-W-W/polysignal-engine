@@ -447,6 +447,19 @@ def get_accuracy_summary(state_path: Optional[Path] = None) -> str:
     )
 
 
+def get_proper_scores(state_path: Optional[Path] = None,
+                      days: Optional[int] = None, dedup: bool = False) -> Dict:
+    """Accuracy + Brier + log loss over resolved predictions (KR-S1).
+
+    See lab/proper_scores.py for the forecast mapping and the clip epsilon.
+    Only the rows still in the file (5000-record rotation) carry confidences,
+    so this covers the rotation window, not the lifetime stats counters.
+    """
+    from lab.proper_scores import score
+    state = OutcomeState.load(Path(state_path) if state_path else _resolve_outcomes_file())
+    return score(state.predictions, days=days, dedup=dedup)
+
+
 def get_gated_accuracy(state_path: Optional[Path] = None) -> Dict:
     """Return accuracy split by pre-gate vs post-gate (xgb_p_correct present).
 
