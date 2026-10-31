@@ -59,3 +59,58 @@ def test_get_proper_scores_reads_outcomes_file(tmp_path):
                              "stats": {}, "per_market": {}}))
     s = get_proper_scores(str(f))
     assert s["n"] == 1 and s["brier"] == pytest.approx(0.0625)
+    assert s["brier_skill_vs_market"] == 0.0  # confidence == price: a tie
+
+
+# --- Brier skill vs market: 1 - brier / market_brier ------------------------
+
+def test_brier_skill_beats_ties_and_loses_to_the_price():
+    beat = [_rec("a", "Bullish", 0.9, "YES", price=0.6), _rec("b", "Bullish", 0.9, "YES", price=0.6)]
+    assert score(beat)["brier_skill_vs_market"] == pytest.approx(1 - 0.02 / 0.32)  # 0.9375
+    tie = [_rec("a", "Bullish", 0.7, "YES"), _rec("b", "Bullish", 0.7, "NO")]
+    assert score(tie)["brier_skill_vs_market"] == 0.0
+    lose = [_rec("a", "Bullish", 0.9, "NO", price=0.6)]
+    assert score(lose)["brier_skill_vs_market"] == pytest.approx(1 - 0.81 / 0.36)  # -1.25
+    # Bearish maps through 1 - confidence before scoring, like brier itself
+    bear = [_rec("a", "Bearish", 0.9, "NO", price=0.4)]  # p_yes 0.1 vs market 0.4
+    assert score(bear)["brier_skill_vs_market"] == pytest.approx(1 - 0.01 / 0.16)
+
+
+def test_brier_skill_is_n_weighted_per_window_not_a_mean_of_ratios():
+    recent = [_rec("a", "Bullish", 0.9, "YES", days_ago=2, price=0.6),
+              _rec("b", "Bullish", 0.9, "YES", days_ago=2, price=0.6)]  # skill 0.9375
+    old = [_rec("c", "Bullish", 0.9, "NO", days_ago=40, price=0.6)]      # skill -1.25
+    assert score(recent + old, days=30, now=NOW)["brier_skill_vs_market"] == pytest.approx(0.9375)
+    pooled = score(recent + old)["brier_skill_vs_market"]
+    assert pooled == pytest.approx(1 - (0.02 + 0.81) / (0.32 + 0.36), abs=1e-4)  # -0.2206
+    assert pooled != pytest.approx((0.9375 - 1.25) / 2, abs=1e-3)          # plain mean
+    assert pooled != pytest.approx((2 * 0.9375 - 1.25) / 3, abs=1e-3)      # n-weighted mean of ratios
+
+
+def test_brier_skill_uses_unrounded_sums():
+    recs = [_rec("a", "Bullish", 0.83, "YES", price=0.77),
+            _rec("b", "Bullish", 0.71, "NO", price=0.64),
+            _rec("c", "Bullish", 0.66, "YES", price=0.58)]
+    s = score(recs)
+    assert (s["brier"], s["market_brier"]) == (0.2162, 0.213)
+    assert s["brier_skill_vs_market"] == -0.0152  # exact sums; rounding first gives -0.0150
+
+
+def test_brier_skill_undefined_when_market_made_no_error():
+    # (a price of exactly 0.0 is read as missing -> 0.5, so the perfect market is 1.0 on YES)
+    recs = [_rec("a", "Bullish", 0.8, "YES", price=1.0), _rec("b", "Bearish", 0.8, "YES", price=1.0)]
+    s = score(recs)
+    assert s["market_brier"] == 0.0 and s["brier_skill_vs_market"] is None
+    assert score([])["brier_skill_vs_market"] is None
+
+
+def test_distinct_markets_and_bullish_share():
+    recs = [_rec("a", "Bullish", 0.7, "YES", ts="2026-10-01T00:00:00+00:00"),
+            _rec("a", "Bullish", 0.8, "YES", ts="2026-10-02T00:00:00+00:00"),
+            _rec("b", "Bearish", 0.6, "NO"),
+            {**_rec("c", "Bullish", 0.9, None), "outcome": "AMBIGUOUS"}]
+    s = score(recs)
+    assert (s["n"], s["n_markets"], s["bullish_share"]) == (3, 2, pytest.approx(2 / 3, abs=1e-4))
+    d = score(recs, dedup=True)
+    assert (d["n"], d["n_markets"], d["bullish_share"]) == (2, 2, 0.5)
+    assert score([])["n_markets"] == 0 and score([])["bullish_share"] is None
