@@ -51,6 +51,9 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from lab.proper_scores import score as proper_score  # pure math, no live pipeline
+
 OUTCOMES_FILE = os.getenv("OUTCOMES_FILE", "/opt/loop/data/prediction_outcomes.json")
 RESULTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "resolution_results.json")
@@ -185,12 +188,14 @@ def main():
                 "market_id": mid, "hypothesis": hyp, "raw_count": 1,
                 "first_ts": ts, "last_ts": ts,
                 "entry_price": r.get("price_at_prediction"),
+                "confidence": r.get("confidence"),
             }
         else:
             u["raw_count"] += 1
             if ts and ts < u["first_ts"]:
                 u["first_ts"] = ts
                 u["entry_price"] = r.get("price_at_prediction")
+                u["confidence"] = r.get("confidence")
             if ts and ts > u["last_ts"]:
                 u["last_ts"] = ts
     units = list(units.values())
@@ -234,6 +239,12 @@ def main():
     no_n = R - yes_n
     entries = [u["entry_price"] for u in resolved if isinstance(u["entry_price"], (int, float))]
     avg_entry = (sum(entries) / len(entries)) if entries else None
+
+    proper = proper_score([{
+        "market_id": u["market_id"], "hypothesis": u["hypothesis"],
+        "resolved_outcome": u["resolved_outcome"], "timestamp": u["first_ts"],
+        "confidence": u["confidence"], "price_at_prediction": u["entry_price"],
+    } for u in resolved if isinstance(u.get("confidence"), (int, float))])
 
     status_counts = {}
     for u in units:
@@ -292,6 +303,7 @@ def main():
             "edge_vs_coinflip": round(acc - 0.50, 4) if R else None,
             "edge_vs_price_implied": (round(acc - avg_entry, 4)
                                       if (R and avg_entry is not None) else None),
+            "proper_scores": proper,
         },
         "unresolved_n": len(units) - R,
         "contrast_raw_weighted_accuracy": (round(raw_weighted_acc, 4)
@@ -322,6 +334,10 @@ def main():
             print(f"avg entry price ........ {avg_entry:.3f}  (price-implied base rate)")
             print(f"edge vs price-implied .. {(acc - avg_entry) * 100:+.1f} pp")
         print(f"edge vs coin flip ...... {(acc - 0.5) * 100:+.1f} pp")
+        if proper["n"]:
+            print(f"Brier / log loss ....... {proper['brier']:.4f} / {proper['log_loss']:.4f}"
+                  f"  (n={proper['n']}, eps={proper['eps']}; market "
+                  f"{proper['market_brier']:.4f} / {proper['market_log_loss']:.4f})")
         if raw_weighted_acc is not None:
             print(f"(contrast) raw-weighted  {raw_weighted_acc * 100:.1f}%  "
                   f"— what un-deduped counting would report")
